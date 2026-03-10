@@ -249,6 +249,15 @@ function getGeminiKey() {
 function setGeminiKey(k) { localStorage.setItem('GEMINI_API_KEY', k); }
 function hasGeminiKey() { return !!localStorage.getItem('GEMINI_API_KEY'); }
 
+// xAI (Grok) API Key Management
+function getXaiKey() {
+  const k = localStorage.getItem('XAI_API_KEY');
+  if (!k) throw new Error('XAI_KEY_MISSING');
+  return k;
+}
+function setXaiKey(k) { localStorage.setItem('XAI_API_KEY', k); }
+function hasXaiKey() { return !!localStorage.getItem('XAI_API_KEY'); }
+
 // Genre presets
 const GENRE_PRESETS = {
   romance: {name:'로맨스',speed:0.7,color:'romance',desc:'느린 감성적 페이스',icon:'💕'},
@@ -411,6 +420,70 @@ async function callImagen(prompt, opts={}) {
   const predictions = data.predictions || [];
   if(predictions.length === 0) throw new Error('이미지 생성 결과가 없습니다.');
   return predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
+}
+
+// ============================================================
+// GROK IMAGE API CLIENT (xAI Aurora)
+// ============================================================
+
+async function callGrokImage(prompt, opts={}) {
+  const xaiKey = getXaiKey();
+  const url = 'https://api.x.ai/v1/images/generations';
+  const body = {
+    model: opts.model || 'grok-2-image',
+    prompt: prompt,
+    n: opts.n || 1,
+    response_format: 'url'
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + xaiKey
+    },
+    body: JSON.stringify(body)
+  });
+  if(!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Grok Image API ${res.status}: ${errText}`);
+  }
+  const data = await res.json();
+  const images = data.data || [];
+  if(images.length === 0) throw new Error('Grok 이미지 생성 결과가 없습니다.');
+  return images.map(img => img.url || `data:image/jpeg;base64,${img.b64_json}`);
+}
+
+// ============================================================
+// GROK CHAT API CLIENT (xAI Grok Text)
+// ============================================================
+
+async function callGrok(systemPrompt, userPrompt, opts={}) {
+  const xaiKey = getXaiKey();
+  const model = opts.model || 'grok-3-mini-fast';
+  const url = 'https://api.x.ai/v1/chat/completions';
+  const body = {
+    model: model,
+    messages: [
+      {role: 'system', content: systemPrompt},
+      {role: 'user', content: userPrompt}
+    ],
+    temperature: opts.temperature || 0.7,
+    stream: false
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + xaiKey
+    },
+    body: JSON.stringify(body)
+  });
+  if(!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Grok API ${res.status}: ${errText}`);
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
 }
 
 // ============================================================
@@ -806,6 +879,8 @@ function ImageGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
   const [processing, setProcessing] = useState(false);
   const [step, setStep] = useState('idle'); // idle, A2, A3, done
   const [selectedCat, setSelectedCat] = useState('character');
+  const [imageProvider, setImageProvider] = React.useState('imagen');
+  const [textProvider, setTextProvider] = React.useState('gemini');
   const [selectedTpl, setSelectedTpl] = useState('');
   const scene = scenes[activeSceneIdx] || {};
 
@@ -826,7 +901,8 @@ ${dialogueText}
 감정: ${EXPR_LABELS[scene.emotionStart]||scene.emotionStart} → ${EXPR_LABELS[scene.emotionEnd]||scene.emotionEnd}
 장르: ${GENRE_PRESETS[scene.genre]?.name||scene.genre}`;
 
-      const convertedConti = await callGemini(PIPELINE_A_SYSTEM.contiConvert, userInput, {thinkBudget:1024});
+      const callText = textProvider==='grok' ? callGrok : callGemini;
+      const convertedConti = await callText(PIPELINE_A_SYSTEM.contiConvert, userInput, {thinkBudget:1024});
       const ns = [...scenes];
       ns[activeSceneIdx] = {...ns[activeSceneIdx], convertedConti, status:{...scene.status, conti:'done'}};
       setScenes(ns);
@@ -836,7 +912,7 @@ ${dialogueText}
       setStep('A3');
       addLog('api','[A-3] 구조화 콘티 → 영문 이미지 프롬프트 변환...');
       const tplHint = selectedTpl ? `\n사용할 템플릿 카테고리: ${selectedCat}, 테플릿: ${selectedTpl}` : '';
-      const imgPromptResult = await callGemini(PIPELINE_A_SYSTEM.imagePrompt, convertedConti + tplHint, {thinkBudget:1024});
+      const imgPromptResult = await callText(PIPELINE_A_SYSTEM.imagePrompt, convertedConti + tplHint, {thinkBudget:1024});
 
       // Parse result
       const promptMatch = imgPromptResult.match(/\[PROMPT\]:\s*([\s\S]*?)(?=\[NEGATIVE\])/);
@@ -851,9 +927,9 @@ ${dialogueText}
 
       // Step A-4: 이미지 생성
       setStep('A4');
-      addLog('api','[A-4] Imagen API로 이미지 생성 중... (약 10~30초 소요)');
+      addLog('api',`[A-4] ${imageProvider==='grok'?'Grok Aurora':'Imagen 3'} API로 이미지 생성 중...`);
       try {
-        const imgUrls = await callImagen(imgPrompt, {aspectRatio:'9:16'});
+        const imgUrls = imageProvider==='grok' ? await callGrokImage(imgPrompt) : await callImagen(imgPrompt, {aspectRatio:'9:16'});
         const ns3 = [...scenes];
         ns3[activeSceneIdx] = {...ns3[activeSceneIdx], imageUrl:imgUrls[0], imageUrls:imgUrls, status:{...ns3[activeSceneIdx].status, imageGen:'done'}};
         setScenes(ns3);
@@ -908,6 +984,22 @@ ${dialogueText}
 
             <div className="form-group">
               <label className="form-label">장르 프리셋: {GENRE_PRESETS[scene.genre]?.icon} {GENRE_PRESETS[scene.genre]?.name}</label>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">텍스트 생성 엔진 (A-2, A-3)</label>
+              <div style={{display:'flex',gap:6}}>
+                <button className={`btn btn-sm ${textProvider==='gemini'?'btn-primary':'btn-secondary'}`} onClick={()=>setTextProvider('gemini')}>💎 Gemini</button>
+                <button className={`btn btn-sm ${textProvider==='grok'?'btn-primary':'btn-secondary'}`} onClick={()=>setTextProvider('grok')}>🤖 Grok</button>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">이미지 생성 엔진</label>
+              <div style={{display:'flex',gap:6}}>
+                <button className={`btn btn-sm ${imageProvider==='imagen'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('imagen')}>🌐 Imagen 3</button>
+                <button className={`btn btn-sm ${imageProvider==='grok'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('grok')}>🤖 Grok Aurora</button>
+              </div>
             </div>
 
             <button className="btn btn-primary btn-block" onClick={runPipelineA} disabled={processing || !scene.description}>
@@ -1006,6 +1098,7 @@ function VideoGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
   const [processing, setProcessing] = useState(false);
   const [step, setStep] = useState('idle');
   const [videoMode, setVideoMode] = useState('single');
+  const [textProviderB, setTextProviderB] = React.useState('gemini');
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [cameraFixed, setCameraFixed] = useState(false);
   const scene = scenes[activeSceneIdx] || {};
@@ -1029,7 +1122,8 @@ function VideoGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
 장르: ${genre?.name} (속도 ${genre?.speed}x)
 이미지 프롬프트: ${scene.imagePrompt || '(없음)'}`;
 
-      const motionConti = await callGemini(PIPELINE_B_SYSTEM.motionConti, userInput, {thinkBudget:2048});
+      const callTextB = textProviderB==='grok' ? callGrok : callGemini;
+      const motionConti = await callTextB(PIPELINE_B_SYSTEM.motionConti, userInput, {thinkBudget:2048});
       const ns = [...scenes];
       ns[activeSceneIdx] = {...ns[activeSceneIdx], motionConti};
       setScenes(ns);
@@ -1039,7 +1133,7 @@ function VideoGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
       setStep('B3');
       addLog('api','[B-3] 영문 모션 프롬프트 생성...');
       const modeInfo = `영상 모드: ${videoMode}, 오디오: ${audioEnabled?'ON':'OFF'}, 카메라 고정: ${cameraFixed?'ON':'OFF'}`;
-      const motionPrompt = await callGemini(PIPELINE_B_SYSTEM.motionPrompt, motionConti + '\n' + modeInfo, {thinkBudget:2048});
+      const motionPrompt = await callTextB(PIPELINE_B_SYSTEM.motionPrompt, motionConti + '\n' + modeInfo, {thinkBudget:2048});
 
       const ns2 = [...scenes];
       ns2[activeSceneIdx] = {...ns2[activeSceneIdx], motionPrompt, videoMode, status:{...ns2[activeSceneIdx].status, video:'done'}};
@@ -1124,6 +1218,14 @@ function VideoGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
                   <div className="toggle-knob"/>
                 </div>
                 <span style={{fontSize:13}}>📷 카메라 고정</span>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">텍스트 생성 엔진 (B-2, B-3)</label>
+              <div style={{display:'flex',gap:6}}>
+                <button className={`btn btn-sm ${textProviderB==='gemini'?'btn-primary':'btn-secondary'}`} onClick={()=>setTextProviderB('gemini')}>💎 Gemini</button>
+                <button className={`btn btn-sm ${textProviderB==='grok'?'btn-primary':'btn-secondary'}`} onClick={()=>setTextProviderB('grok')}>🤖 Grok</button>
               </div>
             </div>
 
@@ -1408,26 +1510,31 @@ function Workbench({scenes, setScenes, addLog}) {
 
 // API Key Modal Component
 function ApiKeyModal({onClose, onSave}) {
-  const [keyVal, setKeyVal] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
-  const existing = hasGeminiKey();
+  const [geminiVal, setGeminiVal] = React.useState(localStorage.getItem('GEMINI_API_KEY')||'');
+  const [xaiVal, setXaiVal] = React.useState(localStorage.getItem('XAI_API_KEY')||'');
+  const handleSave = () => {
+    if(geminiVal.trim()) setGeminiKey(geminiVal.trim());
+    if(xaiVal.trim()) setXaiKey(xaiVal.trim());
+    onSave();
+    onClose();
+  };
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" onClick={e=>e.stopPropagation()}>
-        <div className="modal-title">🔑 Gemini API 키 설정</div>
-        <div className="modal-desc">
-          Google AI Studio에서 발급받은 API 키를 입력하세요.<br/>
-          키는 이 브라우저의 localStorage에만 저장되며 서버로 전송되지 않습니다.
+        <h3 style={{marginBottom:16,fontSize:18,fontWeight:700}}>API 키 설정</h3>
+        <div className="form-group">
+          <label className="form-label">🔑 Google Gemini API Key</label>
+          <input className="form-input" type="password" placeholder="AIzaSy..." value={geminiVal} onChange={e=>setGeminiVal(e.target.value)} />
+          <div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>텍스트 생성(Gemini), 이미지(Imagen), 영상(Veo) 생성에 사용</div>
         </div>
-        <div className="key-status">
-          <span className={"dot " + (existing ? "on" : "off")}></span>
-          {existing ? "키가 설정되어 있습니다" : "키가 설정되지 않았습니다"}
+        <div className="form-group">
+          <label className="form-label">🤖 xAI (Grok) API Key</label>
+          <input className="form-input" type="password" placeholder="xai-..." value={xaiVal} onChange={e=>setXaiVal(e.target.value)} />
+          <div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>Grok 텍스트 생성, Aurora 이미지 생성에 사용</div>
         </div>
-        <input className="modal-input" type="password" placeholder="AIzaSy..." value={keyVal}
-          onChange={e=>setKeyVal(e.target.value)} autoFocus/>
-        <div className="modal-actions">
-          {existing && <button className="btn-delete" onClick={()=>{localStorage.removeItem('GEMINI_API_KEY');onSave();}}>삭제</button>}
-          <button className="btn-cancel" onClick={onClose}>취소</button>
-          <button className="btn-save" onClick={()=>{if(keyVal.trim()){setGeminiKey(keyVal.trim());onSave();}}}>저장</button>
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}}>
+          <button className="btn btn-secondary" onClick={onClose}>취소</button>
+          <button className="btn btn-primary" onClick={handleSave}>저장</button>
         </div>
       </div>
     </div>
@@ -1438,6 +1545,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('conti');
   const [showKeyModal, setShowKeyModal] = useState(!hasGeminiKey());
   const [keySet, setKeySet] = useState(hasGeminiKey());
+  const [xaiKS, setXaiKS] = React.useState(hasXaiKey());
   const [scenes, setScenes] = useState([{
     id:'scene_1', description:'', dialogues:[{type:'speech',character:'',text:''}],
     sfx:[], sfxText:'', emotionStart:'smiling', emotionEnd:'smiling',
@@ -1473,9 +1581,13 @@ function App() {
             </button>
           ))}
         </div>
-        <button className={"api-key-btn " + (keySet?"connected":"")} onClick={()=>setShowKeyModal(true)}>
-          {keySet ? "🟢 API 연결됨" : "🔑 API 키 설정"}
-        </button>
+        <button className="api-key-btn" onClick={()=>setShowKeyModal(true)} style={{display:'flex',gap:6,alignItems:'center'}}>
+              {keySet && <span style={{color:'#00c853'}}>● Gemini</span>}
+              {!keySet && <span style={{color:'#ff5252'}}>○ Gemini</span>}
+              {xaiKS && <span style={{color:'#00c853'}}>● Grok</span>}
+              {!xaiKS && <span style={{color:'#ff5252'}}>○ Grok</span>}
+              🔑
+            </button>
       </div>
       {showKeyModal && <ApiKeyModal onClose={()=>setShowKeyModal(false)} onSave={()=>{setKeySet(hasGeminiKey());setShowKeyModal(false);}}/>}
 
