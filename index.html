@@ -430,7 +430,7 @@ async function callGrokImage(prompt, opts={}) {
   const xaiKey = getXaiKey();
   const url = 'https://api.x.ai/v1/images/generations';
   const body = {
-    model: opts.model || 'grok-2-image',
+    model: opts.model || 'grok-imagine-image',
     prompt: prompt,
     n: opts.n || 1,
     response_format: 'url'
