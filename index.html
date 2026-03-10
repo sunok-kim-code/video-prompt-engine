@@ -1600,8 +1600,8 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
     return true;
   }, [log])
 
-  const callTextLF = useCallback(async (sys, usr) => {
-    return textProvider === 'grok' ? await callGrok(sys, usr) : await callGemini(sys, usr);
+  const callTextLF = useCallback(async (sys, usr, opts) => {
+    return textProvider === 'grok' ? await callGrok(sys, usr) : await callGemini(sys, usr, opts || {});
   }, [textProvider]);
 
   const callImageLF = useCallback(async (prompt, opts) => {
@@ -1649,7 +1649,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
   const runPhase2 = useCallback(async () => {
     transition('PHASE_2_SPLITTING');
     log('[Phase 2-A] Splitting story into scenes...');
-    const sceneRaw = await callTextLF(PROMPTS.SCENE_SPLIT, sourceText);
+    const sceneRaw = await callTextLF(PROMPTS.SCENE_SPLIT, sourceText, {maxTokens: 16384});
     let scenes;
     try {
       let cleaned = sceneRaw.replace(/```json\n?|```/g, '').trim();
@@ -1671,7 +1671,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
       const charInfo = (globalAsset?.characters||[]).filter(c=>(sc.keyCharacters||[]).includes(c.id)).map(c=>c.name+': '+c.referencePrompt).join('\n');
       const bgInfo = (globalAsset?.backgrounds||[]).filter(b=>b.id===sc.primaryLocation).map(b=>b.name+': '+b.referencePrompt)[0]||'generic background';
       const dpInput = 'Scene: '+sc.summary+'\nDialogues: '+JSON.stringify(sc.dialogues)+'\nMood: '+sc.narrativeMood+'\n\nAvailable Characters:\n'+charInfo+'\n\nBackground:\n'+bgInfo;
-      try { const compRaw = await callTextLF(PROMPTS.DP_COMPOSITION, dpInput);
+      try { const compRaw = await callTextLF(PROMPTS.DP_COMPOSITION, dpInput, {maxTokens: 16384});
         sc.compositionData = JSON.parse(compRaw.replace(/```json\n?|```/g, '').trim()); }
       catch(e) { log('[Phase 2-B] DP failed scene '+(i+1)+': '+e.message, 'warn'); sc.compositionData = null; }
       sc.status = 'composed';
@@ -1699,7 +1699,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
       const bgDesc = bgRef ? bgRef.referencePrompt : 'detailed background';
       try {
         const pIn = 'Scene: '+sc.summary+'\nComposition: '+JSON.stringify(comp)+'\nCharacter prompts: '+charDescs+'\nBackground: '+bgDesc;
-        const pRaw = await callTextLF(PROMPTS.ANCHOR_PROMPT_ASSEMBLY, pIn);
+        const pRaw = await callTextLF(PROMPTS.ANCHOR_PROMPT_ASSEMBLY, pIn, {maxTokens: 16384});
         const pData = JSON.parse(pRaw.replace(/```json\n?|```/g, '').trim());
         const urls = await callImageLF(pData.prompt);
         sc.anchorImage = { url:urls[0], prompt:pData.prompt, negativePrompt:pData.negativePrompt||'' };
