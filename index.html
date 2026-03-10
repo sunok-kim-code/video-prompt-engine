@@ -1643,13 +1643,25 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
     const generateSceneImage = useCallback(async (idx) => {
       const scenes = lfScenesRef.current;
       const sc = scenes[idx];
-      if (!sc || !sc.compositionData) { setErrorMsg('Scene data not ready - run Phase 2 first'); return; }
+      if (!sc) { setErrorMsg('Scene data not ready'); return; }
+      if (!sc.imagePrompt && !sc.compositionData) { setErrorMsg('Run Phase 2-3 first'); return; }
       log('[GenImg] Generating image for scene ' + (idx+1));
       sc.status = 'generating_image';
       lfScenesRef.current = [...scenes];
       setLfScenes([...scenes]);
       try {
-        const prompt = sc.compositionData.referencePrompt || sc.summary;
+        let prompt;
+        if (sc.imagePrompt && sc.imagePrompt.prompt) {
+          prompt = sc.imagePrompt.prompt;
+        } else {
+          const comp = sc.compositionData || {};
+          const charDescs = ((comp.characterPoses||[]).map(cp => {
+            const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null;
+            return (cr ? cr.referencePrompt : '') + ' ' + (cp.pose||'') + ' ' + (cp.expression||'');
+          })).filter(Boolean).join('; ');
+          const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
+          prompt = 'manhwa webtoon style, ' + sc.summary + ', Characters: ' + charDescs + ', Background: ' + (bgRef ? bgRef.referencePrompt : 'detailed background');
+        }
         const imgUrl = await callImageLF(prompt);
         sc.anchorImage = { url: imgUrl, prompt };
         sc.status = sc.video ? 'complete' : 'image_done';
@@ -1661,22 +1673,34 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
       }
       lfScenesRef.current = [...scenes];
       setLfScenes([...scenes]);
-    }, [callImageLF]);
+    }, [callImageLF, globalAsset]);
 
-    // === Per-scene video generation ===
     const generateSceneVideo = useCallback(async (idx) => {
       const scenes = lfScenesRef.current;
       const sc = scenes[idx];
       if (!sc) { setErrorMsg('Scene data not ready'); return; }
+      if (!sc.anchorImage) { setErrorMsg('Generate image first'); return; }
       log('[GenVid] Generating video for scene ' + (idx+1));
       sc.status = 'generating_video';
       lfScenesRef.current = [...scenes];
       setLfScenes([...scenes]);
       try {
-        const motionPrompt = sc.compositionData?.motionHint || sc.summary;
+        const motionPrompt = (sc.videoPrompt && sc.videoPrompt.motionPrompt) || (sc.compositionData && sc.compositionData.motionHint) || sc.summary;
         let imageB64 = null;
-        if (sc.anchorImage && sc.anchorImage.url && sc.anchorImage.url.startsWith('data:')) {
-          imageB64 = sc.anchorImage.url.split(',')[1];
+        if (sc.anchorImage && sc.anchorImage.url) {
+          if (sc.anchorImage.url.startsWith('data:')) {
+            imageB64 = sc.anchorImage.url.split(',')[1];
+          } else {
+            try {
+              const resp = await fetch(sc.anchorImage.url);
+              const blob = await resp.blob();
+              imageB64 = await new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(blob);
+              });
+            } catch(fe) { log('[GenVid] Image convert failed: ' + fe.message); }
+          }
         }
         const videoUrls = await callVeo(motionPrompt, imageB64, {aspectRatio:'9:16', duration:5});
         if (videoUrls && videoUrls.length > 0) {
@@ -1780,60 +1804,56 @@ const runPhase1 = useCallback(async () => {
   }, [sourceText, globalAsset, callTextLF, transition, log]);
   const runPhase3 = useCallback(async () => {
     transition('PHASE_3_GENERATING');
-    log('[Phase 3] Generating anchor images...');
+    log('[Phase 3] Generating image prompts (no image generation)...');
     const updated = [...lfScenesRef.current];
     for (let i=0; i<updated.length; i++) {
       if (abortRef.current) throw new Error('Aborted');
       setCurrentSceneIdx(i);
       const sc = updated[i];
-      log('[Phase 3] Anchor image '+(i+1)+'/'+updated.length);
-      if (!sc.compositionData) { log('[Phase 3] Scene '+(i+1)+' no composition, skip', 'warn'); continue; }
-      const comp = sc.compositionData;
-      const charDescs = (comp.characterPoses||[]).map(cp=>{
-        const cr=(globalAsset?.characters||[]).find(c=>c.id===cp.characterId);
-        return cr ? cr.referencePrompt+', '+cp.pose+' pose, '+cp.expression+' expression, positioned '+cp.position : '';
-      }).filter(Boolean).join(', ');
-      const bgRef = (globalAsset?.backgrounds||[]).find(b=>b.id===sc.primaryLocation);
-      const bgDesc = bgRef ? bgRef.referencePrompt : 'detailed background';
+      log('[Phase 3] Prompt ' + (i+1) + '/' + updated.length);
+      if (!sc.compositionData) { log('[Phase 3] Scene ' + (i+1) + ' no composition - skip'); continue; }
       try {
-        const pIn = 'Scene: '+sc.summary+'\nComposition: '+JSON.stringify(comp)+'\nCharacter prompts: '+charDescs+'\nBackground: '+bgDesc;
-        const pRaw = await callTextLF(PROMPTS.ANCHOR_PROMPT_ASSEMBLY, pIn, {maxTokens: 16384});
-        const pData = JSON.parse(pRaw.replace(/```json\n?|```/g, '').trim());
-        const urls = await callImageLF(pData.prompt);
-        sc.anchorImage = { url:urls[0], prompt:pData.prompt, negativePrompt:pData.negativePrompt||'' };
-        sc.status = 'anchor_ready';
-        log('[Phase 3] Scene '+(i+1)+' anchor generated');
-      } catch(e) { log('[Phase 3] Scene '+(i+1)+' failed: '+e.message, 'warn'); sc.anchorImage = null; }
+        const comp = sc.compositionData;
+        const charDescs = (comp.characterPoses||[]).map(cp => {
+          const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null;
+          return (cr ? cr.referencePrompt : '') + ' ' + (cp.pose||'') + ' pose, ' + (cp.expression||'') + ' expression, positioned ' + (cp.position||'');
+        }).filter(Boolean).join('; ');
+        const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
+        const bgDesc = bgRef ? bgRef.referencePrompt : 'detailed background';
+        const userMsg = 'Scene: ' + sc.summary + '\nComposition: ' + JSON.stringify(comp) + '\nCharacter prompts: ' + charDescs + '\nBackground: ' + bgDesc;
+        const pRaw = await callTextLF(PROMPTS.ANCHOR_PROMPT_ASSEMBLY + '\n\n' + userMsg, {maxTokens:16384});
+        const pData = JSON.parse(pRaw.replace(/```json|\n|```/g,'').trim());
+        sc.imagePrompt = pData;
+        sc.status = 'prompt_ready';
+        log('[Phase 3] Scene ' + (i+1) + ' prompt generated');
+      } catch(e) { log('[Phase 3] Scene ' + (i+1) + ' prompt failed: ' + e.message); }
     }
-    lfScenesRef.current = updated; setLfScenes(updated);
+    lfScenesRef.current = updated;
+    setLfScenes([...updated]);
     transition('PHASE_3_COMPLETE');
-    log('[Phase 3] Complete: '+updated.filter(s=>s.anchorImage).length+'/'+updated.length+' anchors');
-  }, [globalAsset, callTextLF, callImageLF, transition, log]);
-
+    log('[Phase 3] Complete - ' + updated.filter(s=>s.imagePrompt).length + '/' + updated.length + ' prompts ready.');
+  }, [globalAsset, callTextLF, transition]);
   const runPhase4 = useCallback(async () => {
     transition('PHASE_4_GENERATING');
-    log('[Phase 4] Generating videos...');
+    log('[Phase 4] Preparing video motion prompts...');
     const updated = [...lfScenesRef.current];
     for (let i=0; i<updated.length; i++) {
       if (abortRef.current) throw new Error('Aborted');
       setCurrentSceneIdx(i);
       const sc = updated[i];
-      if (!sc.anchorImage) { log('[Phase 4] Scene '+(i+1)+' no anchor, skip', 'warn'); continue; }
-      log('[Phase 4] Video '+(i+1)+'/'+updated.length);
-      const motionPrompt = sc.compositionData?.motionHint || sc.summary;
+      log('[Phase 4] Video prompt ' + (i+1) + '/' + updated.length);
       try {
-        let imageB64 = null;
-        if (sc.anchorImage.url && sc.anchorImage.url.startsWith('data:')) imageB64 = sc.anchorImage.url.split(',')[1];
-        const videoUrls = await callVeo(motionPrompt, imageB64, {aspectRatio:'9:16', duration:5});
-        sc.video = { url:videoUrls[0], durationSec:5, motionPrompt };
-        sc.status = 'video_ready';
-        log('[Phase 4] Scene '+(i+1)+' video generated');
-      } catch(e) { log('[Phase 4] Scene '+(i+1)+' failed: '+e.message, 'warn'); sc.video = null; }
+        const motionPrompt = (sc.compositionData||{}).motionHint || sc.summary;
+        sc.videoPrompt = { motionPrompt, aspectRatio:'9:16', duration:5 };
+        if (!sc.status || sc.status === 'prompt_ready') sc.status = 'prompt_ready';
+        log('[Phase 4] Scene ' + (i+1) + ' video prompt ready');
+      } catch(e) { log('[Phase 4] Scene ' + (i+1) + ' failed: ' + e.message); }
     }
-    lfScenesRef.current = updated; setLfScenes(updated);
+    lfScenesRef.current = updated;
+    setLfScenes([...updated]);
     transition('PHASE_4_COMPLETE');
-    log('[Phase 4] Complete: '+updated.filter(s=>s.video).length+'/'+updated.length+' videos');
-  }, [transition, log]);
+    log('[Phase 4] Complete - video prompts ready.');
+  }, [transition]);
   const runPhase5 = useCallback(async () => {
     if (!enableWebtoon) { log('[Phase 5] Webtoon disabled, skipping'); transition('COMPLETED'); return; }
     transition('PHASE_5_EXPANDING');
@@ -1953,11 +1973,11 @@ const runPhase1 = useCallback(async () => {
                 React.createElement('div',{style:{color:'#e6edf3',fontSize:12,fontWeight:600,marginBottom:4}},sc.summary||('Scene '+(i+1))),
                 sc.compositionData && React.createElement('div',{style:{color:'#8b949e',fontSize:11}},sc.compositionData.shotSize+' | '+sc.compositionData.cameraAngle+' | '+sc.compositionData.lighting),
                 React.createElement('div',{style:{display:'flex',gap:4,marginTop:6}},
-                  React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:sc.status==='complete'?'#238636':'#30363d',color:'#fff'}},sc.status||'pending'),
+                  React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:sc.status==='complete'?'#238636':sc.status==='prompt_ready'?'#6c5ce7':sc.status==='image_done'?'#2ea043':'#30363d',color:'#fff'}},sc.status||'pending'),
                   sc.narrativeMood && React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:'#1c2128',color:'#f0883e'}},sc.narrativeMood))
               ),
               React.createElement('div',{style:{display:'flex',gap:4,marginTop:4,flexWrap:'wrap'}},
-                React.createElement('button',{onClick:(e)=>{e.stopPropagation();generateSceneImage(i)},disabled:sc.status==='generating_image',style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #6c5ce7',background:sc.status==='generating_image'?'#6c5ce7':'transparent',color:'#fff',cursor:'pointer',whiteSpace:'nowrap'}},(sc.status==='generating_image'?'•••':'🖼️ 이미지 생성')),
+                React.createElement('button',{onClick:(e)=>{e.stopPropagation();generateSceneImage(i)},disabled:sc.status==='generating_image',style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #6c5ce7',background:sc.status==='generating_image'?'#6c5ce7':'transparent',color:'#fff',cursor:'pointer',whiteSpace:'nowrap'}},(sc.status==='generating_image'?'•••':sc.imagePrompt?'🖼️ 이미지 생성 (✓)':'🖼️ 이미지 생성')),
                 React.createElement('button',{onClick:(e)=>{e.stopPropagation();generateSceneVideo(i)},disabled:sc.status==='generating_video'||!sc.anchorImage,style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #e0457b',background:sc.status==='generating_video'?'#e0457b':'transparent',color:'#fff',cursor:'pointer',whiteSpace:'nowrap'}},(sc.status==='generating_video'?'•••':'🎬 영상 생성')),
                 sc.anchorImage&&React.createElement('button',{onClick:(e)=>{e.stopPropagation();downloadMedia(sc.anchorImage.url,'scene_'+(i+1)+'_image.png')},style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #238636',background:'transparent',color:'#238636',cursor:'pointer',whiteSpace:'nowrap'}},'⬇ 이미지 저장'),
                 sc.video&&sc.video.url&&React.createElement('button',{onClick:(e)=>{e.stopPropagation();downloadMedia(sc.video.url,'scene_'+(i+1)+'_video.mp4')},style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #238636',background:'transparent',color:'#238636',cursor:'pointer',whiteSpace:'nowrap'}},'⬇ 영상 저장')
