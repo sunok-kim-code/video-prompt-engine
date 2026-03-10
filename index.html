@@ -399,30 +399,41 @@ async function callGemini(systemPrompt, userPrompt, opts={}) {
 // IMAGEN API CLIENT (A-4: 이미지 생성)
 // ============================================================
 
-async function callImagen(prompt, opts={}) {
-  const apiKey = getGeminiKey();
-  const model = opts.model || 'imagen-4.0-generate-001';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
-  const body = {
-    instances: [{prompt: prompt}],
-    parameters: {
-      sampleCount: opts.sampleCount || 1,
-      aspectRatio: opts.aspectRatio || '1:1',
-      personGeneration: 'allow_all'
+async function callImagen(prompt, opts = {}) {
+    const apiKey = getGeminiKey();
+    const models = [
+      opts.model || 'imagen-4.0-generate-001',
+      'imagen-4.0-fast-generate-001',
+      'imagen-4.0-ultra-generate-001'
+    ];
+    let lastError = null;
+    for (const model of models) {
+      try {
+        console.log('[Imagen] Trying model: ' + model);
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
+        const body = {instances:[{prompt}], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
+        const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','x-goog-api-key':apiKey}, body:JSON.stringify(body)});
+        if (!res.ok) {
+          const errText = await res.text();
+          console.warn('[Imagen] Model ' + model + ' failed: ' + res.status + ' ' + errText.substring(0, 200));
+          lastError = new Error('Imagen API ' + res.status + ': ' + errText.substring(0, 200));
+          continue;
+        }
+        const data = await res.json();
+        const predictions = data.predictions;
+        if (!predictions || predictions.length === 0) { lastError = new Error('No predictions'); continue; }
+        console.log('[Imagen] Success with model: ' + model);
+        return predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
+      } catch(e) {
+        console.warn('[Imagen] Model ' + model + ' error: ' + e.message);
+        lastError = e;
+        continue;
+      }
     }
-  };
-  const res = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},body:JSON.stringify(body)});
-  if(!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Imagen API ${res.status}: ${errText}`);
+    throw lastError || new Error('All Imagen models failed');
   }
-  const data = await res.json();
-  const predictions = data.predictions || [];
-  if(predictions.length === 0) throw new Error('이미지 생성 결과가 없습니다.');
-  return predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
-}
 
-// ============================================================
+  // ============================================================
 // GROK IMAGE API CLIENT (xAI Aurora)
 // ============================================================
 
