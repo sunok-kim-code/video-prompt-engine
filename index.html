@@ -401,36 +401,42 @@ async function callGemini(systemPrompt, userPrompt, opts={}) {
 
 async function callImagen(prompt, opts = {}) {
     const apiKey = getGeminiKey();
-    const models = [
-      opts.model || 'imagen-4.0-generate-001',
-      'imagen-4.0-fast-generate-001',
-      'imagen-4.0-ultra-generate-001'
-    ];
-    let lastError = null;
-    for (const model of models) {
-      try {
-        console.log('[Imagen] Trying model: ' + model);
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
-        const body = {instances:[{prompt}], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
-        const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','x-goog-api-key':apiKey}, body:JSON.stringify(body)});
-        if (!res.ok) {
-          const errText = await res.text();
-          console.warn('[Imagen] Model ' + model + ' failed: ' + res.status + ' ' + errText.substring(0, 200));
-          lastError = new Error('Imagen API ' + res.status + ': ' + errText.substring(0, 200));
-          continue;
-        }
-        const data = await res.json();
-        const predictions = data.predictions;
-        if (!predictions || predictions.length === 0) { lastError = new Error('No predictions'); continue; }
-        console.log('[Imagen] Success with model: ' + model);
-        return predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
-      } catch(e) {
-        console.warn('[Imagen] Model ' + model + ' error: ' + e.message);
-        lastError = e;
-        continue;
-      }
+    const model = opts.model || 'imagen-4.0-ultra-generate-001';
+    console.log('[Imagen] Using model: ' + model);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
+    const body = {instances:[{prompt}], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','x-goog-api-key':apiKey}, body:JSON.stringify(body)});
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error('Imagen API ' + res.status + ': ' + errText.substring(0, 200));
     }
-    throw lastError || new Error('All Imagen models failed');
+    const data = await res.json();
+    const predictions = data.predictions;
+    if (!predictions || predictions.length === 0) throw new Error('No predictions returned');
+    console.log('[Imagen] Success with model: ' + model);
+    return predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
+  }
+
+  async function callNanoBanana(prompt, opts = {}) {
+    const apiKey = getGeminiKey();
+    const model = 'gemini-2.0-flash-preview-image-generation';
+    console.log('[NanoBanana] Generating image with: ' + model);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const body = {
+      contents: [{role:'user', parts:[{text: prompt}]}],
+      generationConfig: {responseModalities: ['TEXT','IMAGE'], temperature: 1.0}
+    };
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error('NanoBanana API ' + res.status + ': ' + errText.substring(0, 200));
+    }
+    const data = await res.json();
+    const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+    const imgParts = parts.filter(p => p.inlineData && p.inlineData.mimeType && p.inlineData.mimeType.startsWith('image/'));
+    if (imgParts.length === 0) throw new Error('No image generated');
+    console.log('[NanoBanana] Success, got ' + imgParts.length + ' image(s)');
+    return imgParts.map(p => `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`);
   }
 
   // ============================================================
@@ -507,7 +513,7 @@ async function callVeo(prompt, imageBase64, opts={}) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predictLongRunning`;
   const instances = [{prompt: prompt}];
   if(imageBase64) {
-    instances[0].image = {bytesBase64Encoded: imageBase64.replace(/^data:image\/[^;]+;base64,/,'')};
+    instances[0].image = {bytesBase64Encoded: imageBase64.replace(/^data:image\/[^;]+;base64,/,''), mimeType: 'image/png'};
   }
   const body = {
     instances,
@@ -890,7 +896,7 @@ function ImageGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
   const [processing, setProcessing] = useState(false);
   const [step, setStep] = useState('idle'); // idle, A2, A3, done
   const [selectedCat, setSelectedCat] = useState('character');
-  const [imageProvider, setImageProvider] = React.useState('imagen');
+  const [imageProvider, setImageProvider] = React.useState('nanoBanana');
   const [textProvider, setTextProvider] = React.useState('gemini');
   const [selectedTpl, setSelectedTpl] = useState('');
   const scene = scenes[activeSceneIdx] || {};
@@ -1008,8 +1014,8 @@ ${dialogueText}
             <div className="form-group">
               <label className="form-label">이미지 생성 엔진</label>
               <div style={{display:'flex',gap:6}}>
-                <button className={`btn btn-sm ${imageProvider==='imagen'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('imagen')}>🌐 Imagen 4</button>
-                <button className={`btn btn-sm ${imageProvider==='grok'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('grok')}>🤖 Grok Aurora</button>
+                <button className={`btn btn-sm ${imageProvider==='nanoBanana'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('nanoBanana')}>Nano Banana Pro</button>
+                <button className={`btn btn-sm ${imageProvider==='imagen'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('imagen')}>Imagen4 Ultra</button>
               </div>
             </div>
 
@@ -1595,7 +1601,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
   const [expandView, setExpandView] = useState(null);
   const abortRef = useRef(false);
   const [textProvider, setTextProvider] = useState('gemini');
-  const [imageProvider, setImageProvider] = useState('imagen');
+  const [imageProvider, setImageProvider] = useState('nanoBanana');
   const [enableWebtoon, setEnableWebtoon] = useState(true);
     const SAVE_KEY = 'LF_PIPELINE_STATE';
     const savePipeline = useCallback((data) => {
@@ -1647,7 +1653,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
 
   const callImageLF = useCallback(async (prompt, opts) => {
     opts = opts || {};
-    return imageProvider === 'grok' ? await callGrokImage(prompt, opts) : await callImagen(prompt, Object.assign({aspectRatio:'9:16'}, opts));
+    return imageProvider === 'nanoBanana' ? await callNanoBanana(prompt) : await callImagen(prompt, Object.assign({aspectRatio:'9:16'}, opts));
   }, [imageProvider]);
   
     // === Per-scene image generation ===
