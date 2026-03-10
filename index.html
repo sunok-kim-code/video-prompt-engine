@@ -1968,7 +1968,7 @@ function App() {
           <Workbench scenes={scenes} setScenes={setScenes} addLog={addLog}/>
         )}
 
-                {activeTab === 'longform' && <LongFormOrchestrator scenes={scenes} setScenes={setScenes} log={log}/>}
+                {activeTab === 'longform' && <LongFormOrchestrator scenes={scenes} setScenes={setScenes} log={(msg,lvl)=>addLog(lvl||'info',msg)}/>}
 {/* Log Panel */}
         <div className="card" style={{marginTop:16}}>
           <div className="card-title">🖥️ 시스템 로그
