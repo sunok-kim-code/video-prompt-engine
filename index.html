@@ -209,6 +209,26 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .emotion-grid{grid-template-columns:repeat(5,1fr);}
 .nav-tabs{overflow-x:auto;}
 }
+
+.api-key-btn{margin-left:auto;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;transition:all .2s;}
+.api-key-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.api-key-btn.connected{border-color:#27ae60;color:#27ae60;}
+.api-key-btn.connected:hover{background:#27ae60;color:#fff;}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000;}
+.modal-box{background:var(--surface);border-radius:16px;padding:28px;width:460px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:6px;}
+.modal-desc{font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.5;}
+.modal-input{width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;background:var(--surface2);color:var(--text);font-family:monospace;}
+.modal-input:focus{outline:none;border-color:var(--accent);}
+.modal-actions{display:flex;gap:10px;margin-top:16px;justify-content:flex-end;}
+.modal-actions button{padding:10px 20px;border-radius:8px;border:none;font-weight:600;cursor:pointer;font-size:13px;}
+.modal-actions .btn-save{background:var(--accent);color:#fff;}
+.modal-actions .btn-cancel{background:var(--surface2);color:var(--text2);}
+.modal-actions .btn-delete{background:var(--err);color:#fff;}
+.key-status{display:flex;align-items:center;gap:6px;margin:10px 0;font-size:12px;color:var(--text2);}
+.key-status .dot{width:8px;height:8px;border-radius:50%;}
+.key-status .dot.on{background:#27ae60;}
+.key-status .dot.off{background:var(--err);}
 </style>
 </head>
 <body>
@@ -220,7 +240,14 @@ const {useState,useCallback,useRef,useEffect,useMemo} = React;
 // PROMPT ENGINE LAYER
 // ============================================================
 
-const GEMINI_KEY = 'AIzaSyD5dHoSa4kgA9zSLJujtU4xbCM_CRhX-XM';
+// API key stored in browser localStorage (never hardcoded)
+function getGeminiKey() {
+  const k = localStorage.getItem('GEMINI_API_KEY');
+  if (!k) throw new Error('API_KEY_MISSING');
+  return k;
+}
+function setGeminiKey(k) { localStorage.setItem('GEMINI_API_KEY', k); }
+function hasGeminiKey() { return !!localStorage.getItem('GEMINI_API_KEY'); }
 
 // Genre presets
 const GENRE_PRESETS = {
@@ -337,7 +364,11 @@ const VIDEO_MODES = [
 async function callGemini(systemPrompt, userPrompt, opts={}) {
   const model = opts.model || 'gemini-2.5-flash';
   const thinkBudget = opts.thinkBudget ?? 0;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
+  let apiKey;
+  try { apiKey = getGeminiKey(); } catch(e) {
+    throw new Error('API key not set. Click the key button in the top right to enter your Gemini API key.');
+  }
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const body = {
     systemInstruction: {parts:[{text:systemPrompt}]},
     contents: [{role:'user',parts:[{text:userPrompt}]}],
@@ -1226,8 +1257,38 @@ function Workbench({scenes, setScenes, addLog}) {
 // MAIN APP
 // ============================================================
 
+// API Key Modal Component
+function ApiKeyModal({onClose, onSave}) {
+  const [keyVal, setKeyVal] = useState(localStorage.getItem('GEMINI_API_KEY') || '');
+  const existing = hasGeminiKey();
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e=>e.stopPropagation()}>
+        <div className="modal-title">🔑 Gemini API 키 설정</div>
+        <div className="modal-desc">
+          Google AI Studio에서 발급받은 API 키를 입력하세요.<br/>
+          키는 이 브라우저의 localStorage에만 저장되며 서버로 전송되지 않습니다.
+        </div>
+        <div className="key-status">
+          <span className={"dot " + (existing ? "on" : "off")}></span>
+          {existing ? "키가 설정되어 있습니다" : "키가 설정되지 않았습니다"}
+        </div>
+        <input className="modal-input" type="password" placeholder="AIzaSy..." value={keyVal}
+          onChange={e=>setKeyVal(e.target.value)} autoFocus/>
+        <div className="modal-actions">
+          {existing && <button className="btn-delete" onClick={()=>{localStorage.removeItem('GEMINI_API_KEY');onSave();}}>삭제</button>}
+          <button className="btn-cancel" onClick={onClose}>취소</button>
+          <button className="btn-save" onClick={()=>{if(keyVal.trim()){setGeminiKey(keyVal.trim());onSave();}}}>저장</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState('conti');
+  const [showKeyModal, setShowKeyModal] = useState(!hasGeminiKey());
+  const [keySet, setKeySet] = useState(hasGeminiKey());
   const [scenes, setScenes] = useState([{
     id:'scene_1', description:'', dialogues:[{type:'speech',character:'',text:''}],
     sfx:[], sfxText:'', emotionStart:'smiling', emotionEnd:'smiling',
@@ -1263,7 +1324,11 @@ function App() {
             </button>
           ))}
         </div>
+        <button className={"api-key-btn " + (keySet?"connected":"")} onClick={()=>setShowKeyModal(true)}>
+          {keySet ? "🟢 API 연결됨" : "🔑 API 키 설정"}
+        </button>
       </div>
+      {showKeyModal && <ApiKeyModal onClose={()=>setShowKeyModal(false)} onSave={()=>{setKeySet(hasGeminiKey());setShowKeyModal(false);}}/>}
 
       <div className="main-content">
         {activeTab === 'conti' && (
@@ -1296,4 +1361,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </body>
 </html>
 
-<!-- v1.0 deployed -->
