@@ -1406,13 +1406,13 @@ function Workbench({scenes, setScenes, addLog}) {
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${currentStep==='A-3'?'active':'pending'}`}>A-3 이미지프롬프트</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='A-4'?'active':wbScenes.every(s=>s.imageUrl)?'done':'pending'}`}>A-4 이미지생성</div>
+        <div className={`pipeline-step ${currentStep==='A-4'?'active':scenes.every(s=>s.imageUrl)?'done':'pending'}`}>A-4 이미지생성</div>
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${currentStep==='B-2'?'active':'pending'}`}>B-2 모션콘티</div>
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${currentStep==='B-3'?'active':'pending'}`}>B-3 모션프롬프트</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='B-5'?'active':wbScenes.every(s=>s.videoUrl)?'done':'pending'}`}>B-5 영상생성</div>
+        <div className={`pipeline-step ${currentStep==='B-5'?'active':scenes.every(s=>s.videoUrl)?'done':'pending'}`}>B-5 영상생성</div>
       </div>
 
       <div className="stats-bar">
