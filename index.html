@@ -1802,14 +1802,15 @@ const runPhase1 = useCallback(async () => {
     let scenes;
     try {
       let cleaned = sceneRaw.replace(/```json\n?|```/g, '').trim();
-          const arrStart = cleaned.indexOf('[');
-          const arrEnd = cleaned.lastIndexOf(']');
-          if (arrStart >= 0 && arrEnd > arrStart) { cleaned = cleaned.substring(arrStart, arrEnd + 1); }
-          try { scenes = JSON.parse(cleaned); } catch(e1) {
-          const lastBrace = cleaned.lastIndexOf('}');
-          if (lastBrace > 0) { cleaned = cleaned.substring(0, lastBrace+1) + ']'; scenes = JSON.parse(cleaned); log('[Phase 2] Recovered truncated JSON','warn'); }
-          else { throw new Error('Scene split JSON parse failed: ' + e1.message); }
-          }
+      const arrStart = cleaned.indexOf('[');
+      const arrEnd = cleaned.lastIndexOf(']');
+      if (arrStart >= 0 && arrEnd > arrStart) { cleaned = cleaned.substring(arrStart, arrEnd + 1); }
+      try { scenes = JSON.parse(cleaned); } catch(e1) {
+        const lastBrace = cleaned.lastIndexOf('}');
+        if (lastBrace > 0) { cleaned = cleaned.substring(0, lastBrace+1) + ']'; scenes = JSON.parse(cleaned); log('[Phase 2] Recovered truncated JSON','warn'); }
+        else { throw e1; }
+      }
+    } catch(e) { throw new Error('Scene split JSON parse failed: ' + e.message); }
     log('[Phase 2-A] '+scenes.length+' scenes identified');
     if (abortRef.current) throw new Error('Aborted');
 
