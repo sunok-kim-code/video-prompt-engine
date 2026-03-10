@@ -425,7 +425,7 @@ async function callImagen(prompt, opts = {}) {
 
   async function callNanoBanana(prompt, opts = {}) {
     const {projectId, location, accessToken} = getVertexConfig();
-    const model = 'gemini-2.0-flash-preview-image-generation';
+    const model = opts.model || 'gemini-2.0-flash-preview-image-generation';
     console.log('[NanoBanana] Generating image via Vertex AI: ' + model);
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
     const body = {
@@ -899,7 +899,7 @@ function ImageGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
   const [processing, setProcessing] = useState(false);
   const [step, setStep] = useState('idle'); // idle, A2, A3, done
   const [selectedCat, setSelectedCat] = useState('character');
-  const [imageProvider, setImageProvider] = React.useState('nanoBanana');
+  const [imageProvider, setImageProvider] = React.useState('imagen4');
   const [textProvider, setTextProvider] = React.useState('gemini');
   const [selectedTpl, setSelectedTpl] = useState('');
   const scene = scenes[activeSceneIdx] || {};
@@ -1016,9 +1016,13 @@ ${dialogueText}
 
             <div className="form-group">
               <label className="form-label">이미지 생성 엔진</label>
-              <div style={{display:'flex',gap:6}}>
-                <button className={`btn btn-sm ${imageProvider==='nanoBanana'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('nanoBanana')}>Nano Banana Pro</button>
-                <button className={`btn btn-sm ${imageProvider==='imagen'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('imagen')}>Imagen4 Ultra</button>
+              <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                <select value={imageProvider} onChange={e=>setImageProvider(e.target.value)} style={{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:13,cursor:'pointer'}}>
+                  <option value="imagen4">Imagen 4</option>
+                  <option value="imagen4ultra">Imagen 4 Ultra</option>
+                  <option value="nanoBananaPro">Nano Banana Pro</option>
+                  <option value="nanoBanana">Nano Banana</option>
+                </select>
               </div>
             </div>
 
@@ -1604,7 +1608,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
   const [expandView, setExpandView] = useState(null);
   const abortRef = useRef(false);
   const [textProvider, setTextProvider] = useState('gemini');
-  const [imageProvider, setImageProvider] = useState('nanoBanana');
+  const [imageProvider, setImageProvider] = useState('imagen4');
   const [enableWebtoon, setEnableWebtoon] = useState(true);
     const SAVE_KEY = 'LF_PIPELINE_STATE';
     const savePipeline = useCallback((data) => {
@@ -1656,7 +1660,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
 
   const callImageLF = useCallback(async (prompt, opts) => {
     opts = opts || {};
-    return imageProvider === 'nanoBanana' ? await callNanoBanana(prompt) : await callImagen(prompt, Object.assign({aspectRatio:'9:16'}, opts));
+    return (imageProvider === 'nanoBananaPro' || imageProvider === 'nanoBanana') ? await callNanoBanana(prompt, {model: imageProvider === 'nanoBanana' ? 'gemini-2.0-flash-preview-image-generation' : 'gemini-2.0-pro-preview-image-generation'}) : await callImagen(prompt, Object.assign({aspectRatio:'9:16', model: imageProvider === 'imagen4ultra' ? 'imagen-4.0-ultra-generate-001' : 'imagen-4.0-generate-001'}, opts));
   }, [imageProvider]);
   
     // === Per-scene image generation ===
