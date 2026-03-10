@@ -7,23 +7,23 @@
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 :root {
-  --bg: #0a0a0f;
-  --surface: #12121a;
-  --surface2: #1a1a26;
-  --surface3: #222233;
-  --border: #2a2a3e;
-  --text: #e0e0f0;
-  --text2: #8888aa;
+  --bg: #f5f5fa;
+  --surface: #ffffff;
+  --surface2: #f0f0f8;
+  --surface3: #e8e8f0;
+  --border: #d0d0e0;
+  --text: #1a1a2e;
+  --text2: #666688;
   --accent: #6c5ce7;
-  --accent2: #a29bfe;
-  --romance: #ff6b9d;
-  --action: #ff4444;
-  --horror: #9b59b6;
-  --slice: #2ecc71;
-  --drama: #3498db;
-  --success: #00d2d3;
-  --warn: #feca57;
-  --err: #ff6b6b;
+  --accent2: #7c6cf7;
+  --romance: #e0457b;
+  --action: #e03030;
+  --horror: #8e44ad;
+  --slice: #27ae60;
+  --drama: #2980b9;
+  --success: #00a8a8;
+  --warn: #d4a017;
+  --err: #e74c3c;
 }
 body { background:var(--bg); color:var(--text); font-family:'Segoe UI','Apple SD Gothic Neo',sans-serif; min-height:100vh; }
 
@@ -117,7 +117,7 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI','Apple SD
 .result-header .step-meta { margin-left:auto; font-size:11px; color:var(--text2); display:flex; gap:12px; }
 .result-body { padding:18px; }
 .result-text { font-size:14px; line-height:1.8; white-space:pre-wrap; word-break:break-word; }
-.result-text.korean { color:#ccc; }
+.result-text.korean { color:#444; }
 .result-text.english { color:var(--success); font-family:'JetBrains Mono','Fira Code',monospace; font-size:13px; line-height:1.7; }
 
 /* Copy button */
@@ -694,7 +694,7 @@ function App() {
               {batchResults.map((r, i) => (
                 <div key={i} className="result-card step-2 fade-up" style={{animationDelay:`${i*0.1}s`}}>
                   <div className="result-header">
-                    <div className="step-num" style={{background:'rgba(0,210,211,0.2)',color:'var(--success)'}}>{i+1}</div>
+                    <div className="step-num" style={{background:'rgba(0,168,168,0.15)',color:'var(--success)'}}>{i+1}</div>
                     <span className="step-title" style={{fontSize:12}}>{r.description?.slice(0,40)}...</span>
                     <div className="step-meta"><span>⏱ {((r.time1+r.time2)/1000).toFixed(1)}s</span></div>
                     <button className="copy-btn" onClick={() => copyText(r.step2?.text || '')}>복사</button>
