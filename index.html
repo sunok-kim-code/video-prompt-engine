@@ -1790,7 +1790,7 @@ const runPhase1 = useCallback(async () => {
   const runPhase2 = useCallback(async () => {
     transition('PHASE_2_SPLITTING');
     log('[Phase 2-A] Splitting story into scenes...');
-    const sceneRaw = await callTextLF(PROMPTS.SCENE_SPLIT, sourceText, {maxTokens: 16384});
+    const sceneRaw = await callTextLF(PIPELINE_A_SYSTEM.contiConvert, sourceText, {maxTokens: 16384});
     let scenes;
     try {
       let cleaned = sceneRaw.replace(/```json\n?|```/g, '').trim();
@@ -1840,7 +1840,7 @@ const runPhase1 = useCallback(async () => {
         const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
         const bgDesc = bgRef ? bgRef.referencePrompt : 'detailed background';
         const userMsg = 'Scene: ' + sc.summary + '\nComposition: ' + JSON.stringify(comp) + '\nCharacter prompts: ' + charDescs + '\nBackground: ' + bgDesc;
-        const pRaw = await callTextLF(PROMPTS.ANCHOR_PROMPT_ASSEMBLY + '\n\n' + userMsg, {maxTokens:16384});
+        const pRaw = await callTextLF(PIPELINE_A_SYSTEM.imagePrompt + '\n\n' + userMsg, {maxTokens:16384});
         const pData = JSON.parse(pRaw.replace(/```json|\n|```/g,'').trim());
         sc.imagePrompt = pData;
         sc.status = 'prompt_ready';
@@ -1862,8 +1862,11 @@ const runPhase1 = useCallback(async () => {
       const sc = updated[i];
       log('[Phase 4] Video prompt ' + (i+1) + '/' + updated.length);
       try {
-        const motionPrompt = (sc.compositionData||{}).motionHint || sc.summary;
-        sc.videoPrompt = { motionPrompt, aspectRatio:'9:16', duration:5 };
+        const sceneInfo = 'Scene: ' + sc.summary + '\nComposition: ' + JSON.stringify(sc.compositionData||{});
+        const motionRaw = await callTextLF(PIPELINE_B.motionPrompt + '\n\n' + sceneInfo, {maxTokens:4096});
+        let motionData;
+        try { motionData = JSON.parse(motionRaw.replace(/\`\`\`json|\n|\`\`\`/g,'').trim()); } catch(pe) { motionData = {motionPrompt: motionRaw.trim()}; }
+        sc.videoPrompt = { motionPrompt: motionData.motionPrompt || motionData.prompt || motionRaw.trim(), aspectRatio:'9:16', duration:5 };
         if (!sc.status || sc.status === 'prompt_ready') sc.status = 'prompt_ready';
         log('[Phase 4] Scene ' + (i+1) + ' video prompt ready');
       } catch(e) { log('[Phase 4] Scene ' + (i+1) + ' failed: ' + e.message); }
