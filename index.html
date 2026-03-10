@@ -1662,7 +1662,8 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
           const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
           prompt = 'manhwa webtoon style, ' + sc.summary + ', Characters: ' + charDescs + ', Background: ' + (bgRef ? bgRef.referencePrompt : 'detailed background');
         }
-        const imgUrl = await callImageLF(prompt);
+        const imgResult = await callImageLF(prompt);
+        const imgUrl = Array.isArray(imgResult) ? imgResult[0] : imgResult;
         sc.anchorImage = { url: imgUrl, prompt };
         sc.status = sc.video ? 'complete' : 'image_done';
         log('[GenImg] Scene ' + (idx+1) + ' image done');
@@ -1688,11 +1689,12 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
         const motionPrompt = (sc.videoPrompt && sc.videoPrompt.motionPrompt) || (sc.compositionData && sc.compositionData.motionHint) || sc.summary;
         let imageB64 = null;
         if (sc.anchorImage && sc.anchorImage.url) {
-          if (sc.anchorImage.url.startsWith('data:')) {
-            imageB64 = sc.anchorImage.url.split(',')[1];
-          } else {
+          const imgUrl = typeof sc.anchorImage.url === 'string' ? sc.anchorImage.url : (Array.isArray(sc.anchorImage.url) ? sc.anchorImage.url[0] : String(sc.anchorImage.url || ''));
+          if (imgUrl.startsWith('data:')) {
+            imageB64 = imgUrl.split(',')[1];
+          } else if (imgUrl) {
             try {
-              const resp = await fetch(sc.anchorImage.url);
+              const resp = await fetch(imgUrl);
               const blob = await resp.blob();
               imageB64 = await new Promise((resolve) => {
                 const reader = new FileReader();
