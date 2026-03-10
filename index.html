@@ -519,7 +519,13 @@ async function callVeo(prompt, imageBase64, opts={}) {
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predictLongRunning`;
   const instances = [{prompt: prompt}];
   if(imageBase64) {
-    instances[0].image = {bytesBase64Encoded: imageBase64.replace(/^data:image\/[^;]+;base64,/,''), mimeType: 'image/png'};
+    let b64 = imageBase64.replace(/^data:image\/[^;]+;base64,/,'');
+    // Limit image size to prevent request too large errors
+    if (b64.length > 5000000) {
+      console.warn('[callVeo] Image base64 too large (' + Math.round(b64.length/1024/1024) + 'MB), generating without image');
+    } else {
+      instances[0].image = {bytesBase64Encoded: b64, mimeType: 'image/png'};
+    }
   }
   const body = {
     instances,
@@ -529,10 +535,15 @@ async function callVeo(prompt, imageBase64, opts={}) {
       durationSeconds: opts.duration || 5
     }
   };
-  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
+  let res;
+  try {
+    res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
+  } catch(fetchErr) {
+    throw new Error('Veo API network error (Failed to fetch). Check: 1) Access token valid 2) Veo API enabled in GCP project 3) Browser CORS. Detail: ' + fetchErr.message);
+  }
   if(!res.ok) {
     const errText = await res.text();
-    throw new Error('Veo API ' + res.status + ': ' + errText.substring(0, 200));
+    throw new Error('Veo API ' + res.status + ': ' + errText.substring(0, 300));
   }
   const opData = await res.json();
   const opName = opData.name;
@@ -540,7 +551,10 @@ async function callVeo(prompt, imageBase64, opts={}) {
   const pollUrl = `https://${location}-aiplatform.googleapis.com/v1/${opName}`;
   for(let i = 0; i < 60; i++) {
     await new Promise(r => setTimeout(r, 5000));
-    const pollRes = await fetch(pollUrl, {headers:{'Authorization':'Bearer '+accessToken}});
+    let pollRes;
+    try {
+      pollRes = await fetch(pollUrl, {headers:{'Authorization':'Bearer '+accessToken}});
+    } catch(pe) { console.warn('[callVeo] Poll fetch error: ' + pe.message); continue; }
     if(!pollRes.ok) continue;
     const pollData = await pollRes.json();
     if(pollData.done) {
@@ -551,12 +565,30 @@ async function callVeo(prompt, imageBase64, opts={}) {
   }
   throw new Error('Video generation timed out');
 }
-
 // ============================================================
 // PIPELINE A: 글콘티 → 이미지 프롬프트
 // ============================================================
 
 const PIPELINE_A_SYSTEM = {
+  // Scene splitting for LongForm Phase 2 - outputs JSON
+  sceneSplit: `You are an expert story analyst. Split the given story/script into individual scenes for webtoon production.
+
+CRITICAL: You MUST respond with ONLY a valid JSON array. No markdown, no explanation, no code fences.
+
+Each scene object must have these fields:
+- "sceneNumber": integer (1-based)
+- "summary": string (1-2 sentence scene description in Korean)
+- "dialogues": array of {"speaker": string, "text": string}
+- "narrativeMood": string (e.g. "tense", "romantic", "action", "calm")
+- "keyCharacters": array of character ID strings (e.g. ["char_1", "char_2"])
+- "primaryLocation": string (location ID, e.g. "bg_1")
+- "duration": number (estimated seconds for this scene, 3-10)
+
+Example output format:
+[{"sceneNumber":1,"summary":"주인공이 카페에서 친구를 만난다","dialogues":[{"speaker":"주인공","text":"오랜만이야!"}],"narrativeMood":"warm","keyCharacters":["char_1","char_2"],"primaryLocation":"bg_1","duration":5}]
+
+Split the story naturally by location changes, time jumps, or dramatic beats.
+Respond with ONLY the JSON array.`,
   // A-2: 콘티 변환
   contiConvert: `당신은 웹툰/만화 글콘티를 구조화된 형식으로 변환하는 전문가입틈다.
 
@@ -1679,14 +1711,25 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
         if (sc.imagePrompt && sc.imagePrompt.prompt) {
           prompt = sc.imagePrompt.prompt;
         } else {
-          const comp = sc.compositionData || {};
-          const charDescs = ((comp.characterPoses||[]).map(cp => {
-            const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null;
-            return (cr ? cr.referencePrompt : '') + ' ' + (cp.pose||'') + ' ' + (cp.expression||'');
-          })).filter(Boolean).join('; ');
-          const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
-          prompt = 'manhwa webtoon style, ' + sc.summary + ', Characters: ' + charDescs + ', Background: ' + (bgRef ? bgRef.referencePrompt : 'detailed background');
+          prompt = 'manhwa webtoon style, ' + sc.summary;
         }
+        // Always enrich prompt with character/background references from globalAsset
+        const comp = sc.compositionData || {};
+        const charRefs = ((comp.characterPoses||[]).map(cp => {
+          const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null;
+          return cr ? cr.referencePrompt : '';
+        })).filter(Boolean);
+        if (charRefs.length > 0) { prompt += '\nCharacter details: ' + charRefs.join('; '); }
+        // Also check keyCharacters from scene data
+        if ((!charRefs.length) && sc.keyCharacters && (globalAsset||{}).characters) {
+          const kcRefs = sc.keyCharacters.map(cid => {
+            const cr = globalAsset.characters.find(ch=>ch.id===cid);
+            return cr ? cr.referencePrompt : '';
+          }).filter(Boolean);
+          if (kcRefs.length > 0) { prompt += '\nCharacter details: ' + kcRefs.join('; '); }
+        }
+        const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
+        if (bgRef && bgRef.referencePrompt) { prompt += '\nBackground: ' + bgRef.referencePrompt; }
         const imgResult = await callImageLF(prompt);
         const imgUrl = Array.isArray(imgResult) ? imgResult[0] : imgResult;
         sc.anchorImage = { url: imgUrl, prompt };
@@ -1798,7 +1841,7 @@ const runPhase1 = useCallback(async () => {
   const runPhase2 = useCallback(async () => {
     transition('PHASE_2_SPLITTING');
     log('[Phase 2-A] Splitting story into scenes...');
-    const sceneRaw = await callTextLF(PIPELINE_A_SYSTEM.contiConvert + '\n\nCRITICAL: You MUST respond with ONLY a valid JSON array. No markdown, no explanation, no code fences. Start with [ and end with ].', sourceText, {maxTokens: 16384});
+    const sceneRaw = await callTextLF(PIPELINE_A_SYSTEM.sceneSplit, sourceText, {maxTokens: 16384});
     let scenes;
     try {
       let cleaned = sceneRaw.replace(/```json\n?|```/g, '').trim();
