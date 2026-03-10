@@ -898,6 +898,7 @@ function GlContiEditor({scenes, setScenes, activeSceneIdx, setActiveSceneIdx}) {
 function ImageGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, addLog}) {
   const [processing, setProcessing] = useState(false);
   const [step, setStep] = useState('idle'); // idle, A2, A3, done
+      const currentStep = step;
   const [selectedCat, setSelectedCat] = useState('character');
   const [imageProvider, setImageProvider] = React.useState('imagen4');
   const [textProvider, setTextProvider] = React.useState('gemini');
