@@ -1990,26 +1990,26 @@ const runPhase1 = useCallback(async () => {
   const phaseNum = phase.startsWith('PHASE_') ? parseInt(phase.split('_')[1]) : phase==='COMPLETED' ? 6 : 0;
   const progressPct = phase==='COMPLETED' ? 100 : phase==='IDLE' ? 0 : Math.round((phaseNum/5)*100);
   return React.createElement('div', {style:{display:'flex',flexDirection:'column',gap:16,height:'100%'}},
-    React.createElement('div', {style:{display:'flex',gap:12,alignItems:'center',padding:'10px 14px',background:'linear-gradient(135deg,#1a1a2e,#16213e)',borderRadius:10,flexWrap:'wrap'}},
+    React.createElement('div', {style:{display:'flex',gap:12,alignItems:'center',padding:'10px 14px',background:'linear-gradient(135deg,#e8e8f4,#dde0f0)',borderRadius:10,flexWrap:'wrap'}},
       React.createElement('span', {style:{color:'#6c5ce7',fontWeight:700,fontSize:15}}, 'LongForm Pipeline'),
-      React.createElement('select', {value:textProvider,onChange:e=>setTextProvider(e.target.value),disabled:running,style:{background:'#0d1117',color:'#e6edf3',border:'1px solid #30363d',borderRadius:6,padding:'4px 8px',fontSize:12}},
+      React.createElement('select', {value:textProvider,onChange:e=>setTextProvider(e.target.value),disabled:running,style:{background:'#ffffff',color:'#1a1a2e',border:'1px solid #d0d0e0',borderRadius:6,padding:'4px 8px',fontSize:12}},
         React.createElement('option',{value:'gemini'},'Text: Gemini'), React.createElement('option',{value:'grok'},'Text: Grok')),
-      React.createElement('select', {value:imageProvider,onChange:e=>setImageProvider(e.target.value),disabled:running,style:{background:'#0d1117',color:'#e6edf3',border:'1px solid #30363d',borderRadius:6,padding:'4px 8px',fontSize:12}},
+      React.createElement('select', {value:imageProvider,onChange:e=>setImageProvider(e.target.value),disabled:running,style:{background:'#ffffff',color:'#1a1a2e',border:'1px solid #d0d0e0',borderRadius:6,padding:'4px 8px',fontSize:12}},
         React.createElement('option',{value:'imagen'},'Image: Imagen 4'), React.createElement('option',{value:'grok'},'Image: Grok Aurora')),
-      React.createElement('label',{style:{display:'flex',alignItems:'center',gap:4,color:'#8b949e',fontSize:12,cursor:'pointer'}},
+      React.createElement('label',{style:{display:'flex',alignItems:'center',gap:4,color:'#666688',fontSize:12,cursor:'pointer'}},
         React.createElement('input',{type:'checkbox',checked:enableWebtoon,onChange:e=>setEnableWebtoon(e.target.checked),disabled:running}), 'Phase 5 \uC6F9\uD230\uD655\uC7A5'),
-      React.createElement('span',{style:{marginLeft:'auto',padding:'3px 10px',borderRadius:12,fontSize:11,fontWeight:600,background:phase==='COMPLETED'?'#238636':phase==='ERROR'?'#da3633':running?'#1f6feb':'#30363d',color:'#fff'}}, PHASE_LABELS[phase]||phase)
+      React.createElement('span',{style:{marginLeft:'auto',padding:'3px 10px',borderRadius:12,fontSize:11,fontWeight:600,background:phase==='COMPLETED'?'#238636':phase==='ERROR'?'#da3633':running?'#1f6feb':'#d0d0e0',color:'#fff'}}, PHASE_LABELS[phase]||phase)
     ),
-    React.createElement('div',{style:{position:'relative',height:32,background:'#161b22',borderRadius:8,overflow:'hidden'}},
+    React.createElement('div',{style:{position:'relative',height:32,background:'#f5f5fa',borderRadius:8,overflow:'hidden'}},
       React.createElement('div',{style:{height:'100%',width:progressPct+'%',transition:'width 0.5s ease',background:phase==='ERROR'?'linear-gradient(90deg,#da3633,#f85149)':'linear-gradient(90deg,#6c5ce7,#a29bfe)',borderRadius:8}}),
       React.createElement('div',{style:{position:'absolute',top:0,left:0,right:0,bottom:0,display:'flex',alignItems:'center',justifyContent:'space-around',padding:'0 8px'}},
-        ...[1,2,3,4,5].map(n=>React.createElement('span',{key:n,style:{fontSize:10,fontWeight:600,color:phaseNum>=n?'#fff':'#484f58',textShadow:phaseNum>=n?'0 0 4px rgba(0,0,0,0.5)':'none'}},['P1 \uBD84\uC11D','P2 \uC528','P3 \uC575\uCEE4','P4 \uC601\uC0C1','P5 \uC6F9\uD230'][n-1])))
+        ...[1,2,3,4,5].map(n=>React.createElement('span',{key:n,style:{fontSize:10,fontWeight:600,color:phaseNum>=n?'#fff':'#999aab',textShadow:phaseNum>=n?'0 0 4px rgba(0,0,0,0.5)':'none'}},['P1 \uBD84\uC11D','P2 \uC528','P3 \uC575\uCEE4','P4 \uC601\uC0C1','P5 \uC6F9\uD230'][n-1])))
     ),
     React.createElement('div',{style:{flex:1,display:'flex',gap:12,minHeight:0,overflow:'hidden'}},
       React.createElement('div',{style:{width:340,display:'flex',flexDirection:'column',gap:10,flexShrink:0}},
-        React.createElement('input',{placeholder:'Project Title',value:projectTitle,onChange:e=>setProjectTitle(e.target.value),disabled:running,style:{background:'#0d1117',color:'#e6edf3',border:'1px solid #30363d',borderRadius:8,padding:'8px 12px',fontSize:13}}),
-        React.createElement('textarea',{placeholder:'Enter full story/web novel text here...\n\nPaste the complete text for the AI to analyze.',value:sourceText,onChange:e=>setSourceText(e.target.value),disabled:running,style:{flex:1,background:'#0d1117',color:'#e6edf3',border:'1px solid #30363d',borderRadius:8,padding:12,fontSize:12,lineHeight:1.6,resize:'none',fontFamily:'inherit'}}),
-        React.createElement('div',{style:{fontSize:11,color:'#484f58',textAlign:'right'}}, sourceText.length.toLocaleString()+' chars | '+lfScenes.length+' scenes'),
+        React.createElement('input',{placeholder:'Project Title',value:projectTitle,onChange:e=>setProjectTitle(e.target.value),disabled:running,style:{background:'#ffffff',color:'#1a1a2e',border:'1px solid #d0d0e0',borderRadius:8,padding:'8px 12px',fontSize:13}}),
+        React.createElement('textarea',{placeholder:'Enter full story/web novel text here...\n\nPaste the complete text for the AI to analyze.',value:sourceText,onChange:e=>setSourceText(e.target.value),disabled:running,style:{flex:1,background:'#ffffff',color:'#1a1a2e',border:'1px solid #d0d0e0',borderRadius:8,padding:12,fontSize:12,lineHeight:1.6,resize:'none',fontFamily:'inherit'}}),
+        React.createElement('div',{style:{fontSize:11,color:'#999aab',textAlign:'right'}}, sourceText.length.toLocaleString()+' chars | '+lfScenes.length+' scenes'),
           React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:4}},
             React.createElement('span',{style:{fontSize:12,color:'var(--text2)'}},'이미지 모델:'),
             React.createElement('select',{value:imageProvider,onChange:e=>setImageProvider(e.target.value),disabled:running,style:{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,cursor:'pointer'}},
@@ -2031,36 +2031,36 @@ const runPhase1 = useCallback(async () => {
       ),
       React.createElement('div',{style:{flex:1,display:'flex',flexDirection:'column',gap:10,overflow:'hidden'}},
         React.createElement('div',{style:{display:'flex',gap:6}},
-          ...['characters','backgrounds','scenes'].map(v=>React.createElement('button',{key:v,onClick:()=>setExpandView(expandView===v?null:v),style:{padding:'6px 14px',borderRadius:8,border:'none',fontSize:12,fontWeight:600,cursor:'pointer',background:expandView===v?'#6c5ce7':'#21262d',color:expandView===v?'#fff':'#8b949e'}},
+          ...['characters','backgrounds','scenes'].map(v=>React.createElement('button',{key:v,onClick:()=>setExpandView(expandView===v?null:v),style:{padding:'6px 14px',borderRadius:8,border:'none',fontSize:12,fontWeight:600,cursor:'pointer',background:expandView===v?'#6c5ce7':'#d0d0e0',color:expandView===v?'#fff':'#666688'}},
             v==='characters'?'Characters '+(globalAsset?.characters?.length||0):v==='backgrounds'?'Backgrounds '+(globalAsset?.backgrounds?.length||0):'Scenes '+lfScenes.length))
         ),
-        React.createElement('div',{style:{flex:1,overflow:'auto',borderRadius:10,background:'#0d1117',border:'1px solid #21262d',padding:12}},
+        React.createElement('div',{style:{flex:1,overflow:'auto',borderRadius:10,background:'#ffffff',border:'1px solid #d0d0e0',padding:12}},
           expandView==='characters' && globalAsset?.characters && React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}},
-            ...globalAsset.characters.map((ch,i)=>React.createElement('div',{key:i,style:{background:'#161b22',borderRadius:10,overflow:'hidden',border:'1px solid #30363d'}},
+            ...globalAsset.characters.map((ch,i)=>React.createElement('div',{key:i,style:{background:'#f5f5fa',borderRadius:10,overflow:'hidden',border:'1px solid #d0d0e0'}},
               ch.referenceImageUrl && React.createElement('img',{src:ch.referenceImageUrl,style:{width:'100%',height:200,objectFit:'cover'}}),
               React.createElement('div',{style:{padding:'8px 10px'}},
-                React.createElement('div',{style:{fontWeight:700,color:'#e6edf3',fontSize:13}},ch.name),
+                React.createElement('div',{style:{fontWeight:700,color:'#1a1a2e',fontSize:13}},ch.name),
                 React.createElement('div',{style:{color:'#6c5ce7',fontSize:11,marginTop:2}},ch.role),
-                React.createElement('div',{style:{color:'#8b949e',fontSize:11,marginTop:4}},(ch.appearance?.hair||'')+' | '+(ch.appearance?.build||''))
+                React.createElement('div',{style:{color:'#666688',fontSize:11,marginTop:4}},(ch.appearance?.hair||'')+' | '+(ch.appearance?.build||''))
               )))
           ),
           expandView==='backgrounds' && globalAsset?.backgrounds && React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:12}},
-            ...globalAsset.backgrounds.map((bg,i)=>React.createElement('div',{key:i,style:{background:'#161b22',borderRadius:10,overflow:'hidden',border:'1px solid #30363d'}},
+            ...globalAsset.backgrounds.map((bg,i)=>React.createElement('div',{key:i,style:{background:'#f5f5fa',borderRadius:10,overflow:'hidden',border:'1px solid #d0d0e0'}},
               bg.referenceImageUrl && React.createElement('img',{src:bg.referenceImageUrl,style:{width:'100%',height:160,objectFit:'cover'}}),
               React.createElement('div',{style:{padding:'8px 10px'}},
-                React.createElement('div',{style:{fontWeight:700,color:'#e6edf3',fontSize:13}},bg.name),
-                React.createElement('div',{style:{color:'#8b949e',fontSize:11,marginTop:2}},bg.locationType+' | '+bg.timeOfDay+' | '+(bg.mood||''))
+                React.createElement('div',{style:{fontWeight:700,color:'#1a1a2e',fontSize:13}},bg.name),
+                React.createElement('div',{style:{color:'#666688',fontSize:11,marginTop:2}},bg.locationType+' | '+bg.timeOfDay+' | '+(bg.mood||''))
               )))
           ),
           expandView==='scenes' && lfScenes.length>0 && React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10}},
-            ...lfScenes.map((sc,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:10,background:'#161b22',borderRadius:10,border:currentSceneIdx===i&&running?'2px solid #6c5ce7':'1px solid #30363d',padding:10,alignItems:'flex-start'}},
-              React.createElement('div',{style:{width:32,height:32,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:sc.status==='complete'?'#238636':sc.status==='video_ready'?'#1f6feb':sc.status==='anchor_ready'?'#6c5ce7':'#30363d',color:'#fff',fontSize:12,fontWeight:700,flexShrink:0}},i+1),
+            ...lfScenes.map((sc,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:10,background:'#f5f5fa',borderRadius:10,border:currentSceneIdx===i&&running?'2px solid #6c5ce7':'1px solid #d0d0e0',padding:10,alignItems:'flex-start'}},
+              React.createElement('div',{style:{width:32,height:32,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:sc.status==='complete'?'#238636':sc.status==='video_ready'?'#1f6feb':sc.status==='anchor_ready'?'#6c5ce7':'#d0d0e0',color:'#fff',fontSize:12,fontWeight:700,flexShrink:0}},i+1),
               React.createElement('div',{style:{flex:1,minWidth:0}},
-                React.createElement('div',{style:{color:'#e6edf3',fontSize:12,fontWeight:600,marginBottom:4}},sc.summary||('Scene '+(i+1))),
-                sc.compositionData && React.createElement('div',{style:{color:'#8b949e',fontSize:11}},sc.compositionData.shotSize+' | '+sc.compositionData.cameraAngle+' | '+sc.compositionData.lighting),
+                React.createElement('div',{style:{color:'#1a1a2e',fontSize:12,fontWeight:600,marginBottom:4}},sc.summary||('Scene '+(i+1))),
+                sc.compositionData && React.createElement('div',{style:{color:'#666688',fontSize:11}},sc.compositionData.shotSize+' | '+sc.compositionData.cameraAngle+' | '+sc.compositionData.lighting),
                 React.createElement('div',{style:{display:'flex',gap:4,marginTop:6}},
-                  React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:sc.status==='complete'?'#238636':sc.status==='prompt_ready'?'#6c5ce7':sc.status==='image_done'?'#2ea043':'#30363d',color:'#fff'}},sc.status||'pending'),
-                  sc.narrativeMood && React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:'#1c2128',color:'#f0883e'}},sc.narrativeMood))
+                  React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:sc.status==='complete'?'#238636':sc.status==='prompt_ready'?'#6c5ce7':sc.status==='image_done'?'#2ea043':'#d0d0e0',color:'#fff'}},sc.status||'pending'),
+                  sc.narrativeMood && React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:'#f0f0f8',color:'#f0883e'}},sc.narrativeMood))
               ),
               React.createElement('div',{style:{display:'flex',gap:4,marginTop:4,flexWrap:'wrap'}},
                 React.createElement('button',{onClick:(e)=>{e.stopPropagation();generateSceneImage(i)},disabled:sc.status==='generating_image',style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #6c5ce7',background:sc.status==='generating_image'?'#6c5ce7':'transparent',color:'#fff',cursor:'pointer',whiteSpace:'nowrap'}},(sc.status==='generating_image'?'•••':sc.imagePrompt?'🖼️ 이미지 생성 (✓)':'🖼️ 이미지 생성')),
@@ -2072,19 +2072,19 @@ const runPhase1 = useCallback(async () => {
               sc.video?.url && React.createElement('video',{src:sc.video.url,muted:true,style:{width:60,height:80,objectFit:'cover',borderRadius:6,flexShrink:0},onMouseEnter:e=>e.target.play(),onMouseLeave:e=>{e.target.pause();e.target.currentTime=0;}})
             ))
           ),
-          !expandView && React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'#484f58',gap:12}},
+          !expandView && React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'#999aab',gap:12}},
             React.createElement('div',{style:{fontSize:48}},'\uD83C\uDFAC'),
             React.createElement('div',{style:{fontSize:14,fontWeight:600}},'Long-Form Production Pipeline'),
             React.createElement('div',{style:{fontSize:12,textAlign:'center',lineHeight:1.8,maxWidth:400}},'Phase 1: Story Analysis & Global Asset\nPhase 2: Scene Splitting & DP Composition\nPhase 3: Anchor Image Generation\nPhase 4: Video Generation (Veo 2)\nPhase 5: Webtoon Panel Expansion'),
-            React.createElement('div',{style:{fontSize:11,color:'#30363d',marginTop:8}},'Paste your story text on the left and start the pipeline')
+            React.createElement('div',{style:{fontSize:11,color:'#d0d0e0',marginTop:8}},'Paste your story text on the left and start the pipeline')
           ),
-          expandView==='characters' && !globalAsset?.characters && React.createElement('div',{style:{color:'#484f58',textAlign:'center',padding:40,fontSize:13}},'Phase 1\uC744 \uC2E4\uD589\uD558\uBA74 \uCE90\uB9AD\uD130\uAC00 \uCD94\uCD9C\uB429\uB2C8\uB2E4'),
-          expandView==='backgrounds' && !globalAsset?.backgrounds && React.createElement('div',{style:{color:'#484f58',textAlign:'center',padding:40,fontSize:13}},'Phase 1\uC744 \uC2E4\uD589\uD558\uBA74 \uBC30\uACBD\uC774 \uCD94\uCD9C\uB429\uB2C8\uB2E4'),
-          expandView==='scenes' && lfScenes.length===0 && React.createElement('div',{style:{color:'#484f58',textAlign:'center',padding:40,fontSize:13}},'Phase 2\uB97C \uC2E4\uD589\uD558\uBA74 \uC528\uC774 \uBD84\uD560\uB429\uB2C8\uB2E4')
+          expandView==='characters' && !globalAsset?.characters && React.createElement('div',{style:{color:'#999aab',textAlign:'center',padding:40,fontSize:13}},'Phase 1\uC744 \uC2E4\uD589\uD558\uBA74 \uCE90\uB9AD\uD130\uAC00 \uCD94\uCD9C\uB429\uB2C8\uB2E4'),
+          expandView==='backgrounds' && !globalAsset?.backgrounds && React.createElement('div',{style:{color:'#999aab',textAlign:'center',padding:40,fontSize:13}},'Phase 1\uC744 \uC2E4\uD589\uD558\uBA74 \uBC30\uACBD\uC774 \uCD94\uCD9C\uB429\uB2C8\uB2E4'),
+          expandView==='scenes' && lfScenes.length===0 && React.createElement('div',{style:{color:'#999aab',textAlign:'center',padding:40,fontSize:13}},'Phase 2\uB97C \uC2E4\uD589\uD558\uBA74 \uC528\uC774 \uBD84\uD560\uB429\uB2C8\uB2E4')
         )
       )
     ),
-    phaseHistory.length>0 && React.createElement('div',{style:{display:'flex',gap:4,padding:'6px 10px',background:'#161b22',borderRadius:8,overflowX:'auto',flexShrink:0}},
+    phaseHistory.length>0 && React.createElement('div',{style:{display:'flex',gap:4,padding:'6px 10px',background:'#f5f5fa',borderRadius:8,overflowX:'auto',flexShrink:0}},
       ...phaseHistory.map((h,i)=>React.createElement('span',{key:i,style:{padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:600,whiteSpace:'nowrap',background:h.error?'#3d1f1f':h.phase.endsWith('_COMPLETE')||h.phase==='COMPLETED'?'#0e3a1f':'#1c2333',color:h.error?'#f85149':h.phase.endsWith('_COMPLETE')||h.phase==='COMPLETED'?'#3fb950':'#6c5ce7'}},PHASE_LABELS[h.phase]||h.phase))
     )
   );
