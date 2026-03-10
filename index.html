@@ -879,7 +879,7 @@ function ImageGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
   const [processing, setProcessing] = useState(false);
   const [step, setStep] = useState('idle'); // idle, A2, A3, done
   const [selectedCat, setSelectedCat] = useState('character');
-  const [imageProvider, setImageProvider] = React.useState('grok');
+  const [imageProvider, setImageProvider] = React.useState('imagen');
   const [textProvider, setTextProvider] = React.useState('gemini');
   const [selectedTpl, setSelectedTpl] = useState('');
   const scene = scenes[activeSceneIdx] || {};
@@ -1584,7 +1584,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
   const [expandView, setExpandView] = useState(null);
   const abortRef = useRef(false);
   const [textProvider, setTextProvider] = useState('gemini');
-  const [imageProvider, setImageProvider] = useState('grok');
+  const [imageProvider, setImageProvider] = useState('imagen');
   const [enableWebtoon, setEnableWebtoon] = useState(true);
     const SAVE_KEY = 'LF_PIPELINE_STATE';
     const savePipeline = useCallback((data) => {
