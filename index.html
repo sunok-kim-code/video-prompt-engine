@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Prompt Engine â MoonTech Manager .AI</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #1a1a26;
+  --surface3: #222233;
+  --border: #2a2a3e;
+  --text: #e0e0f0;
+  --text2: #8888aa;
+  --accent: #6c5ce7;
+  --accent2: #a29bfe;
+  --romance: #ff6b9d;
+  --action: #ff4444;
+  --horror: #9b59b6;
+  --slice: #2ecc71;
+  --drama: #3498db;
+  --success: #00d2d3;
+  --warn: #feca57;
+  --err: #ff6b6b;
+}
+body { background:var(--bg); color:var(--text); font-family:'Segoe UI','Apple SD Gothic Neo',sans-serif; min-height:100vh; }
+
+.app { max-width:1400px; margin:0 auto; padding:20px; }
+
+/* Header */
+.header { display:flex; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--border); margin-bottom:24px; }
+.header h1 { font-size:24px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.header .badge { background:var(--accent); color:#fff; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; }
+.header .sub { color:var(--text2); font-size:13px; margin-left:auto; }
+
+/* Layout */
+.layout { display:grid; grid-template-columns:420px 1fr; gap:24px; }
+@media(max-width:900px) { .layout { grid-template-columns:1fr; } }
+
+/* Panel */
+.panel { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; }
+.panel h2 { font-size:15px; font-weight:600; color:var(--accent2); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+.panel h2 .icon { font-size:18px; }
+
+/* Form */
+.form-group { margin-bottom:16px; }
+.form-group label { display:block; font-size:12px; color:var(--text2); margin-bottom:6px; font-weight:500; text-transform:uppercase; letter-spacing:0.5px; }
+.form-group textarea, .form-group input, .form-group select {
+  width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+  padding:10px 14px; color:var(--text); font-size:14px; font-family:inherit; outline:none; transition:border 0.2s;
+}
+.form-group textarea:focus, .form-group input:focus, .form-group select:focus { border-color:var(--accent); }
+.form-group textarea { resize:vertical; min-height:80px; line-height:1.6; }
+.form-group select { cursor:pointer; }
+
+/* Genre chips */
+.genre-chips { display:flex; gap:8px; flex-wrap:wrap; }
+.genre-chip {
+  padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer;
+  border:2px solid transparent; transition:all 0.2s; opacity:0.6;
+}
+.genre-chip:hover { opacity:0.8; }
+.genre-chip.active { opacity:1; border-color:currentColor; }
+.genre-chip[data-g="romance"] { background:rgba(255,107,157,0.15); color:var(--romance); }
+.genre-chip[data-g="action"] { background:rgba(255,68,68,0.15); color:var(--action); }
+.genre-chip[data-g="horror"] { background:rgba(155,89,182,0.15); color:var(--horror); }
+.genre-chip[data-g="sliceOfLife"] { background:rgba(46,204,113,0.15); color:var(--slice); }
+.genre-chip[data-g="drama"] { background:rgba(52,152,219,0.15); color:var(--drama); }
+
+/* Emotion selects */
+.emotion-row { display:flex; gap:10px; align-items:center; }
+.emotion-row select { flex:1; }
+.emotion-arrow { color:var(--accent2); font-size:18px; }
+
+/* Options row */
+.options-row { display:flex; gap:12px; flex-wrap:wrap; }
+.option-chip {
+  display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px;
+  background:var(--surface2); border:1px solid var(--border); cursor:pointer; font-size:12px; transition:all 0.2s;
+}
+.option-chip.active { border-color:var(--accent); background:rgba(108,92,231,0.15); }
+.option-chip input { display:none; }
+
+/* Run button */
+.run-btn {
+  width:100%; padding:14px; border:none; border-radius:12px; font-size:15px; font-weight:700;
+  background:linear-gradient(135deg,var(--accent),#a29bfe); color:#fff; cursor:pointer;
+  transition:all 0.3s; position:relative; overflow:hidden;
+}
+.run-btn:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(108,92,231,0.4); }
+.run-btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; box-shadow:none; }
+.run-btn .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px; vertical-align:middle; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Results area */
+.results { display:flex; flex-direction:column; gap:20px; }
+
+.result-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden;
+  transition:border-color 0.3s;
+}
+.result-card.highlight { border-color:var(--accent); }
+.result-header {
+  padding:14px 18px; display:flex; align-items:center; gap:10px;
+  background:var(--surface2); border-bottom:1px solid var(--border);
+}
+.result-header .step-num {
+  width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:700;
+}
+.step-1 .step-num { background:rgba(108,92,231,0.2); color:var(--accent2); }
+.step-2 .step-num { background:rgba(0,210,211,0.2); color:var(--success); }
+.step-3 .step-num { background:rgba(254,202,87,0.2); color:var(--warn); }
+.result-header .step-title { font-size:14px; font-weight:600; }
+.result-header .step-meta { margin-left:auto; font-size:11px; color:var(--text2); display:flex; gap:12px; }
+.result-body { padding:18px; }
+.result-text { font-size:14px; line-height:1.8; white-space:pre-wrap; word-break:break-word; }
+.result-text.korean { color:#ccc; }
+.result-text.english { color:var(--success); font-family:'JetBrains Mono','Fira Code',monospace; font-size:13px; line-height:1.7; }
+
+/* Copy button */
+.copy-btn {
+  padding:5px 12px; border:1px solid var(--border); border-radius:6px; background:var(--surface2);
+  color:var(--text2); font-size:11px; cursor:pointer; transition:all 0.2s;
+}
+.copy-btn:hover { border-color:var(--accent); color:var(--accent2); }
+
+/* Stats bar */
+.stats-bar {
+  display:flex; gap:16px; padding:14px 18px; background:var(--surface2); border-radius:12px;
+  flex-wrap:wrap;
+}
+.stat { display:flex; flex-direction:column; gap:2px; }
+.stat-label { font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; }
+.stat-value { font-size:16px; font-weight:700; }
+.stat-value.time { color:var(--success); }
+.stat-value.tokens { color:var(--warn); }
+.stat-value.words { color:var(--accent2); }
+
+/* Camera dict panel */
+.camera-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; max-height:300px; overflow-y:auto; }
+.camera-item {
+  padding:8px 10px; background:var(--surface2); border-radius:8px; cursor:pointer;
+  border:1px solid transparent; transition:all 0.2s; font-size:12px;
+}
+.camera-item:hover { border-color:var(--accent); }
+.camera-item .ko { font-weight:600; color:var(--text); }
+.camera-item .en { color:var(--text2); font-size:11px; margin-top:2px; }
+
+/* Progress */
+.progress-bar { width:100%; height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; margin:12px 0; }
+.progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--success)); transition:width 0.5s ease; border-radius:2px; }
+
+/* Tabs */
+.tabs { display:flex; gap:2px; margin-bottom:16px; background:var(--surface2); border-radius:10px; padding:3px; }
+.tab {
+  flex:1; padding:8px 12px; border:none; background:transparent; color:var(--text2);
+  font-size:12px; font-weight:600; cursor:pointer; border-radius:8px; transition:all 0.2s; text-align:center;
+}
+.tab.active { background:var(--accent); color:#fff; }
+
+/* Batch list */
+.batch-scene {
+  display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--surface2);
+  border-radius:10px; margin-bottom:8px; border:1px solid var(--border);
+}
+.batch-scene .num { width:30px; height:30px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; }
+.batch-scene .desc { flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.batch-scene .status { font-size:18px; flex-shrink:0; }
+.batch-scene .remove-btn { padding:4px 8px; border:1px solid var(--border); border-radius:6px; background:transparent; color:var(--text2); cursor:pointer; font-size:11px; }
+
+/* History */
+.history-item {
+  padding:12px 14px; background:var(--surface2); border-radius:10px; margin-bottom:8px;
+  border:1px solid var(--border); cursor:pointer; transition:border-color 0.2s;
+}
+.history-item:hover { border-color:var(--accent); }
+.history-item .time { font-size:11px; color:var(--text2); }
+.history-item .preview { font-size:13px; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--success); }
+
+/* Empty state */
+.empty-state { text-align:center; padding:60px 20px; color:var(--text2); }
+.empty-state .icon { font-size:48px; margin-bottom:12px; }
+.empty-state p { font-size:14px; line-height:1.6; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:var(--text2); }
+
+/* Animate in */
+@keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+.fade-up { animation:fadeUp 0.4s ease both; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// VIDEO PROMPT ENGINE â WEB APPLICATION
+// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+
+const { useState, useCallback, useRef, useEffect } = React;
+
+// âââ Constants ââââââââââââââââââââââââââââââââââââââââââââââ
+
+const GEMINI_API_KEY = 'AIzaSyD5dHoSa4kgA9zSLJujtU4xbCM_CRhX-XM';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+const GENRES = [
+  { id:'romance', label:'ë¡ë§¨ì¤', emoji:'ð', speed:0.7 },
+  { id:'action', label:'ì¡ì', emoji:'â¡', speed:1.5 },
+  { id:'horror', label:'ê³µí¬', emoji:'ð»', speed:0.8 },
+  { id:'sliceOfLife', label:'ì¼ì', emoji:'âï¸', speed:1.0 },
+  { id:'drama', label:'ëë¼ë§', emoji:'ð­', speed:0.9 },
+];
+
+const EXPRESSIONS = [
+  'happy','sad','angry','surprised','fear','disgusted','smiling',
+  'crying','shouting','shy','confused','smirking','thinking','winking','sleeping'
+];
+
+const EXPRESSION_KO = {
+  happy:'íë³µ',sad:'ì¬í',angry:'ë¶ë¸',surprised:'ëë',fear:'ê³µí¬',
+  disgusted:'íì¤',smiling:'ë¯¸ì',crying:'ì¸ì',shouting:'ì¸ì¹¨',shy:'ìì¤ì',
+  confused:'í¼ë',smirking:'ë¥ê¸',thinking:'ìê°',winking:'ìí¬',sleeping:'ìë©´'
+};
+
+const CAMERAS = [
+  {ko:'ê³ ì ',en:'Static locked camera',use:'ëí, ê°ì '},
+  {ko:'ì²ì²í ì¤ì¸',en:'Slow gradual zoom-in toward subject',use:'ê°ì  ê³ ì¡°'},
+  {ko:'ë¹ ë¥¸ ì¤ì¸',en:'Quick snap zoom to close-up',use:'ëë, ì¶©ê²©'},
+  {ko:'ì¤ìì',en:'Camera pulling back to reveal wider scene',use:'ì¥ë©´ ì í'},
+  {ko:'í¬ (ì¢âì°)',en:'Camera panning smoothly left to right',use:'ê³µê° ìê°'},
+  {ko:'í¬ (ì°âì¢)',en:'Camera panning smoothly right to left',use:'ì­ë°©í¥ ì¶ì '},
+  {ko:'í¸í¸ì',en:'Camera tilting upward',use:'ìì, ê±°ëí¨'},
+  {ko:'í¸í¸ë¤ì´',en:'Camera tilting downward',use:'íê°, ë°ê²¬'},
+  {ko:'ë¬ë¦¬(ì ì§)',en:'Camera dollying forward toward subject',use:'ì ê·¼, ì§ì¤'},
+  {ko:'ë¬ë¦¬(íì§)',en:'Camera dollying backward away',use:'ì´ë³, ë©ì´ì§'},
+  {ko:'í¸ëí¹',en:'Camera tracking alongside subject',use:'ëí, ì¶ê²©'},
+  {ko:'ì¤ë¹(íì )',en:'Camera orbiting around subject',use:'ëë¼ë§í± ê°ì¡°'},
+  {ko:'í¬ë ì¸ì',en:'Camera craning upward rising',use:'í´ë°©ê°'},
+  {ko:'í¬ë ì¸ë¤ì´',en:'Camera craning down descending',use:'ë°ê²¬'},
+  {ko:'íë¤ë¦¼',en:'Handheld camera shake',use:'ê³µí¬, ì í¬'},
+  {ko:'ëì¹ìµê¸',en:'Dutch angle drift',use:'ë¶ì, ê´ê¸°'},
+  {ko:'ëí¬ì»¤ì¤',en:'Rack focus shift',use:'ìì  ì ë'},
+  {ko:'ìí',en:'Fast whip pan with motion blur',use:'ì¥ë©´ ì í'},
+];
+
+const GENRE_PRESETS = {
+  romance:{physics:'natural hair movement, fabric flow, light particles, soft focus transitions',ambient:'cherry blossom petals, dust motes in sunlight, warm golden particles',neg:'fast movement, camera shake, harsh lighting'},
+  action:{physics:'speed lines, impact effects, debris particles, motion blur, shockwave ripples',ambient:'dust clouds, sparks, energy effects, ground crack particles',neg:'slow motion, static camera, gentle movement'},
+  horror:{physics:'shadow shifting, flickering lights, unnatural pauses, micro-twitches',ambient:'fog/mist, shadow play, dark particles, distortion waves',neg:'bright lighting, cheerful motion, warm colors'},
+  sliceOfLife:{physics:'natural everyday physics, realistic weight, casual cloth movement',ambient:'sunlight through window, steam from food, floating dust in light',neg:'dramatic effects, speed lines, horror elements'},
+  drama:{physics:'micro-expressions, hand trembles, breath visualization, tear physics',ambient:'depth of field shifts, light/shadow interplay, rain/weather effects',neg:'comedic exaggeration, cartoonish physics'},
+};
+
+// âââ System Prompts âââââââââââââââââââââââââââââââââââââââââ
+
+const SYS_MOTION_CONVERT = (genre, preset) => `ëë "ì¹í° ì¥ë©´ ëª¨ì ë³íê¸°"ë¤. ìë ¥ë ê¸ì½í°ë¥¼ ìì ëª¨ì ì§ìë¡ ë³ííë¤.
+
+[íµì¬ ê·ì¹]
+1. ì´ë¯¸ ìì±ë ê³ íë¦¬í° ì´ë¯¸ì§ê° ìì¤ë¡ ì¡´ì¬ â ì¸í/ë³µì¥/ë°°ê²½ ë¬ì¬ ì ë ê¸ì§
+2. ì¤ì§ "ìì§ì"ë§ ê¸°ì : ëí­, ìì  ì´ë, íì  ë³í, ì¹´ë©ë¼ ìí¬
+3. ê° ì¥ë©´ë¹ ìì¸í ëª¨ì ì§ì ìì±
+4. ìê° íë¦ ëªì: "ì²ì²í", "ê¸ê²©í", "2ì´ì ê±¸ì³" ë±
+5. ê°ì  ì íì´ ìì¼ë©´ ë°ëì íì  ë³í í¨í¨
+6. í¨ê³¼ìì´ ìì¼ë©´ ë¬¼ë¦¬ì  ìì§ìì¼ë¡ ë§¤í
+
+[í¬ë§·]
+- ëª¨ì: [êµ¬ì²´ì  ëì ë¬ì¬]
+- ë¶ìëì: [ë¨¸ë¦¬ì¹´ë½, ì·, ë¬¼ë¦¬ ë°ì]
+- ì¹´ë©ë¼: [ì¹´ë©ë¼ ìì§ì]
+- íì´ë°: [ìë]
+- ê°ì íë¦: [ìì â ë]
+
+[ê¸ì§] ìºë¦­í° ì¸ëª¨ ë¬ì¬, ë°°ê²½ ì¤ëª, ëì¬ í¬í¨, "~íë ì¥ë©´" ë©í íí
+
+[ì¥ë¥´: ${genre}]
+- ìë: ${preset?.speed || 1.0}x
+- ë¬¼ë¦¬ ê°ì¡°: ${preset?.physics || ''}
+- ë¶ìê¸°: ${preset?.ambient || ''}`;
+
+const SYS_MOTION_PROMPT = (genre, preset) => `You are an expert animation motion prompt engineer for webtoon-to-video conversion.
+Convert Korean motion directions into precise English video generation prompts.
+
+ABSOLUTE RULES:
+- Output ONLY the English motion prompt, nothing else
+- Max 80 words (concise prompts = better videos)
+- Focus EXCLUSIVELY on MOTION, CAMERA, and TIMING
+- NEVER describe character appearance, clothing, or background (source image has this)
+- Use present continuous tense ("walking", "turning", "zooming")
+- MUST include physics: "hair physics", "cloth simulation", "weight shift"
+
+STRUCTURE: [Subject action] + [Secondary motion/physics] + [Camera movement] + [Timing] + [Atmosphere]
+
+GENRE: ${genre}
+- Physics emphasis: ${preset?.physics || ''}
+- Ambient effects: ${preset?.ambient || ''}
+- AVOID: ${preset?.neg || ''}`;
+
+// âââ Gemini API âââââââââââââââââââââââââââââââââââââââââââââ
+
+async function callGemini(systemPrompt, userPrompt) {
+  const r = await fetch(GEMINI_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      generationConfig: { temperature: 0.35, topP: 0.85, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } }
+    })
+  });
+  if (!r.ok) throw new Error(`API Error: ${r.status}`);
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  const text = d.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('\n') || '';
+  return {
+    text: text.trim(),
+    inputTokens: d.usageMetadata?.promptTokenCount || 0,
+    outputTokens: d.usageMetadata?.candidatesTokenCount || 0,
+  };
+}
+
+// âââ Components âââââââââââââââââââââââââââââââââââââââââââââ
+
+function App() {
+  const [tab, setTab] = useState('single'); // single | batch | camera | history
+  const [genre, setGenre] = useState('romance');
+  const [description, setDescription] = useState('');
+  const [dialogue, setDialogue] = useState('');
+  const [sfx, setSfx] = useState('');
+  const [emotionStart, setEmotionStart] = useState('thinking');
+  const [emotionEnd, setEmotionEnd] = useState('thinking');
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [cameraFixed, setCameraFixed] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [step1Result, setStep1Result] = useState(null);
+  const [step2Result, setStep2Result] = useState(null);
+  const [step1Time, setStep1Time] = useState(0);
+  const [step2Time, setStep2Time] = useState(0);
+  const [error, setError] = useState('');
+  const [history, setHistory] = useState([]);
+
+  // Batch mode
+  const [batchScenes, setBatchScenes] = useState([]);
+  const [batchResults, setBatchResults] = useState([]);
+  const [batchProcessing, setBatchProcessing] = useState(false);
+
+  const genreInfo = GENRES.find(g => g.id === genre);
+  const preset = GENRE_PRESETS[genre];
+
+  // âââ Run Pipeline âââââââââââââââââââââââââââââââââââââââââ
+
+  const runPipeline = useCallback(async (desc, dial, sfxStr, eStart, eEnd, genreId) => {
+    const p = GENRE_PRESETS[genreId];
+    const gInfo = GENRES.find(g => g.id === genreId);
+
+    const scenePrompt = [
+      `[ì¥ë©´ ë¬ì¬] ${desc}`,
+      dial ? `[ëì¬] ${dial}` : '',
+      sfxStr ? `[í¨ê³¼ì] ${sfxStr}` : '',
+      `[ê°ì ] ${eStart} â ${eEnd}`,
+    ].filter(Boolean).join('\n');
+
+    // Step 1
+    const t1 = Date.now();
+    const r1 = await callGemini(
+      SYS_MOTION_CONVERT(gInfo.label, { ...p, speed: gInfo.speed }),
+      scenePrompt
+    );
+    const time1 = Date.now() - t1;
+
+    // Step 2
+    const modeNote = cameraFixed ? '\nIMPORTANT: Camera is FIXED. Zero pan/tilt/zoom. All motion from subject only.' : '';
+    const audioNote = audioEnabled ? '\nInclude AUDIO direction: [Audio: sound description synchronized to motion]' : '';
+
+    const t2 = Date.now();
+    const r2 = await callGemini(
+      SYS_MOTION_PROMPT(gInfo.label, p) + modeNote + audioNote,
+      `Convert this Korean motion conti to an English motion prompt (max 80 words):\n\n${r1.text}`
+    );
+    const time2 = Date.now() - t2;
+
+    return { step1: r1, step2: r2, time1, time2 };
+  }, [audioEnabled, cameraFixed]);
+
+  const handleRun = useCallback(async () => {
+    if (!description.trim()) return;
+    setLoading(true); setError(''); setStep1Result(null); setStep2Result(null); setProgress(0);
+
+    try {
+      setProgress(20);
+      const { step1, step2, time1, time2 } = await runPipeline(
+        description, dialogue, sfx, emotionStart, emotionEnd, genre
+      );
+
+      setProgress(60);
+      setStep1Result(step1); setStep1Time(time1);
+      setProgress(90);
+      setStep2Result(step2); setStep2Time(time2);
+      setProgress(100);
+
+      setHistory(prev => [{
+        id: Date.now(),
+        time: new Date().toLocaleTimeString('ko-KR'),
+        description: description.slice(0, 60),
+        genre,
+        motionConti: step1.text,
+        motionPrompt: step2.text,
+        totalTime: time1 + time2,
+      }, ...prev].slice(0, 20));
+
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+      setTimeout(() => setProgress(0), 1000);
+    }
+  }, [description, dialogue, sfx, emotionStart, emotionEnd, genre, runPipeline]);
+
+  // âââ Batch Processing âââââââââââââââââââââââââââââââââââââ
+
+  const addBatchScene = () => {
+    if (!description.trim()) return;
+    setBatchScenes(prev => [...prev, {
+      id: Date.now(), description, dialogue, sfx, emotionStart, emotionEnd, genre, status: 'pending'
+    }]);
+    setDescription(''); setDialogue(''); setSfx('');
+  };
+
+  const removeBatchScene = (id) => {
+    setBatchScenes(prev => prev.filter(s => s.id !== id));
+  };
+
+  const runBatch = useCallback(async () => {
+    setBatchProcessing(true); setBatchResults([]);
+    const results = [];
+    for (let i = 0; i < batchScenes.length; i++) {
+      const sc = batchScenes[i];
+      setBatchScenes(prev => prev.map(s => s.id === sc.id ? {...s, status:'processing'} : s));
+      try {
+        const r = await runPipeline(sc.description, sc.dialogue, sc.sfx, sc.emotionStart, sc.emotionEnd, sc.genre);
+        results.push({ ...sc, ...r, status: 'done' });
+        setBatchScenes(prev => prev.map(s => s.id === sc.id ? {...s, status:'done'} : s));
+      } catch(e) {
+        results.push({ ...sc, error: e.message, status: 'error' });
+        setBatchScenes(prev => prev.map(s => s.id === sc.id ? {...s, status:'error'} : s));
+      }
+    }
+    setBatchResults(results);
+    setBatchProcessing(false);
+  }, [batchScenes, runPipeline]);
+
+  // âââ Copy âââââââââââââââââââââââââââââââââââââââââââââââââ
+
+  const copyText = (text) => {
+    navigator.clipboard?.writeText(text);
+  };
+
+  const wordCount = step2Result ? step2Result.text.split(/\s+/).length : 0;
+  const totalTokens = (step1Result?.inputTokens||0) + (step1Result?.outputTokens||0) + (step2Result?.inputTokens||0) + (step2Result?.outputTokens||0);
+
+  // âââ Render âââââââââââââââââââââââââââââââââââââââââââââââ
+
+  return (
+    <div className="app">
+      <div className="header">
+        <h1>Video Prompt Engine</h1>
+        <span className="badge">v1.0</span>
+        <span className="sub">MoonTech Manager .AI â ìì íë¡¬íí¸ ìë ìì±</span>
+      </div>
+
+      <div className="layout">
+        {/* LEFT PANEL */}
+        <div>
+          <div className="panel" style={{marginBottom:20}}>
+            <h2><span className="icon">ð¬</span> ì¥ë©´ ìë ¥</h2>
+
+            <div className="form-group">
+              <label>ì¥ë¥´</label>
+              <div className="genre-chips">
+                {GENRES.map(g => (
+                  <div key={g.id} className={`genre-chip ${genre===g.id?'active':''}`} data-g={g.id} onClick={() => setGenre(g.id)}>
+                    {g.emoji} {g.label} ({g.speed}x)
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>ì¥ë©´ ë¬ì¬ *</label>
+              <textarea value={description} onChange={e => setDescription(e.target.value)}
+                placeholder="ì: ê°ì ì´ ê²©í´ì§ ìì, ëë¬¼ì ì°¸ì¼ë©° ê³ ê°ë¥¼ ëë¦°ë¤. ë¹ìë¦¬ê° ì¸ì°¨ê² ë´ë¦´ë¤." rows={4} />
+            </div>
+
+            <div className="form-group">
+              <label>ëì¬ (ì í)</label>
+              <input value={dialogue} onChange={e => setDialogue(e.target.value)}
+                placeholder='ì: ë:(ìì) ...ê°ì§ ë§.' />
+            </div>
+
+            <div className="form-group">
+              <label>í¨ê³¼ì (ì í)</label>
+              <input value={sfx} onChange={e => setSfx(e.target.value)}
+                placeholder='ì: ì¾!, ë¹ìë¦¬, ëê·¼ëê·¼' />
+            </div>
+
+            <div className="form-group">
+              <label>ê°ì  ì í</label>
+              <div className="emotion-row">
+                <select value={emotionStart} onChange={e => setEmotionStart(e.target.value)}>
+                  {EXPRESSIONS.map(ex => <option key={ex} value={ex}>{EXPRESSION_KO[ex]} ({ex})</option>)}
+                </select>
+                <span className="emotion-arrow">â</span>
+                <select value={emotionEnd} onChange={e => setEmotionEnd(e.target.value)}>
+                  {EXPRESSIONS.map(ex => <option key={ex} value={ex}>{EXPRESSION_KO[ex]} ({ex})</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>ìµì</label>
+              <div className="options-row">
+                <label className={`option-chip ${audioEnabled?'active':''}`}>
+                  <input type="checkbox" checked={audioEnabled} onChange={e => setAudioEnabled(e.target.checked)} />
+                  ð ì¤ëì¤ í¬í¨
+                </label>
+                <label className={`option-chip ${cameraFixed?'active':''}`}>
+                  <input type="checkbox" checked={cameraFixed} onChange={e => setCameraFixed(e.target.checked)} />
+                  ð ì¹´ë©ë¼ ê³ ì 
+                </label>
+              </div>
+            </div>
+
+            {progress > 0 && (
+              <div className="progress-bar"><div className="progress-fill" style={{width:`${progress}%`}} /></div>
+            )}
+
+            <div style={{display:'flex',gap:8}}>
+              <button className="run-btn" onClick={handleRun} disabled={loading || !description.trim()}>
+                {loading && <span className="spinner" />}
+                {loading ? 'ìì± ì¤...' : 'ð ëª¨ì íë¡¬íí¸ ìì±'}
+              </button>
+              {tab === 'batch' && (
+                <button className="run-btn" style={{flex:'0 0 auto',width:'auto',padding:'14px 20px',background:'var(--surface3)',border:'1px solid var(--border)'}}
+                  onClick={addBatchScene} disabled={!description.trim()}>
+                  + ì¶ê°
+                </button>
+              )}
+            </div>
+
+            {error && <p style={{color:'var(--err)',fontSize:13,marginTop:10}}>â ï¸ {error}</p>}
+          </div>
+
+          {/* Camera Dictionary */}
+          <div className="panel">
+            <h2><span className="icon">ð·</span> ì¹´ë©ë¼ ìí¬ ì¬ì </h2>
+            <div className="camera-grid">
+              {CAMERAS.map((c,i) => (
+                <div key={i} className="camera-item" onClick={() => {
+                  setDescription(prev => prev + (prev ? ' ' : '') + c.ko + '.');
+                }}>
+                  <div className="ko">{c.ko}</div>
+                  <div className="en">{c.en}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT PANEL */}
+        <div className="results">
+          <div className="tabs">
+            <button className={`tab ${tab==='single'?'active':''}`} onClick={() => setTab('single')}>ë¨ì¼ ì¥ë©´</button>
+            <button className={`tab ${tab==='batch'?'active':''}`} onClick={() => setTab('batch')}>ë°°ì¹ ì²ë¦¬</button>
+            <button className={`tab ${tab==='history'?'active':''}`} onClick={() => setTab('history')}>ê¸°ë¡ ({history.length})</button>
+          </div>
+
+          {tab === 'single' && (
+            <>
+              {!step1Result && !loading && (
+                <div className="empty-state">
+                  <div className="icon">ð¬</div>
+                  <p>ì¼ìª½ìì ì¥ë©´ì ìë ¥íê³ <br/>ãëª¨ì íë¡¬íí¸ ìì±ãì í´ë¦­íì¸ì</p>
+                  <p style={{marginTop:12,fontSize:12,color:'var(--text2)'}}>
+                    ê¸ì½í° â ëª¨ì ì½í°(íêµ­ì´) â ìë¬¸ ëª¨ì íë¡¬íí¸<br/>3ë¨ê³ íì´íë¼ì¸ì´ ìëì¼ë¡ ì¤íë©ëë¤
+                  </p>
+                </div>
+              )}
+
+              {step1Result && (
+                <div className="fade-up">
+                  <div className="stats-bar" style={{marginBottom:16}}>
+                    <div className="stat">
+                      <span className="stat-label">ì´ ìììê°</span>
+                      <span className="stat-value time">{((step1Time+step2Time)/1000).toFixed(1)}s</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-label">í í° ì¬ì©</span>
+                      <span className="stat-value tokens">{totalTokens}</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-label">íë¡¬íí¸ ë¨ì´</span>
+                      <span className="stat-value words">{wordCount}/80</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-label">ì¥ë¥´</span>
+                      <span className="stat-value">{genreInfo?.emoji} {genreInfo?.label}</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-label">ê°ì </span>
+                      <span className="stat-value" style={{fontSize:13}}>{EXPRESSION_KO[emotionStart]}â{EXPRESSION_KO[emotionEnd]}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {step1Result && (
+                <div className="result-card step-1 fade-up" style={{animationDelay:'0.1s'}}>
+                  <div className="result-header">
+                    <div className="step-num">1</div>
+                    <span className="step-title">ëª¨ì ì½í° (íêµ­ì´)</span>
+                    <div className="step-meta">
+                      <span>â± {(step1Time/1000).toFixed(1)}s</span>
+                      <span>ð {step1Result.inputTokens}+{step1Result.outputTokens} tokens</span>
+                    </div>
+                    <button className="copy-btn" onClick={() => copyText(step1Result.text)}>ë³µì¬</button>
+                  </div>
+                  <div className="result-body">
+                    <div className="result-text korean">{step1Result.text}</div>
+                  </div>
+                </div>
+              )}
+
+              {step2Result && (
+                <div className="result-card step-2 highlight fade-up" style={{animationDelay:'0.2s'}}>
+                  <div className="result-header">
+                    <div className="step-num">2</div>
+                    <span className="step-title">ìë¬¸ ëª¨ì íë¡¬íí¸ (Video APIì©)</span>
+                    <div className="step-meta">
+                      <span>â± {(step2Time/1000).toFixed(1)}s</span>
+                      <span>ð {wordCount} words</span>
+                    </div>
+                    <button className="copy-btn" onClick={() => copyText(step2Result.text)}>ë³µì¬</button>
+                  </div>
+                  <div className="result-body">
+                    <div className="result-text english">{step2Result.text}</div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {tab === 'batch' && (
+            <>
+              {batchScenes.length === 0 && !batchProcessing && (
+                <div className="empty-state">
+                  <div className="icon">ð¦</div>
+                  <p>ì¥ë©´ì ìë ¥íê³  ã+ ì¶ê°ã ë²í¼ì¼ë¡ ë°°ì¹ì ì¶ê°íì¸ì<br/>ì¬ë¬ ì¥ë©´ì íë²ì ì²ë¦¬í  ì ììµëë¤</p>
+                </div>
+              )}
+
+              {batchScenes.map((sc, i) => (
+                <div key={sc.id} className="batch-scene">
+                  <div className="num">{i+1}</div>
+                  <div className="desc">
+                    {GENRES.find(g=>g.id===sc.genre)?.emoji} {sc.description}
+                  </div>
+                  <div className="status">
+                    {sc.status === 'pending' && 'â³'}
+                    {sc.status === 'processing' && <span className="spinner" style={{width:16,height:16,borderWidth:2}} />}
+                    {sc.status === 'done' && 'â'}
+                    {sc.status === 'error' && 'â'}
+                  </div>
+                  {!batchProcessing && <button className="remove-btn" onClick={() => removeBatchScene(sc.id)}>ì­ì </button>}
+                </div>
+              ))}
+
+              {batchScenes.length > 0 && !batchProcessing && (
+                <button className="run-btn" onClick={runBatch}>
+                  ð {batchScenes.length}ê° ì¥ë©´ ì¼ê´ ìì±
+                </button>
+              )}
+
+              {batchResults.map((r, i) => (
+                <div key={i} className="result-card step-2 fade-up" style={{animationDelay:`${i*0.1}s`}}>
+                  <div className="result-header">
+                    <div className="step-num" style={{background:'rgba(0,210,211,0.2)',color:'var(--success)'}}>{i+1}</div>
+                    <span className="step-title" style={{fontSize:12}}>{r.description?.slice(0,40)}...</span>
+                    <div className="step-meta"><span>â± {((r.time1+r.time2)/1000).toFixed(1)}s</span></div>
+                    <button className="copy-btn" onClick={() => copyText(r.step2?.text || '')}>ë³µì¬</button>
+                  </div>
+                  <div className="result-body">
+                    {r.error ? (
+                      <div style={{color:'var(--err)'}}>â ï¸ {r.error}</div>
+                    ) : (
+                      <>
+                        <div className="result-text korean" style={{marginBottom:12,paddingBottom:12,borderBottom:'1px solid var(--border)',fontSize:12}}>{r.step1?.text}</div>
+                        <div className="result-text english">{r.step2?.text}</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {tab === 'history' && (
+            <>
+              {history.length === 0 && (
+                <div className="empty-state">
+                  <div className="icon">ð</div>
+                  <p>ìì§ ìì± ê¸°ë¡ì´ ììµëë¤</p>
+                </div>
+              )}
+              {history.map(h => (
+                <div key={h.id} className="history-item" onClick={() => {
+                  setStep1Result({text:h.motionConti,inputTokens:0,outputTokens:0});
+                  setStep2Result({text:h.motionPrompt,inputTokens:0,outputTokens:0});
+                  setStep1Time(0); setStep2Time(h.totalTime);
+                  setTab('single');
+                }}>
+                  <div style={{display:'flex',justifyContent:'space-between'}}>
+                    <span style={{fontSize:13}}>{GENRES.find(g=>g.id===h.genre)?.emoji} {h.description}...</span>
+                    <span className="time">{h.time} Â· {(h.totalTime/1000).toFixed(1)}s</span>
+                  </div>
+                  <div className="preview">{h.motionPrompt.slice(0, 100)}...</div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
