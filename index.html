@@ -956,13 +956,13 @@ ${dialogueText}
   return (
     <div>
       <div className="pipeline-bar">
-        <div className={`pipeline-step ${step==='A2'?'active':scene.convertedConti?'done':'pending'}`}>A-1 글콘티</div>
+        <div className={`pipeline-step ${currentStep==='A2'?'active':scene.convertedConti?'done':'pending'}`}>A-1 글콘티</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${step==='A2'?'active':scene.convertedConti?'done':'pending'}`}>A-2 콘티변환</div>
+        <div className={`pipeline-step ${currentStep==='A2'?'active':scene.convertedConti?'done':'pending'}`}>A-2 콘티변환</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${step==='A3'?'active':scene.imagePrompt?'done':'pending'}`}>A-3 영문프롬프트</div>
+        <div className={`pipeline-step ${currentStep==='A3'?'active':scene.imagePrompt?'done':'pending'}`}>A-3 영문프롬프트</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${step==='A4'?'active':scene.imageUrl?'done':'pending'}`}>A-4 이미지생성</div>
+        <div className={`pipeline-step ${currentStep==='A4'?'active':scene.imageUrl?'done':'pending'}`}>A-4 이미지생성</div>
       </div>
 
       <div className="grid-32">
@@ -1172,11 +1172,11 @@ function VideoGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
       <div className="pipeline-bar">
         <div className={`pipeline-step ${scene.imagePrompt?'done':'pending'}`}>A완료 이미지</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${step==='B2'?'active':scene.motionConti?'done':'pending'}`}>B-2 모션콘티</div>
+        <div className={`pipeline-step ${currentStep==='B2'?'active':scene.motionConti?'done':'pending'}`}>B-2 모션콘티</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${step==='B3'?'active':scene.motionPrompt?'done':'pending'}`}>B-3 모션프롬프트</div>
+        <div className={`pipeline-step ${currentStep==='B3'?'active':scene.motionPrompt?'done':'pending'}`}>B-3 모션프롬프트</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${step==='B5'?'active':scene.videoUrl?'done':'pending'}`}>B-5 영상생성</div>
+        <div className={`pipeline-step ${currentStep==='B5'?'active':scene.videoUrl?'done':'pending'}`}>B-5 영상생성</div>
       </div>
 
       <div className="grid-32">
@@ -1406,13 +1406,13 @@ function Workbench({scenes, setScenes, addLog}) {
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${currentStep==='A-3'?'active':'pending'}`}>A-3 이미지프롬프트</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${step==='A-4'?'active':wbScenes.every(s=>s.imageUrl)?'done':'pending'}`}>A-4 이미지생성</div>
+        <div className={`pipeline-step ${currentStep==='A-4'?'active':wbScenes.every(s=>s.imageUrl)?'done':'pending'}`}>A-4 이미지생성</div>
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${currentStep==='B-2'?'active':'pending'}`}>B-2 모션콘티</div>
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${currentStep==='B-3'?'active':'pending'}`}>B-3 모션프롬프트</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${step==='B-5'?'active':wbScenes.every(s=>s.videoUrl)?'done':'pending'}`}>B-5 영상생성</div>
+        <div className={`pipeline-step ${currentStep==='B-5'?'active':wbScenes.every(s=>s.videoUrl)?'done':'pending'}`}>B-5 영상생성</div>
       </div>
 
       <div className="stats-bar">
