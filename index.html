@@ -241,10 +241,15 @@ const {useState,useCallback,useRef,useEffect,useMemo} = React;
 // ============================================================
 
 // API key stored in browser localStorage (never hardcoded)
+function getVertexConfig() {
+  const projectId = localStorage.getItem('VERTEX_PROJECT_ID');
+  const location = localStorage.getItem('VERTEX_LOCATION') || 'us-central1';
+  const accessToken = localStorage.getItem('VERTEX_ACCESS_TOKEN');
+  if (!projectId || !accessToken) throw new Error('Vertex AI config not set. Set Project ID and Access Token.');
+  return {projectId, location, accessToken};
+}
 function getGeminiKey() {
-  const k = localStorage.getItem('GEMINI_API_KEY');
-  if (!k) throw new Error('API_KEY_MISSING');
-  return k;
+  return getVertexConfig().accessToken;
 }
 function setGeminiKey(k) { localStorage.setItem('GEMINI_API_KEY', k); }
 function hasGeminiKey() { return !!localStorage.getItem('GEMINI_API_KEY'); }
@@ -373,11 +378,8 @@ const VIDEO_MODES = [
 async function callGemini(systemPrompt, userPrompt, opts={}) {
   const model = opts.model || 'gemini-2.5-flash';
   const thinkBudget = opts.thinkBudget ?? 0;
-  let apiKey;
-  try { apiKey = getGeminiKey(); } catch(e) {
-    throw new Error('API key not set. Click the key button in the top right to enter your Gemini API key.');
-  }
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const {projectId, location, accessToken} = getVertexConfig();
+  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
   const body = {
     systemInstruction: {parts:[{text:systemPrompt}]},
     contents: [{role:'user',parts:[{text:userPrompt}]}],
@@ -388,11 +390,15 @@ async function callGemini(systemPrompt, userPrompt, opts={}) {
       thinkingConfig: {thinkingBudget: thinkBudget}
     }
   };
-  const res = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},body:JSON.stringify(body)});
-  if(!res.ok) throw new Error(`Gemini API ${res.status}: ${await res.text()}`);
+  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
+  if(!res.ok) {
+    const errText = await res.text();
+    throw new Error('Gemini API ' + res.status + ': ' + errText.substring(0,200));
+  }
   const data = await res.json();
   const parts = data.candidates?.[0]?.content?.parts || [];
-  return parts.filter(p=>!p.thought).map(p=>p.text).join('');
+  const textParts = parts.filter(p => p.text && !p.thought);
+  return textParts.map(p => p.text).join('');
 }
 
 // ============================================================
@@ -400,12 +406,12 @@ async function callGemini(systemPrompt, userPrompt, opts={}) {
 // ============================================================
 
 async function callImagen(prompt, opts = {}) {
-    const apiKey = getGeminiKey();
+    const {projectId, location, accessToken} = getVertexConfig();
     const model = opts.model || 'imagen-4.0-ultra-generate-001';
-    console.log('[Imagen] Using model: ' + model);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
+    console.log('[Imagen] Using model via Vertex AI: ' + model);
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
     const body = {instances:[{prompt}], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
-    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','x-goog-api-key':apiKey}, body:JSON.stringify(body)});
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
     if (!res.ok) {
       const errText = await res.text();
       throw new Error('Imagen API ' + res.status + ': ' + errText.substring(0, 200));
@@ -418,15 +424,15 @@ async function callImagen(prompt, opts = {}) {
   }
 
   async function callNanoBanana(prompt, opts = {}) {
-    const apiKey = getGeminiKey();
+    const {projectId, location, accessToken} = getVertexConfig();
     const model = 'gemini-2.0-flash-preview-image-generation';
-    console.log('[NanoBanana] Generating image with: ' + model);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    console.log('[NanoBanana] Generating image via Vertex AI: ' + model);
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
     const body = {
       contents: [{role:'user', parts:[{text: prompt}]}],
       generationConfig: {responseModalities: ['TEXT','IMAGE'], temperature: 1.0}
     };
-    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
     if (!res.ok) {
       const errText = await res.text();
       throw new Error('NanoBanana API ' + res.status + ': ' + errText.substring(0, 200));
@@ -508,9 +514,9 @@ async function callGrok(systemPrompt, userPrompt, opts={}) {
 // ============================================================
 
 async function callVeo(prompt, imageBase64, opts={}) {
-  const apiKey = getGeminiKey();
+  const {projectId, location, accessToken} = getVertexConfig();
   const model = opts.model || 'veo-2.0-generate-001';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predictLongRunning`;
+  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predictLongRunning`;
   const instances = [{prompt: prompt}];
   if(imageBase64) {
     instances[0].image = {bytesBase64Encoded: imageBase64.replace(/^data:image\/[^;]+;base64,/,''), mimeType: 'image/png'};
@@ -523,30 +529,27 @@ async function callVeo(prompt, imageBase64, opts={}) {
       durationSeconds: opts.duration || 5
     }
   };
-  const res = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},body:JSON.stringify(body)});
+  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
   if(!res.ok) {
     const errText = await res.text();
-    throw new Error(`Veo API ${res.status}: ${errText}`);
+    throw new Error('Veo API ' + res.status + ': ' + errText.substring(0, 200));
   }
   const opData = await res.json();
   const opName = opData.name;
-  if(!opName) throw new Error('Veo 작업 ID를 받지 못했습니다.');
-
-  // Poll for completion
-  const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${opName}`;
+  if(!opName) throw new Error('No operation name returned');
+  const pollUrl = `https://${location}-aiplatform.googleapis.com/v1/${opName}`;
   for(let i = 0; i < 60; i++) {
     await new Promise(r => setTimeout(r, 5000));
-    const pollRes = await fetch(pollUrl, {headers:{'x-goog-api-key':apiKey}});
+    const pollRes = await fetch(pollUrl, {headers:{'Authorization':'Bearer '+accessToken}});
     if(!pollRes.ok) continue;
     const pollData = await pollRes.json();
     if(pollData.done) {
-      if(pollData.error) throw new Error(`Veo 오류: ${pollData.error.message}`);
-      const videos = pollData.response?.generateVideoResponse?.generatedSamples || [];
-      if(videos.length === 0) throw new Error('영상 생성 결과가 없습니다.');
-      return videos.map(v => `data:video/mp4;base64,${v.video.bytesBase64Encoded}`);
+      const predictions = pollData.response && pollData.response.predictions;
+      if(!predictions || predictions.length === 0) throw new Error('No video generated');
+      return predictions.map(p => p.videoUri || ('data:video/mp4;base64,' + p.bytesBase64Encoded));
     }
   }
-  throw new Error('영상 생성 시간 초과 (5분)');
+  throw new Error('Video generation timed out');
 }
 
 // ============================================================
@@ -2028,34 +2031,34 @@ const runPhase1 = useCallback(async () => {
 
 
 function ApiKeyModal({onClose, onSave}) {
-  const [geminiVal, setGeminiVal] = React.useState(localStorage.getItem('GEMINI_API_KEY')||'');
+  const [projectId, setProjectId] = React.useState(localStorage.getItem('VERTEX_PROJECT_ID')||'');
+  const [location, setLocation] = React.useState(localStorage.getItem('VERTEX_LOCATION')||'us-central1');
+  const [accessToken, setAccessToken] = React.useState(localStorage.getItem('VERTEX_ACCESS_TOKEN')||'');
   const [xaiVal, setXaiVal] = React.useState(localStorage.getItem('XAI_API_KEY')||'');
   const handleSave = () => {
-    if(geminiVal.trim()) setGeminiKey(geminiVal.trim());
-    if(xaiVal.trim()) setXaiKey(xaiVal.trim());
-    onSave();
+    if(projectId) localStorage.setItem('VERTEX_PROJECT_ID', projectId.trim());
+    if(location) localStorage.setItem('VERTEX_LOCATION', location.trim());
+    if(accessToken) localStorage.setItem('VERTEX_ACCESS_TOKEN', accessToken.trim());
+    if(xaiVal) localStorage.setItem('XAI_API_KEY', xaiVal.trim());
+    onSave && onSave();
     onClose();
   };
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e=>e.stopPropagation()}>
-        <h3 style={{marginBottom:16,fontSize:18,fontWeight:700}}>API 키 설정</h3>
-        <div className="form-group">
-          <label className="form-label">🔑 Google Gemini API Key</label>
-          <input className="form-input" type="password" placeholder="AIzaSy..." value={geminiVal} onChange={e=>setGeminiVal(e.target.value)} />
-          <div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>텍스트 생성(Gemini), 이미지(Imagen), 영상(Veo) 생성에 사용</div>
-        </div>
-        <div className="form-group">
-          <label className="form-label">🤖 xAI (Grok) API Key</label>
-          <input className="form-input" type="password" placeholder="xai-..." value={xaiVal} onChange={e=>setXaiVal(e.target.value)} />
-          <div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>Grok 텍스트 생성, Aurora 이미지 생성에 사용</div>
-        </div>
-        <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:16}}>
-          <button className="btn btn-secondary" onClick={onClose}>취소</button>
-          <button className="btn btn-primary" onClick={handleSave}>저장</button>
-        </div>
-      </div>
-    </div>
+  return React.createElement('div', {style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}},
+    React.createElement('div', {style:{background:'var(--surface)',borderRadius:12,padding:24,width:480,maxHeight:'80vh',overflow:'auto'}},
+      React.createElement('h3', {style:{margin:'0 0 16px',color:'var(--text)'}}, 'Vertex AI Settings'),
+      React.createElement('label', {style:{color:'var(--text2)',fontSize:12}}, 'Project ID'),
+      React.createElement('input', {type:'text', value:projectId, onChange:e=>setProjectId(e.target.value), placeholder:'my-gcp-project-id', style:{width:'100%',padding:8,marginBottom:12,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)'}}),
+      React.createElement('label', {style:{color:'var(--text2)',fontSize:12}}, 'Location'),
+      React.createElement('input', {type:'text', value:location, onChange:e=>setLocation(e.target.value), placeholder:'us-central1', style:{width:'100%',padding:8,marginBottom:12,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)'}}),
+      React.createElement('label', {style:{color:'var(--text2)',fontSize:12}}, 'Access Token (gcloud auth print-access-token)'),
+      React.createElement('textarea', {value:accessToken, onChange:e=>setAccessToken(e.target.value), placeholder:'ya29.a0AfH6SM...', rows:3, style:{width:'100%',padding:8,marginBottom:12,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontFamily:'monospace',fontSize:11}}),
+      React.createElement('label', {style:{color:'var(--text2)',fontSize:12}}, 'xAI (Grok) API Key (optional)'),
+      React.createElement('input', {type:'password', value:xaiVal, onChange:e=>setXaiVal(e.target.value), placeholder:'xai-...', style:{width:'100%',padding:8,marginBottom:16,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)'}}),
+      React.createElement('div', {style:{display:'flex',gap:8,justifyContent:'flex-end'}},
+        React.createElement('button', {className:'btn btn-secondary',onClick:onClose}, 'Cancel'),
+        React.createElement('button', {className:'btn btn-primary',onClick:handleSave}, 'Save')
+      )
+    )
   );
 }
 
