@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Video Prompt Engine â MoonTech Manager .AI</title>
+<title>Video Prompt Engine — MoonTech Manager .AI</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 :root {
@@ -202,23 +202,23 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI','Apple SD
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script type="text/babel">
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// VIDEO PROMPT ENGINE â WEB APPLICATION
-// ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ════════════════════════════════════════════════════════════
+// VIDEO PROMPT ENGINE — WEB APPLICATION
+// ════════════════════════════════════════════════════════════
 
 const { useState, useCallback, useRef, useEffect } = React;
 
-// âââ Constants ââââââââââââââââââââââââââââââââââââââââââââââ
+// ─── Constants ──────────────────────────────────────────────
 
 const GEMINI_API_KEY = 'AIzaSyD5dHoSa4kgA9zSLJujtU4xbCM_CRhX-XM';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 const GENRES = [
-  { id:'romance', label:'ë¡ë§¨ì¤', emoji:'ð', speed:0.7 },
-  { id:'action', label:'ì¡ì', emoji:'â¡', speed:1.5 },
-  { id:'horror', label:'ê³µí¬', emoji:'ð»', speed:0.8 },
-  { id:'sliceOfLife', label:'ì¼ì', emoji:'âï¸', speed:1.0 },
-  { id:'drama', label:'ëë¼ë§', emoji:'ð­', speed:0.9 },
+  { id:'romance', label:'로맨스', emoji:'💕', speed:0.7 },
+  { id:'action', label:'액션', emoji:'⚡', speed:1.5 },
+  { id:'horror', label:'공포', emoji:'👻', speed:0.8 },
+  { id:'sliceOfLife', label:'일상', emoji:'☀️', speed:1.0 },
+  { id:'drama', label:'드라마', emoji:'🎭', speed:0.9 },
 ];
 
 const EXPRESSIONS = [
@@ -227,30 +227,30 @@ const EXPRESSIONS = [
 ];
 
 const EXPRESSION_KO = {
-  happy:'íë³µ',sad:'ì¬í',angry:'ë¶ë¸',surprised:'ëë',fear:'ê³µí¬',
-  disgusted:'íì¤',smiling:'ë¯¸ì',crying:'ì¸ì',shouting:'ì¸ì¹¨',shy:'ìì¤ì',
-  confused:'í¼ë',smirking:'ë¥ê¸',thinking:'ìê°',winking:'ìí¬',sleeping:'ìë©´'
+  happy:'행복',sad:'슬픔',angry:'분노',surprised:'넀람',fear:'공포',
+  disgusted:'혐오',smiling:'미소',crying:'울음',shouting:'외침',shy:'수줍음',
+  confused:'혼란',smirking:'능글',thinking:'생각',winking:'윙크',sleeping:'수면'
 };
 
 const CAMERAS = [
-  {ko:'ê³ ì ',en:'Static locked camera',use:'ëí, ê°ì '},
-  {ko:'ì²ì²í ì¤ì¸',en:'Slow gradual zoom-in toward subject',use:'ê°ì  ê³ ì¡°'},
-  {ko:'ë¹ ë¥¸ ì¤ì¸',en:'Quick snap zoom to close-up',use:'ëë, ì¶©ê²©'},
-  {ko:'ì¤ìì',en:'Camera pulling back to reveal wider scene',use:'ì¥ë©´ ì í'},
-  {ko:'í¬ (ì¢âì°)',en:'Camera panning smoothly left to right',use:'ê³µê° ìê°'},
-  {ko:'í¬ (ì°âì¢)',en:'Camera panning smoothly right to left',use:'ì­ë°©í¥ ì¶ì '},
-  {ko:'í¸í¸ì',en:'Camera tilting upward',use:'ìì, ê±°ëí¨'},
-  {ko:'í¸í¸ë¤ì´',en:'Camera tilting downward',use:'íê°, ë°ê²¬'},
-  {ko:'ë¬ë¦¬(ì ì§)',en:'Camera dollying forward toward subject',use:'ì ê·¼, ì§ì¤'},
-  {ko:'ë¬ë¦¬(íì§)',en:'Camera dollying backward away',use:'ì´ë³, ë©ì´ì§'},
-  {ko:'í¸ëí¹',en:'Camera tracking alongside subject',use:'ëí, ì¶ê²©'},
-  {ko:'ì¤ë¹(íì )',en:'Camera orbiting around subject',use:'ëë¼ë§í± ê°ì¡°'},
-  {ko:'í¬ë ì¸ì',en:'Camera craning upward rising',use:'í´ë°©ê°'},
-  {ko:'í¬ë ì¸ë¤ì´',en:'Camera craning down descending',use:'ë°ê²¬'},
-  {ko:'íë¤ë¦¼',en:'Handheld camera shake',use:'ê³µí¬, ì í¬'},
-  {ko:'ëì¹ìµê¸',en:'Dutch angle drift',use:'ë¶ì, ê´ê¸°'},
-  {ko:'ëí¬ì»¤ì¤',en:'Rack focus shift',use:'ìì  ì ë'},
-  {ko:'ìí',en:'Fast whip pan with motion blur',use:'ì¥ë©´ ì í'},
+  {ko:'고정',en:'Static locked camera',use:'대화, 감정'},
+  {ko:'천천히 줌인',en:'Slow gradual zoom-in toward subject',use:'감정 고조'},
+  {ko:'빠른 줌인',en:'Quick snap zoom to close-up',use:'놈람, 충격'},
+  {ko:'줌아웃',en:'Camera pulling back to reveal wider scene',use:'장면 전환'},
+  {ko:'팬 (좌→우)',en:'Camera panning smoothly left to right',use:'공간 소개'},
+  {ko:'팬 (우→좌)',en:'Camera panning smoothly right to left',use:'역방향 추적'},
+  {ko:'틸트업',en:'Camera tilting upward',use:'위엄, 거대함'},
+  {ko:'틸트다운',en:'Camera tilting downward',use:'하강, 발견'},
+  {ko:'달리(전진)',en:'Camera dollying forward toward subject',use:'접근, 집중'},
+  {ko:'달리(후진)',en:'Camera dollying backward away',use:'이별, 멀어짐'},
+  {ko:'트래킹',en:'Camera tracking alongside subject',use:'동행, 추격'},
+  {ko:'오빗(회전)',en:'Camera orbiting around subject',use:'드라마틱 강조'},
+  {ko:'크레인업',en:'Camera craning upward rising',use:'해방감'},
+  {ko:'크레인다운',en:'Camera craning down descending',use:'발견'},
+  {ko:'흔들림',en:'Handheld camera shake',use:'공포, 전투'},
+  {ko:'더치앵글',en:'Dutch angle drift',use:'불안, 광기'},
+  {ko:'랑포커스',en:'Rack focus shift',use:'시선 유도'},
+  {ko:'위핑',en:'Fast whip pan with motion blur',use:'장면 전환'},
 ];
 
 const GENRE_PRESETS = {
@@ -261,31 +261,31 @@ const GENRE_PRESETS = {
   drama:{physics:'micro-expressions, hand trembles, breath visualization, tear physics',ambient:'depth of field shifts, light/shadow interplay, rain/weather effects',neg:'comedic exaggeration, cartoonish physics'},
 };
 
-// âââ System Prompts âââââââââââââââââââââââââââââââââââââââââ
+// ─── System Prompts ─────────────────────────────────────────
 
-const SYS_MOTION_CONVERT = (genre, preset) => `ëë "ì¹í° ì¥ë©´ ëª¨ì ë³íê¸°"ë¤. ìë ¥ë ê¸ì½í°ë¥¼ ìì ëª¨ì ì§ìë¡ ë³ííë¤.
+const SYS_MOTION_CONVERT = (genre, preset) => `너는 "웹툰 장면 모션 변환기"다. 입력된 글콘티를 영상 모션 지시로 변환한다.
 
-[íµì¬ ê·ì¹]
-1. ì´ë¯¸ ìì±ë ê³ íë¦¬í° ì´ë¯¸ì§ê° ìì¤ë¡ ì¡´ì¬ â ì¸í/ë³µì¥/ë°°ê²½ ë¬ì¬ ì ë ê¸ì§
-2. ì¤ì§ "ìì§ì"ë§ ê¸°ì : ëí­, ìì  ì´ë, íì  ë³í, ì¹´ë©ë¼ ìí¬
-3. ê° ì¥ë©´ë¹ ìì¸í ëª¨ì ì§ì ìì±
-4. ìê° íë¦ ëªì: "ì²ì²í", "ê¸ê²©í", "2ì´ì ê±¸ì³" ë±
-5. ê°ì  ì íì´ ìì¼ë©´ ë°ëì íì  ë³í í¨í¨
-6. í¨ê³¼ìì´ ìì¼ë©´ ë¬¼ë¦¬ì  ìì§ìì¼ë¡ ë§¤í
+[핵심 규칙]
+1. 이미 완성된 고퀄리티 이미지가 소스로 존재 → 외형/복장/배경 묘사 절대 금지
+2. 오직 "움직임"만 기술: 동힑, 시선 이동, 표정 변화, 카메라 워크
+3. 각 장면당 상세한 모션 지시 작성
+4. 시간 흐름 명시: "천천히", "급격히", "2초에 걸쳐" 등
+5. 감정 전환이 있으메 반드시 표정 변화 폨함
+6. 효과음이 있으메 물리적 움직임으로 매핑
 
-[í¬ë§·]
-- ëª¨ì: [êµ¬ì²´ì  ëì ë¬ì¬]
-- ë¶ìëì: [ë¨¸ë¦¬ì¹´ë½, ì·, ë¬¼ë¦¬ ë°ì]
-- ì¹´ë©ë¼: [ì¹´ë©ë¼ ìì§ì]
-- íì´ë°: [ìë]
-- ê°ì íë¦: [ìì â ë]
+[포맷]
+- 모션: [구체적 동작 묘사]
+- 부수동작: [머리카락, 옷, 물리 반응]
+- 카메라: [카메라 움직임]
+- 타이밍: [속도]
+- 감정흐름: [시작 → 끝]
 
-[ê¸ì§] ìºë¦­í° ì¸ëª¨ ë¬ì¬, ë°°ê²½ ì¤ëª, ëì¬ í¬í¨, "~íë ì¥ë©´" ë©í íí
+[금지] 캐릭터 외모 묘사, 배경 설명, 대사 포함, "~하는 장면" 메타 푘현
 
-[ì¥ë¥´: ${genre}]
-- ìë: ${preset?.speed || 1.0}x
-- ë¬¼ë¦¬ ê°ì¡°: ${preset?.physics || ''}
-- ë¶ìê¸°: ${preset?.ambient || ''}`;
+[장르: ${genre}]
+- 속도: ${preset?.speed || 1.0}x
+- 물리 강조: ${preset?.physics || ''}
+- 분위기: ${preset?.ambient || ''}`;
 
 const SYS_MOTION_PROMPT = (genre, preset) => `You are an expert animation motion prompt engineer for webtoon-to-video conversion.
 Convert Korean motion directions into precise English video generation prompts.
@@ -305,7 +305,7 @@ GENRE: ${genre}
 - Ambient effects: ${preset?.ambient || ''}
 - AVOID: ${preset?.neg || ''}`;
 
-// âââ Gemini API âââââââââââââââââââââââââââââââââââââââââââââ
+// ─── Gemini API ─────────────────────────────────────────────
 
 async function callGemini(systemPrompt, userPrompt) {
   const r = await fetch(GEMINI_URL, {
@@ -328,7 +328,7 @@ async function callGemini(systemPrompt, userPrompt) {
   };
 }
 
-// âââ Components âââââââââââââââââââââââââââââââââââââââââââââ
+// ─── Components ─────────────────────────────────────────────
 
 function App() {
   const [tab, setTab] = useState('single'); // single | batch | camera | history
@@ -358,17 +358,17 @@ function App() {
   const genreInfo = GENRES.find(g => g.id === genre);
   const preset = GENRE_PRESETS[genre];
 
-  // âââ Run Pipeline âââââââââââââââââââââââââââââââââââââââââ
+  // ─── Run Pipeline ─────────────────────────────────────────
 
   const runPipeline = useCallback(async (desc, dial, sfxStr, eStart, eEnd, genreId) => {
     const p = GENRE_PRESETS[genreId];
     const gInfo = GENRES.find(g => g.id === genreId);
 
     const scenePrompt = [
-      `[ì¥ë©´ ë¬ì¬] ${desc}`,
-      dial ? `[ëì¬] ${dial}` : '',
-      sfxStr ? `[í¨ê³¼ì] ${sfxStr}` : '',
-      `[ê°ì ] ${eStart} â ${eEnd}`,
+      `[장면 묘사] ${desc}`,
+      dial ? `[대사] ${dial}` : '',
+      sfxStr ? `[효과음] ${sfxStr}` : '',
+      `[감정] ${eStart} → ${eEnd}`,
     ].filter(Boolean).join('\n');
 
     // Step 1
@@ -427,7 +427,7 @@ function App() {
     }
   }, [description, dialogue, sfx, emotionStart, emotionEnd, genre, runPipeline]);
 
-  // âââ Batch Processing âââââââââââââââââââââââââââââââââââââ
+  // ─── Batch Processing ─────────────────────────────────────
 
   const addBatchScene = () => {
     if (!description.trim()) return;
@@ -460,7 +460,7 @@ function App() {
     setBatchProcessing(false);
   }, [batchScenes, runPipeline]);
 
-  // âââ Copy âââââââââââââââââââââââââââââââââââââââââââââââââ
+  // ─── Copy ─────────────────────────────────────────────────
 
   const copyText = (text) => {
     navigator.clipboard?.writeText(text);
@@ -469,24 +469,24 @@ function App() {
   const wordCount = step2Result ? step2Result.text.split(/\s+/).length : 0;
   const totalTokens = (step1Result?.inputTokens||0) + (step1Result?.outputTokens||0) + (step2Result?.inputTokens||0) + (step2Result?.outputTokens||0);
 
-  // âââ Render âââââââââââââââââââââââââââââââââââââââââââââââ
+  // ─── Render ───────────────────────────────────────────────
 
   return (
     <div className="app">
       <div className="header">
         <h1>Video Prompt Engine</h1>
         <span className="badge">v1.0</span>
-        <span className="sub">MoonTech Manager .AI â ìì íë¡¬íí¸ ìë ìì±</span>
+        <span className="sub">MoonTech Manager .AI — 영상 프롬프트 자동 생성</span>
       </div>
 
       <div className="layout">
         {/* LEFT PANEL */}
         <div>
           <div className="panel" style={{marginBottom:20}}>
-            <h2><span className="icon">ð¬</span> ì¥ë©´ ìë ¥</h2>
+            <h2><span className="icon">🎬</span> 장면 입력</h2>
 
             <div className="form-group">
-              <label>ì¥ë¥´</label>
+              <label>장르</label>
               <div className="genre-chips">
                 {GENRES.map(g => (
                   <div key={g.id} className={`genre-chip ${genre===g.id?'active':''}`} data-g={g.id} onClick={() => setGenre(g.id)}>
@@ -497,30 +497,30 @@ function App() {
             </div>
 
             <div className="form-group">
-              <label>ì¥ë©´ ë¬ì¬ *</label>
+              <label>장면 묘사 *</label>
               <textarea value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="ì: ê°ì ì´ ê²©í´ì§ ìì, ëë¬¼ì ì°¸ì¼ë©° ê³ ê°ë¥¼ ëë¦°ë¤. ë¹ìë¦¬ê° ì¸ì°¨ê² ë´ë¦´ë¤." rows={4} />
+                placeholder="예: 감정이 격해진 수아, 눈물을 참으며 고개를 돌린다. 빗소리가 세차게 내릴다." rows={4} />
             </div>
 
             <div className="form-group">
-              <label>ëì¬ (ì í)</label>
+              <label>대사 (선택)</label>
               <input value={dialogue} onChange={e => setDialogue(e.target.value)}
-                placeholder='ì: ë:(ìì) ...ê°ì§ ë§.' />
+                placeholder='예: 대:(수아) ...가지 마.' />
             </div>
 
             <div className="form-group">
-              <label>í¨ê³¼ì (ì í)</label>
+              <label>효과음 (선택)</label>
               <input value={sfx} onChange={e => setSfx(e.target.value)}
-                placeholder='ì: ì¾!, ë¹ìë¦¬, ëê·¼ëê·¼' />
+                placeholder='예: 쾅!, 빗소리, 두근두근' />
             </div>
 
             <div className="form-group">
-              <label>ê°ì  ì í</label>
+              <label>감정 전환</label>
               <div className="emotion-row">
                 <select value={emotionStart} onChange={e => setEmotionStart(e.target.value)}>
                   {EXPRESSIONS.map(ex => <option key={ex} value={ex}>{EXPRESSION_KO[ex]} ({ex})</option>)}
                 </select>
-                <span className="emotion-arrow">â</span>
+                <span className="emotion-arrow">→</span>
                 <select value={emotionEnd} onChange={e => setEmotionEnd(e.target.value)}>
                   {EXPRESSIONS.map(ex => <option key={ex} value={ex}>{EXPRESSION_KO[ex]} ({ex})</option>)}
                 </select>
@@ -528,15 +528,15 @@ function App() {
             </div>
 
             <div className="form-group">
-              <label>ìµì</label>
+              <label>옵션</label>
               <div className="options-row">
                 <label className={`option-chip ${audioEnabled?'active':''}`}>
                   <input type="checkbox" checked={audioEnabled} onChange={e => setAudioEnabled(e.target.checked)} />
-                  ð ì¤ëì¤ í¬í¨
+                  🔊 오디오 포함
                 </label>
                 <label className={`option-chip ${cameraFixed?'active':''}`}>
                   <input type="checkbox" checked={cameraFixed} onChange={e => setCameraFixed(e.target.checked)} />
-                  ð ì¹´ë©ë¼ ê³ ì 
+                  📌 카메라 고정
                 </label>
               </div>
             </div>
@@ -548,22 +548,22 @@ function App() {
             <div style={{display:'flex',gap:8}}>
               <button className="run-btn" onClick={handleRun} disabled={loading || !description.trim()}>
                 {loading && <span className="spinner" />}
-                {loading ? 'ìì± ì¤...' : 'ð ëª¨ì íë¡¬íí¸ ìì±'}
+                {loading ? '생성 중...' : '🚀 모션 프롬프트 생성'}
               </button>
               {tab === 'batch' && (
                 <button className="run-btn" style={{flex:'0 0 auto',width:'auto',padding:'14px 20px',background:'var(--surface3)',border:'1px solid var(--border)'}}
                   onClick={addBatchScene} disabled={!description.trim()}>
-                  + ì¶ê°
+                  + 추가
                 </button>
               )}
             </div>
 
-            {error && <p style={{color:'var(--err)',fontSize:13,marginTop:10}}>â ï¸ {error}</p>}
+            {error && <p style={{color:'var(--err)',fontSize:13,marginTop:10}}>⚠️ {error}</p>}
           </div>
 
           {/* Camera Dictionary */}
           <div className="panel">
-            <h2><span className="icon">ð·</span> ì¹´ë©ë¼ ìí¬ ì¬ì </h2>
+            <h2><span className="icon">📷</span> 카메라 워크 사전</h2>
             <div className="camera-grid">
               {CAMERAS.map((c,i) => (
                 <div key={i} className="camera-item" onClick={() => {
@@ -580,19 +580,19 @@ function App() {
         {/* RIGHT PANEL */}
         <div className="results">
           <div className="tabs">
-            <button className={`tab ${tab==='single'?'active':''}`} onClick={() => setTab('single')}>ë¨ì¼ ì¥ë©´</button>
-            <button className={`tab ${tab==='batch'?'active':''}`} onClick={() => setTab('batch')}>ë°°ì¹ ì²ë¦¬</button>
-            <button className={`tab ${tab==='history'?'active':''}`} onClick={() => setTab('history')}>ê¸°ë¡ ({history.length})</button>
+            <button className={`tab ${tab==='single'?'active':''}`} onClick={() => setTab('single')}>단일 장면</button>
+            <button className={`tab ${tab==='batch'?'active':''}`} onClick={() => setTab('batch')}>배치 처리</button>
+            <button className={`tab ${tab==='history'?'active':''}`} onClick={() => setTab('history')}>기록 ({history.length})</button>
           </div>
 
           {tab === 'single' && (
             <>
               {!step1Result && !loading && (
                 <div className="empty-state">
-                  <div className="icon">ð¬</div>
-                  <p>ì¼ìª½ìì ì¥ë©´ì ìë ¥íê³ <br/>ãëª¨ì íë¡¬íí¸ ìì±ãì í´ë¦­íì¸ì</p>
+                  <div className="icon">🎬</div>
+                  <p>왼쪽에서 장면을 입력하고<br/>「모션 프롬프트 생성」을 클릭하세요</p>
                   <p style={{marginTop:12,fontSize:12,color:'var(--text2)'}}>
-                    ê¸ì½í° â ëª¨ì ì½í°(íêµ­ì´) â ìë¬¸ ëª¨ì íë¡¬íí¸<br/>3ë¨ê³ íì´íë¼ì¸ì´ ìëì¼ë¡ ì¤íë©ëë¤
+                    글콘티 → 모션 콘티(한국어) → 영문 모션 프롬프트<br/>3단계 파이플라인이 자동으로 실행됩니다
                   </p>
                 </div>
               )}
@@ -601,24 +601,24 @@ function App() {
                 <div className="fade-up">
                   <div className="stats-bar" style={{marginBottom:16}}>
                     <div className="stat">
-                      <span className="stat-label">ì´ ìììê°</span>
+                      <span className="stat-label">총 소요시간</span>
                       <span className="stat-value time">{((step1Time+step2Time)/1000).toFixed(1)}s</span>
                     </div>
                     <div className="stat">
-                      <span className="stat-label">í í° ì¬ì©</span>
+                      <span className="stat-label">토큰 사용</span>
                       <span className="stat-value tokens">{totalTokens}</span>
                     </div>
                     <div className="stat">
-                      <span className="stat-label">íë¡¬íí¸ ë¨ì´</span>
+                      <span className="stat-label">프롬프트 단어</span>
                       <span className="stat-value words">{wordCount}/80</span>
                     </div>
                     <div className="stat">
-                      <span className="stat-label">ì¥ë¥´</span>
+                      <span className="stat-label">장르</span>
                       <span className="stat-value">{genreInfo?.emoji} {genreInfo?.label}</span>
                     </div>
                     <div className="stat">
-                      <span className="stat-label">ê°ì </span>
-                      <span className="stat-value" style={{fontSize:13}}>{EXPRESSION_KO[emotionStart]}â{EXPRESSION_KO[emotionEnd]}</span>
+                      <span className="stat-label">감정</span>
+                      <span className="stat-value" style={{fontSize:13}}>{EXPRESSION_KO[emotionStart]}→{EXPRESSION_KO[emotionEnd]}</span>
                     </div>
                   </div>
                 </div>
@@ -628,12 +628,12 @@ function App() {
                 <div className="result-card step-1 fade-up" style={{animationDelay:'0.1s'}}>
                   <div className="result-header">
                     <div className="step-num">1</div>
-                    <span className="step-title">ëª¨ì ì½í° (íêµ­ì´)</span>
+                    <span className="step-title">모션 콘티 (한국어)</span>
                     <div className="step-meta">
-                      <span>â± {(step1Time/1000).toFixed(1)}s</span>
-                      <span>ð {step1Result.inputTokens}+{step1Result.outputTokens} tokens</span>
+                      <span>⏱ {(step1Time/1000).toFixed(1)}s</span>
+                      <span>📊 {step1Result.inputTokens}+{step1Result.outputTokens} tokens</span>
                     </div>
-                    <button className="copy-btn" onClick={() => copyText(step1Result.text)}>ë³µì¬</button>
+                    <button className="copy-btn" onClick={() => copyText(step1Result.text)}>복사</button>
                   </div>
                   <div className="result-body">
                     <div className="result-text korean">{step1Result.text}</div>
@@ -645,12 +645,12 @@ function App() {
                 <div className="result-card step-2 highlight fade-up" style={{animationDelay:'0.2s'}}>
                   <div className="result-header">
                     <div className="step-num">2</div>
-                    <span className="step-title">ìë¬¸ ëª¨ì íë¡¬íí¸ (Video APIì©)</span>
+                    <span className="step-title">영문 모션 프롬프트 (Video API용)</span>
                     <div className="step-meta">
-                      <span>â± {(step2Time/1000).toFixed(1)}s</span>
-                      <span>ð {wordCount} words</span>
+                      <span>⏱ {(step2Time/1000).toFixed(1)}s</span>
+                      <span>📝 {wordCount} words</span>
                     </div>
-                    <button className="copy-btn" onClick={() => copyText(step2Result.text)}>ë³µì¬</button>
+                    <button className="copy-btn" onClick={() => copyText(step2Result.text)}>복사</button>
                   </div>
                   <div className="result-body">
                     <div className="result-text english">{step2Result.text}</div>
@@ -664,8 +664,8 @@ function App() {
             <>
               {batchScenes.length === 0 && !batchProcessing && (
                 <div className="empty-state">
-                  <div className="icon">ð¦</div>
-                  <p>ì¥ë©´ì ìë ¥íê³  ã+ ì¶ê°ã ë²í¼ì¼ë¡ ë°°ì¹ì ì¶ê°íì¸ì<br/>ì¬ë¬ ì¥ë©´ì íë²ì ì²ë¦¬í  ì ììµëë¤</p>
+                  <div className="icon">📦</div>
+                  <p>장면을 입력하고 「+ 추가」 버튼으로 배치에 추가하세요<br/>여러 장면을 한번에 처리할 수 있습니다</p>
                 </div>
               )}
 
@@ -676,18 +676,18 @@ function App() {
                     {GENRES.find(g=>g.id===sc.genre)?.emoji} {sc.description}
                   </div>
                   <div className="status">
-                    {sc.status === 'pending' && 'â³'}
+                    {sc.status === 'pending' && '⏳'}
                     {sc.status === 'processing' && <span className="spinner" style={{width:16,height:16,borderWidth:2}} />}
-                    {sc.status === 'done' && 'â'}
-                    {sc.status === 'error' && 'â'}
+                    {sc.status === 'done' && '✅'}
+                    {sc.status === 'error' && '❌'}
                   </div>
-                  {!batchProcessing && <button className="remove-btn" onClick={() => removeBatchScene(sc.id)}>ì­ì </button>}
+                  {!batchProcessing && <button className="remove-btn" onClick={() => removeBatchScene(sc.id)}>삭제</button>}
                 </div>
               ))}
 
               {batchScenes.length > 0 && !batchProcessing && (
                 <button className="run-btn" onClick={runBatch}>
-                  ð {batchScenes.length}ê° ì¥ë©´ ì¼ê´ ìì±
+                  🚀 {batchScenes.length}개 장면 일괄 생성
                 </button>
               )}
 
@@ -696,12 +696,12 @@ function App() {
                   <div className="result-header">
                     <div className="step-num" style={{background:'rgba(0,210,211,0.2)',color:'var(--success)'}}>{i+1}</div>
                     <span className="step-title" style={{fontSize:12}}>{r.description?.slice(0,40)}...</span>
-                    <div className="step-meta"><span>â± {((r.time1+r.time2)/1000).toFixed(1)}s</span></div>
-                    <button className="copy-btn" onClick={() => copyText(r.step2?.text || '')}>ë³µì¬</button>
+                    <div className="step-meta"><span>⏱ {((r.time1+r.time2)/1000).toFixed(1)}s</span></div>
+                    <button className="copy-btn" onClick={() => copyText(r.step2?.text || '')}>복사</button>
                   </div>
                   <div className="result-body">
                     {r.error ? (
-                      <div style={{color:'var(--err)'}}>â ï¸ {r.error}</div>
+                      <div style={{color:'var(--err)'}}>⚠️ {r.error}</div>
                     ) : (
                       <>
                         <div className="result-text korean" style={{marginBottom:12,paddingBottom:12,borderBottom:'1px solid var(--border)',fontSize:12}}>{r.step1?.text}</div>
@@ -718,8 +718,8 @@ function App() {
             <>
               {history.length === 0 && (
                 <div className="empty-state">
-                  <div className="icon">ð</div>
-                  <p>ìì§ ìì± ê¸°ë¡ì´ ììµëë¤</p>
+                  <div className="icon">📜</div>
+                  <p>아직 생성 기록이 없습니다</p>
                 </div>
               )}
               {history.map(h => (
@@ -731,7 +731,7 @@ function App() {
                 }}>
                   <div style={{display:'flex',justifyContent:'space-between'}}>
                     <span style={{fontSize:13}}>{GENRES.find(g=>g.id===h.genre)?.emoji} {h.description}...</span>
-                    <span className="time">{h.time} Â· {(h.totalTime/1000).toFixed(1)}s</span>
+                    <span className="time">{h.time} · {(h.totalTime/1000).toFixed(1)}s</span>
                   </div>
                   <div className="preview">{h.motionPrompt.slice(0, 100)}...</div>
                 </div>
