@@ -1798,16 +1798,18 @@ const runPhase1 = useCallback(async () => {
   const runPhase2 = useCallback(async () => {
     transition('PHASE_2_SPLITTING');
     log('[Phase 2-A] Splitting story into scenes...');
-    const sceneRaw = await callTextLF(PIPELINE_A_SYSTEM.contiConvert, sourceText, {maxTokens: 16384});
+    const sceneRaw = await callTextLF(PIPELINE_A_SYSTEM.contiConvert + '\n\nCRITICAL: You MUST respond with ONLY a valid JSON array. No markdown, no explanation, no code fences. Start with [ and end with ].', sourceText, {maxTokens: 16384});
     let scenes;
     try {
       let cleaned = sceneRaw.replace(/```json\n?|```/g, '').trim();
-      try { scenes = JSON.parse(cleaned); } catch(e1) {
-        const lastBrace = cleaned.lastIndexOf('}');
-        if (lastBrace > 0) { cleaned = cleaned.substring(0, lastBrace+1) + ']'; scenes = JSON.parse(cleaned); log('[Phase 2-A] JSON repaired (truncated)','warn'); }
-        else throw e1;
-      }
-    } catch(e) { throw new Error('Scene split JSON parse failed: '+e.message); }
+          const arrStart = cleaned.indexOf('[');
+          const arrEnd = cleaned.lastIndexOf(']');
+          if (arrStart >= 0 && arrEnd > arrStart) { cleaned = cleaned.substring(arrStart, arrEnd + 1); }
+          try { scenes = JSON.parse(cleaned); } catch(e1) {
+          const lastBrace = cleaned.lastIndexOf('}');
+          if (lastBrace > 0) { cleaned = cleaned.substring(0, lastBrace+1) + ']'; scenes = JSON.parse(cleaned); log('[Phase 2] Recovered truncated JSON','warn'); }
+          else { throw new Error('Scene split JSON parse failed: ' + e1.message); }
+          }
     log('[Phase 2-A] '+scenes.length+' scenes identified');
     if (abortRef.current) throw new Error('Aborted');
 
