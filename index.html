@@ -1638,7 +1638,75 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
     opts = opts || {};
     return imageProvider === 'grok' ? await callGrokImage(prompt, opts) : await callImagen(prompt, Object.assign({aspectRatio:'9:16'}, opts));
   }, [imageProvider]);
-  const runPhase1 = useCallback(async () => {
+  
+    // === Per-scene image generation ===
+    const generateSceneImage = useCallback(async (idx) => {
+      const scenes = lfScenesRef.current;
+      const sc = scenes[idx];
+      if (!sc || !sc.compositionData) { setErrorMsg('Scene data not ready - run Phase 2 first'); return; }
+      log('[GenImg] Generating image for scene ' + (idx+1));
+      sc.status = 'generating_image';
+      lfScenesRef.current = [...scenes];
+      setLfScenes([...scenes]);
+      try {
+        const prompt = sc.compositionData.referencePrompt || sc.summary;
+        const imgUrl = await callImageLF(prompt);
+        sc.anchorImage = { url: imgUrl, prompt };
+        sc.status = sc.video ? 'complete' : 'image_done';
+        log('[GenImg] Scene ' + (idx+1) + ' image done');
+      } catch(e) {
+        log('[GenImg] Error: ' + e.message);
+        sc.status = 'error';
+        setErrorMsg('Image gen failed: ' + e.message);
+      }
+      lfScenesRef.current = [...scenes];
+      setLfScenes([...scenes]);
+    }, [callImageLF]);
+
+    // === Per-scene video generation ===
+    const generateSceneVideo = useCallback(async (idx) => {
+      const scenes = lfScenesRef.current;
+      const sc = scenes[idx];
+      if (!sc) { setErrorMsg('Scene data not ready'); return; }
+      log('[GenVid] Generating video for scene ' + (idx+1));
+      sc.status = 'generating_video';
+      lfScenesRef.current = [...scenes];
+      setLfScenes([...scenes]);
+      try {
+        const motionPrompt = sc.compositionData?.motionHint || sc.summary;
+        let imageB64 = null;
+        if (sc.anchorImage && sc.anchorImage.url && sc.anchorImage.url.startsWith('data:')) {
+          imageB64 = sc.anchorImage.url.split(',')[1];
+        }
+        const videoUrls = await callVeo(motionPrompt, imageB64, {aspectRatio:'9:16', duration:5});
+        if (videoUrls && videoUrls.length > 0) {
+          sc.video = { url: videoUrls[0], durationSec: 5, motionPrompt };
+          sc.status = 'complete';
+          log('[GenVid] Scene ' + (idx+1) + ' video done');
+        } else {
+          sc.status = sc.anchorImage ? 'image_done' : 'pending';
+          log('[GenVid] No video returned');
+        }
+      } catch(e) {
+        log('[GenVid] Error: ' + e.message);
+        sc.status = 'error';
+        setErrorMsg('Video gen failed: ' + e.message);
+      }
+      lfScenesRef.current = [...scenes];
+      setLfScenes([...scenes]);
+    }, []);
+
+    // === Download/save media ===
+    const downloadMedia = useCallback((dataUrl, filename) => {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }, []);
+
+const runPhase1 = useCallback(async () => {
     transition('PHASE_1_ANALYZING');
     log('[Phase 1-A] Extracting characters from story...');
     const charRaw = await callTextLF(PROMPTS.CHARACTER_EXTRACTION, sourceText);
@@ -1887,6 +1955,12 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
                 React.createElement('div',{style:{display:'flex',gap:4,marginTop:6}},
                   React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:sc.status==='complete'?'#238636':'#30363d',color:'#fff'}},sc.status||'pending'),
                   sc.narrativeMood && React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:'#1c2128',color:'#f0883e'}},sc.narrativeMood))
+              ),
+              React.createElement('div',{style:{display:'flex',gap:4,marginTop:4,flexWrap:'wrap'}},
+                React.createElement('button',{onClick:(e)=>{e.stopPropagation();generateSceneImage(i)},disabled:sc.status==='generating_image',style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #6c5ce7',background:sc.status==='generating_image'?'#6c5ce7':'transparent',color:'#fff',cursor:'pointer',whiteSpace:'nowrap'}},(sc.status==='generating_image'?'•••':'🖼️ 이미지 생성')),
+                React.createElement('button',{onClick:(e)=>{e.stopPropagation();generateSceneVideo(i)},disabled:sc.status==='generating_video'||!sc.anchorImage,style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #e0457b',background:sc.status==='generating_video'?'#e0457b':'transparent',color:'#fff',cursor:'pointer',whiteSpace:'nowrap'}},(sc.status==='generating_video'?'•••':'🎬 영상 생성')),
+                sc.anchorImage&&React.createElement('button',{onClick:(e)=>{e.stopPropagation();downloadMedia(sc.anchorImage.url,'scene_'+(i+1)+'_image.png')},style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #238636',background:'transparent',color:'#238636',cursor:'pointer',whiteSpace:'nowrap'}},'⬇ 이미지 저장'),
+                sc.video&&sc.video.url&&React.createElement('button',{onClick:(e)=>{e.stopPropagation();downloadMedia(sc.video.url,'scene_'+(i+1)+'_video.mp4')},style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #238636',background:'transparent',color:'#238636',cursor:'pointer',whiteSpace:'nowrap'}},'⬇ 영상 저장')
               ),
               sc.anchorImage?.url && React.createElement('img',{src:sc.anchorImage.url,style:{width:60,height:80,objectFit:'cover',borderRadius:6,flexShrink:0}}),
               sc.video?.url && React.createElement('video',{src:sc.video.url,muted:true,style:{width:60,height:80,objectFit:'cover',borderRadius:6,flexShrink:0},onMouseEnter:e=>e.target.play(),onMouseLeave:e=>{e.target.pause();e.target.currentTime=0;}})
