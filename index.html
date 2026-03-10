@@ -1576,6 +1576,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
   const [projectTitle, setProjectTitle] = useState('');
   const [globalAsset, setGlobalAsset] = useState(null);
   const [lfScenes, setLfScenes] = useState([]);
+  const lfScenesRef = useRef([]);
   const [phaseHistory, setPhaseHistory] = useState([]);
   const [errorMsg, setErrorMsg] = useState('');
   const [running, setRunning] = useState(false);
@@ -1676,14 +1677,14 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
       catch(e) { log('[Phase 2-B] DP failed scene '+(i+1)+': '+e.message, 'warn'); sc.compositionData = null; }
       sc.status = 'composed';
     }
-    setLfScenes(scenes);
+    lfScenesRef.current = scenes; setLfScenes(scenes);
     transition('PHASE_2_COMPLETE');
     log('[Phase 2] Complete: '+scenes.length+' scenes with composition data');
   }, [sourceText, globalAsset, callTextLF, transition, log]);
   const runPhase3 = useCallback(async () => {
     transition('PHASE_3_GENERATING');
     log('[Phase 3] Generating anchor images...');
-    const updated = [...lfScenes];
+    const updated = [...lfScenesRef.current];
     for (let i=0; i<updated.length; i++) {
       if (abortRef.current) throw new Error('Aborted');
       setCurrentSceneIdx(i);
@@ -1707,15 +1708,15 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
         log('[Phase 3] Scene '+(i+1)+' anchor generated');
       } catch(e) { log('[Phase 3] Scene '+(i+1)+' failed: '+e.message, 'warn'); sc.anchorImage = null; }
     }
-    setLfScenes(updated);
+    lfScenesRef.current = updated; setLfScenes(updated);
     transition('PHASE_3_COMPLETE');
     log('[Phase 3] Complete: '+updated.filter(s=>s.anchorImage).length+'/'+updated.length+' anchors');
-  }, [lfScenes, globalAsset, callTextLF, callImageLF, transition, log]);
+  }, [globalAsset, callTextLF, callImageLF, transition, log]);
 
   const runPhase4 = useCallback(async () => {
     transition('PHASE_4_GENERATING');
     log('[Phase 4] Generating videos...');
-    const updated = [...lfScenes];
+    const updated = [...lfScenesRef.current];
     for (let i=0; i<updated.length; i++) {
       if (abortRef.current) throw new Error('Aborted');
       setCurrentSceneIdx(i);
@@ -1732,15 +1733,15 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
         log('[Phase 4] Scene '+(i+1)+' video generated');
       } catch(e) { log('[Phase 4] Scene '+(i+1)+' failed: '+e.message, 'warn'); sc.video = null; }
     }
-    setLfScenes(updated);
+    lfScenesRef.current = updated; setLfScenes(updated);
     transition('PHASE_4_COMPLETE');
     log('[Phase 4] Complete: '+updated.filter(s=>s.video).length+'/'+updated.length+' videos');
-  }, [lfScenes, transition, log]);
+  }, [transition, log]);
   const runPhase5 = useCallback(async () => {
     if (!enableWebtoon) { log('[Phase 5] Webtoon disabled, skipping'); transition('COMPLETED'); return; }
     transition('PHASE_5_EXPANDING');
     log('[Phase 5] Expanding to webtoon panels...');
-    const updated = [...lfScenes];
+    const updated = [...lfScenesRef.current];
     for (let i=0; i<updated.length; i++) {
       if (abortRef.current) throw new Error('Aborted');
       setCurrentSceneIdx(i);
@@ -1760,11 +1761,11 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
       }
       sc.status = 'complete';
     }
-    setLfScenes(updated);
+    lfScenesRef.current = updated; setLfScenes(updated);
     transition('PHASE_5_COMPLETE');
     transition('COMPLETED');
     log('[Phase 5] Complete');
-  }, [lfScenes, enableWebtoon, callImageLF, transition, log]);
+  }, [enableWebtoon, callImageLF, transition, log]);
 
   const runFullPipeline = useCallback(async () => {
     if (!sourceText.trim()) { log('Source text empty', 'error'); return; }
@@ -1819,7 +1820,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
         React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
           !running && phase==='IDLE' && React.createElement('button',{onClick:runFullPipeline,disabled:!sourceText.trim(),style:{flex:1,padding:'10px 16px',background:'linear-gradient(135deg,#6c5ce7,#a29bfe)',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer',opacity:sourceText.trim()?1:0.4}},'Full Pipeline Start'),
           !running && phase==='ERROR' && React.createElement('button',{onClick:resumePipeline,style:{flex:1,padding:'10px 16px',background:'linear-gradient(135deg,#f0883e,#f9826c)',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}},'Resume from Error'),
-          !running && phase==='COMPLETED' && React.createElement('button',{onClick:()=>{setPhase('IDLE');setPhaseHistory([]);setGlobalAsset(null);setLfScenes([]);},style:{flex:1,padding:'10px 16px',background:'#238636',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}},'New Project'),
+          !running && phase==='COMPLETED' && React.createElement('button',{onClick:()=>{setPhase('IDLE');setPhaseHistory([]);setGlobalAsset(null);lfScenesRef.current = []; setLfScenes([]);},style:{flex:1,padding:'10px 16px',background:'#238636',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}},'New Project'),
           running && React.createElement('button',{onClick:stopPipeline,style:{flex:1,padding:'10px 16px',background:'#da3633',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}},'Stop Pipeline'),
           !running && phase!=='IDLE' && phase!=='ERROR' && phase!=='COMPLETED' && React.createElement('button',{onClick:async()=>{setRunning(true);try{if(phase==='PHASE_1_COMPLETE')await runPhase2();else if(phase==='PHASE_2_COMPLETE')await runPhase3();else if(phase==='PHASE_3_COMPLETE')await runPhase4();else if(phase==='PHASE_4_COMPLETE')await runPhase5();}catch(e){transition('ERROR',e.message);}finally{setRunning(false);}},style:{flex:1,padding:'10px 16px',background:'#1f6feb',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}},'Next Phase')
         ),
