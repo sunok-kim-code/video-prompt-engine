@@ -7,6 +7,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -234,6 +236,111 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 <body>
 <div id="root"></div>
 <script type="text/babel">
+
+// ============================================================
+// Firebase / Firestore Project Management
+// ============================================================
+let _db = null;
+function getFirebaseConfig() {
+  try {
+    const raw = localStorage.getItem('firebase_config');
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return null;
+}
+function saveFirebaseConfig(cfg) {
+  localStorage.setItem('firebase_config', JSON.stringify(cfg));
+  _db = null; // reset
+  initFirebase();
+}
+function initFirebase() {
+  const cfg = getFirebaseConfig();
+  if (!cfg || !cfg.apiKey || !cfg.projectId) return null;
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(cfg);
+    }
+    _db = firebase.firestore();
+    return _db;
+  } catch(e) { console.error('Firebase init error:', e); return null; }
+}
+function getDb() {
+  if (_db) return _db;
+  return initFirebase();
+}
+
+// Firestore CRUD for projects
+async function fbListProjects() {
+  const db = getDb();
+  if (!db) throw new Error('Firebase not configured');
+  const snap = await db.collection('webtoon_projects').orderBy('updatedAt','desc').get();
+  return snap.docs.map(d => ({id: d.id, ...d.data()}));
+}
+
+async function fbSaveProject(projectId, data) {
+  const db = getDb();
+  if (!db) throw new Error('Firebase not configured');
+  const ref = db.collection('webtoon_projects').doc(projectId);
+  const payload = {
+    ...data,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  // Remove large binary data (images/videos stored as base64) from main doc
+  if (payload.scenes) {
+    payload.sceneCount = payload.scenes.length;
+  }
+  await ref.set(payload, {merge: true});
+  return projectId;
+}
+
+async function fbLoadProject(projectId) {
+  const db = getDb();
+  if (!db) throw new Error('Firebase not configured');
+  const doc = await db.collection('webtoon_projects').doc(projectId).get();
+  if (!doc.exists) throw new Error('Project not found');
+  return {id: doc.id, ...doc.data()};
+}
+
+async function fbDeleteProject(projectId) {
+  const db = getDb();
+  if (!db) throw new Error('Firebase not configured');
+  // Delete phase subcollections first
+  const phases = await db.collection('webtoon_projects').doc(projectId).collection('phases').get();
+  const batch = db.batch();
+  phases.docs.forEach(d => batch.delete(d.ref));
+  batch.delete(db.collection('webtoon_projects').doc(projectId));
+  await batch.commit();
+}
+
+async function fbSavePhase(projectId, phaseName, phaseData) {
+  const db = getDb();
+  if (!db) throw new Error('Firebase not configured');
+  const ref = db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName);
+  await ref.set({
+    ...phaseData,
+    savedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+
+async function fbLoadPhase(projectId, phaseName) {
+  const db = getDb();
+  if (!db) throw new Error('Firebase not configured');
+  const doc = await db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName).get();
+  if (!doc.exists) return null;
+  return doc.data();
+}
+
+async function fbListPhases(projectId) {
+  const db = getDb();
+  if (!db) throw new Error('Firebase not configured');
+  const snap = await db.collection('webtoon_projects').doc(projectId).collection('phases').orderBy('savedAt','desc').get();
+  return snap.docs.map(d => ({id: d.id, ...d.data()}));
+}
+
+// Initialize on load
+try { initFirebase(); } catch(e) {}
+
+
 const {useState,useCallback,useRef,useEffect,useMemo} = React;
 
 // ============================================================
@@ -1643,6 +1750,134 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
   const [textProvider, setTextProvider] = useState('gemini');
   const [imageProvider, setImageProvider] = useState('imagen4');
   const [enableWebtoon, setEnableWebtoon] = useState(true);
+
+  // === Project Management States ===
+  const [projectList, setProjectList] = useState([]);
+  const [currentProjectId, setCurrentProjectId] = useState('');
+  const [showProjectPanel, setShowProjectPanel] = useState(false);
+  const [showFirebaseConfig, setShowFirebaseConfig] = useState(false);
+  const [fbConfig, setFbConfig] = useState(getFirebaseConfig() || {apiKey:'',authDomain:'',projectId:'',storageBucket:'',messagingSenderId:'',appId:''});
+  const [fbStatus, setFbStatus] = useState(getDb() ? 'connected' : 'not configured');
+  const [savingStatus, setSavingStatus] = useState('');
+
+  // Load project list on mount
+  useEffect(() => {
+    if (getDb()) {
+      fbListProjects().then(list => setProjectList(list)).catch(e => console.warn('FB list error:', e));
+      setFbStatus('connected');
+    }
+  }, []);
+
+  // Generate project ID from title
+  const genProjectId = (title) => {
+    return title.trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, '_').substring(0, 40) + '_' + Date.now().toString(36);
+  };
+
+  // Save current project to Firebase
+  const saveProjectToFB = useCallback(async () => {
+    if (!getDb()) { setErrorMsg('Firebase 설정이 필요합니다'); setShowFirebaseConfig(true); return; }
+    const pid = currentProjectId || genProjectId(projectTitle || 'untitled');
+    if (!currentProjectId) setCurrentProjectId(pid);
+    setSavingStatus('저장 중...');
+    try {
+      // Save main project metadata
+      await fbSaveProject(pid, {
+        title: projectTitle || 'Untitled',
+        sourceText: sourceText.substring(0, 500), // preview only
+        phase: phase,
+        sceneCount: (lfScenesRef.current || []).length,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      // Save phase data based on current state
+      if (globalAsset) {
+        await fbSavePhase(pid, 'phase1_assets', {
+          globalAsset: globalAsset,
+          sourceTextFull: sourceText
+        });
+      }
+      if (lfScenesRef.current && lfScenesRef.current.length > 0) {
+        // Save scenes without large binary data
+        const scenesClean = lfScenesRef.current.map(sc => {
+          const clone = {...sc};
+          // Keep image URLs but limit size
+          if (clone.anchorImage && clone.anchorImage.url && clone.anchorImage.url.length > 1000) {
+            clone.anchorImage = {...clone.anchorImage, url: clone.anchorImage.url.substring(0, 200) + '...[truncated]'};
+          }
+          if (clone.video && clone.video.url && clone.video.url.length > 1000) {
+            clone.video = {...clone.video, url: '[video data truncated]'};
+          }
+          return clone;
+        });
+        await fbSavePhase(pid, 'phase2_scenes', {scenes: scenesClean});
+      }
+      setSavingStatus('저장 완료!');
+      // Refresh project list
+      const list = await fbListProjects();
+      setProjectList(list);
+      setTimeout(() => setSavingStatus(''), 2000);
+      log('[Firebase] Project saved: ' + pid);
+    } catch(e) {
+      setSavingStatus('저장 실패: ' + e.message);
+      log('[Firebase] Save error: ' + e.message, 'error');
+    }
+  }, [currentProjectId, projectTitle, sourceText, phase, globalAsset]);
+
+  // Load project from Firebase
+  const loadProjectFromFB = useCallback(async (pid) => {
+    if (!getDb()) return;
+    setSavingStatus('불러오는 중...');
+    try {
+      const proj = await fbLoadProject(pid);
+      setCurrentProjectId(pid);
+      setProjectTitle(proj.title || '');
+      // Load phase 1 data
+      const p1 = await fbLoadPhase(pid, 'phase1_assets');
+      if (p1) {
+        if (p1.sourceTextFull) setSourceText(p1.sourceTextFull);
+        if (p1.globalAsset) setGlobalAsset(p1.globalAsset);
+      }
+      // Load phase 2 data
+      const p2 = await fbLoadPhase(pid, 'phase2_scenes');
+      if (p2 && p2.scenes) {
+        lfScenesRef.current = p2.scenes;
+        setLfScenes([...p2.scenes]);
+      }
+      setPhase(proj.phase || 'IDLE');
+      setSavingStatus('불러오기 완료!');
+      setShowProjectPanel(false);
+      log('[Firebase] Project loaded: ' + pid);
+      setTimeout(() => setSavingStatus(''), 2000);
+    } catch(e) {
+      setSavingStatus('불러오기 실패: ' + e.message);
+      log('[Firebase] Load error: ' + e.message, 'error');
+    }
+  }, []);
+
+  // Delete project from Firebase
+  const deleteProjectFromFB = useCallback(async (pid) => {
+    if (!getDb()) return;
+    if (!confirm('프로젝트를 삭제하시겠습니까?')) return;
+    try {
+      await fbDeleteProject(pid);
+      if (currentProjectId === pid) { setCurrentProjectId(''); }
+      const list = await fbListProjects();
+      setProjectList(list);
+      log('[Firebase] Project deleted: ' + pid);
+    } catch(e) { log('[Firebase] Delete error: ' + e.message, 'error'); }
+  }, [currentProjectId]);
+
+  // Save Firebase config
+  const handleSaveFbConfig = useCallback(() => {
+    saveFirebaseConfig(fbConfig);
+    if (getDb()) {
+      setFbStatus('connected');
+      setShowFirebaseConfig(false);
+      fbListProjects().then(list => setProjectList(list)).catch(e => console.warn(e));
+    } else {
+      setFbStatus('connection failed');
+    }
+  }, [fbConfig]);
+
     const SAVE_KEY = 'LF_PIPELINE_STATE';
     const savePipeline = useCallback((data) => {
       try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch(e) { console.warn('Save failed', e); }
@@ -1836,6 +2071,8 @@ const runPhase1 = useCallback(async () => {
     const asset = { characters, backgrounds, styleGuide:{artStyle:'manhwa',colorPalette:[],moodBoard:''}, createdAt:new Date().toISOString(), version:1 };
     setGlobalAsset(asset);
     transition('PHASE_1_COMPLETE');
+    // Auto-save Phase 1
+    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase1_assets', {globalAsset: asset, sourceTextFull: sourceText}); await fbSaveProject(currentProjectId, {title: projectTitle, phase:'PHASE_1_COMPLETE',updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); log('[AutoSave] Phase 1 saved'); } catch(e){log('[AutoSave] Phase 1 error: '+e.message,'warn');} }
     log('[Phase 1] Complete: '+characters.length+' characters, '+backgrounds.length+' backgrounds');
   }, [sourceText, callTextLF, callImageLF, transition, log]);
   const runPhase2 = useCallback(async () => {
@@ -1873,6 +2110,8 @@ const runPhase1 = useCallback(async () => {
     }
     lfScenesRef.current = scenes; setLfScenes(scenes);
     transition('PHASE_2_COMPLETE');
+    // Auto-save Phase 2
+    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase2_scenes', {scenes: scenes.map(s=>({sceneNumber:s.sceneNumber,summary:s.summary,dialogues:s.dialogues,narrativeMood:s.narrativeMood,keyCharacters:s.keyCharacters,primaryLocation:s.primaryLocation,compositionData:s.compositionData,status:s.status}))}); await fbSaveProject(currentProjectId, {phase:'PHASE_2_COMPLETE',sceneCount:scenes.length,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); log('[AutoSave] Phase 2 saved'); } catch(e){log('[AutoSave] Phase 2 error: '+e.message,'warn');} }
     log('[Phase 2] Complete: '+scenes.length+' scenes with composition data');
   }, [sourceText, globalAsset, callTextLF, transition, log]);
   const runPhase3 = useCallback(async () => {
@@ -1904,6 +2143,8 @@ const runPhase1 = useCallback(async () => {
     lfScenesRef.current = updated;
     setLfScenes([...updated]);
     transition('PHASE_3_COMPLETE');
+    // Auto-save Phase 3
+    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase3_prompts', {scenes: updated.map(s=>({summary:s.summary,imagePrompt:s.imagePrompt,status:s.status}))}); await fbSaveProject(currentProjectId, {phase:'PHASE_3_COMPLETE',updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); log('[AutoSave] Phase 3 saved'); } catch(e){log('[AutoSave] Phase 3 error: '+e.message,'warn');} }
     log('[Phase 3] Complete - ' + updated.filter(s=>s.imagePrompt).length + '/' + updated.length + ' prompts ready.');
   }, [globalAsset, callTextLF, transition]);
   const runPhase4 = useCallback(async () => {
@@ -1928,6 +2169,8 @@ const runPhase1 = useCallback(async () => {
     lfScenesRef.current = updated;
     setLfScenes([...updated]);
     transition('PHASE_4_COMPLETE');
+    // Auto-save Phase 4
+    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase4_video', {scenes: lfScenesRef.current.map(s=>({summary:s.summary,videoPrompt:s.videoPrompt,status:s.status}))}); await fbSaveProject(currentProjectId, {phase:'PHASE_4_COMPLETE',updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); log('[AutoSave] Phase 4 saved'); } catch(e){log('[AutoSave] Phase 4 error: '+e.message,'warn');} }
     log('[Phase 4] Complete - video prompts ready.');
   }, [transition]);
   const runPhase5 = useCallback(async () => {
@@ -1990,6 +2233,44 @@ const runPhase1 = useCallback(async () => {
   const phaseNum = phase.startsWith('PHASE_') ? parseInt(phase.split('_')[1]) : phase==='COMPLETED' ? 6 : 0;
   const progressPct = phase==='COMPLETED' ? 100 : phase==='IDLE' ? 0 : Math.round((phaseNum/5)*100);
   return React.createElement('div', {style:{display:'flex',flexDirection:'column',gap:16,height:'100%'}},
+    // === Project Management Bar ===
+    React.createElement('div', {style:{display:'flex',gap:8,alignItems:'center',padding:'8px 12px',background:'#f0f0f8',borderRadius:8,flexWrap:'wrap',border:'1px solid #d0d0e0'}},
+      React.createElement('span',{style:{fontSize:13,fontWeight:600,color:'#6c5ce7'}},'📁 프로젝트'),
+      currentProjectId && React.createElement('span',{style:{fontSize:11,color:'#666688',background:'#e8e8f0',padding:'2px 8px',borderRadius:4}}, projectTitle || currentProjectId),
+      React.createElement('button',{onClick:()=>setShowProjectPanel(!showProjectPanel),style:{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid #d0d0e0',background:'white',color:'#333',cursor:'pointer'}},'프로젝트 목록'),
+      React.createElement('button',{onClick:saveProjectToFB,disabled:!projectTitle,style:{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid #6c5ce7',background:savingStatus==='저장 중...'?'#6c5ce7':'white',color:savingStatus==='저장 중...'?'white':'#6c5ce7',cursor:'pointer'}},'💾 저장'),
+      React.createElement('button',{onClick:()=>{ setCurrentProjectId(''); setProjectTitle(''); setSourceText(''); setGlobalAsset(null); setLfScenes([]); lfScenesRef.current=[]; setPhase('IDLE'); },style:{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid #d0d0e0',background:'white',color:'#666',cursor:'pointer'}},'+ 새 프로젝트'),
+      React.createElement('button',{onClick:()=>setShowFirebaseConfig(!showFirebaseConfig),style:{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid '+(fbStatus==='connected'?'#27ae60':'#e03030'),background:'white',color:fbStatus==='connected'?'#27ae60':'#e03030',cursor:'pointer'}}, fbStatus==='connected'?'🟢 Firebase':'🔴 Firebase 설정'),
+      savingStatus && React.createElement('span',{style:{fontSize:11,color:savingStatus.includes('실패')?'#e03030':'#27ae60',marginLeft:4}}, savingStatus)
+    ),
+    // === Firebase Config Panel ===
+    showFirebaseConfig && React.createElement('div',{style:{padding:12,background:'#fff',border:'1px solid #d0d0e0',borderRadius:8,display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}},
+      React.createElement('span',{style:{gridColumn:'1/-1',fontSize:13,fontWeight:600,color:'#333'}},'Firebase 설정'),
+      ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'].map(k =>
+        React.createElement('div',{key:k,style:{display:'flex',flexDirection:'column',gap:2}},
+          React.createElement('label',{style:{fontSize:10,color:'#666'}},k),
+          React.createElement('input',{value:fbConfig[k]||'',onChange:e=>{const v=e.target.value;setFbConfig(prev=>({...prev,[k]:v}))},style:{padding:'4px 8px',fontSize:11,border:'1px solid #d0d0e0',borderRadius:4,background:'#fafafa'}})
+        )
+      ),
+      React.createElement('div',{style:{gridColumn:'1/-1',display:'flex',gap:8}},
+        React.createElement('button',{onClick:handleSaveFbConfig,style:{padding:'6px 16px',fontSize:12,borderRadius:6,border:'none',background:'#6c5ce7',color:'white',cursor:'pointer'}},'저장 및 연결'),
+        React.createElement('button',{onClick:()=>setShowFirebaseConfig(false),style:{padding:'6px 16px',fontSize:12,borderRadius:6,border:'1px solid #d0d0e0',background:'white',color:'#666',cursor:'pointer'}},'닫기')
+      )
+    ),
+    // === Project List Panel ===
+    showProjectPanel && React.createElement('div',{style:{padding:12,background:'#fff',border:'1px solid #d0d0e0',borderRadius:8,maxHeight:250,overflow:'auto'}},
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
+        React.createElement('span',{style:{fontSize:13,fontWeight:600,color:'#333'}},'프로젝트 목록 ('+projectList.length+')'),
+        React.createElement('button',{onClick:()=>{if(getDb()) fbListProjects().then(l=>setProjectList(l))},style:{padding:'2px 8px',fontSize:10,borderRadius:4,border:'1px solid #d0d0e0',background:'white',cursor:'pointer'}},'새로고침')
+      ),
+      projectList.length===0 && React.createElement('div',{style:{textAlign:'center',padding:16,color:'#999',fontSize:12}}, fbStatus==='connected'?'저장된 프로젝트가 없습니다':'Firebase를 먼저 설정해주세요'),
+      ...projectList.map(p => React.createElement('div',{key:p.id,style:{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:6,background:p.id===currentProjectId?'#f0eeff':'#fafafa',border:'1px solid '+(p.id===currentProjectId?'#6c5ce7':'#eee'),marginBottom:4,cursor:'pointer'},onClick:()=>loadProjectFromFB(p.id)},
+        React.createElement('span',{style:{flex:1,fontSize:12,fontWeight:p.id===currentProjectId?600:400,color:'#333'}}, p.title||p.id),
+        React.createElement('span',{style:{fontSize:10,color:'#999'}}, p.phase||''),
+        p.sceneCount && React.createElement('span',{style:{fontSize:10,color:'#999'}}, p.sceneCount+'씬'),
+        React.createElement('button',{onClick:e=>{e.stopPropagation();deleteProjectFromFB(p.id)},style:{padding:'2px 6px',fontSize:10,borderRadius:4,border:'1px solid #e03030',background:'white',color:'#e03030',cursor:'pointer'}},'삭제')
+      ))
+    ),
     React.createElement('div', {style:{display:'flex',gap:12,alignItems:'center',padding:'10px 14px',background:'linear-gradient(135deg,#e8e8f4,#dde0f0)',borderRadius:10,flexWrap:'wrap'}},
       React.createElement('span', {style:{color:'#6c5ce7',fontWeight:700,fontSize:15}}, 'LongForm Pipeline'),
       React.createElement('select', {value:textProvider,onChange:e=>setTextProvider(e.target.value),disabled:running,style:{background:'#ffffff',color:'#1a1a2e',border:'1px solid #d0d0e0',borderRadius:6,padding:'4px 8px',fontSize:12}},
