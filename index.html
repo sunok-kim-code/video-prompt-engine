@@ -401,7 +401,7 @@ async function callGemini(systemPrompt, userPrompt, opts={}) {
 
 async function callImagen(prompt, opts={}) {
   const apiKey = getGeminiKey();
-  const model = opts.model || 'imagen-3.0-generate-001';
+  const model = opts.model || 'imagen-4.0-generate-001';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict`;
   const body = {
     instances: [{prompt: prompt}],
@@ -927,7 +927,7 @@ ${dialogueText}
 
       // Step A-4: 이미지 생성
       setStep('A4');
-      addLog('api',`[A-4] ${imageProvider==='grok'?'Grok Aurora':'Imagen 3'} API로 이미지 생성 중...`);
+      addLog('api',`[A-4] ${imageProvider==='grok'?'Grok Aurora':'Imagen 4'} API로 이미지 생성 중...`);
       try {
         const imgUrls = imageProvider==='grok' ? await callGrokImage(imgPrompt) : await callImagen(imgPrompt, {aspectRatio:'9:16'});
         const ns3 = [...scenes];
@@ -997,7 +997,7 @@ ${dialogueText}
             <div className="form-group">
               <label className="form-label">이미지 생성 엔진</label>
               <div style={{display:'flex',gap:6}}>
-                <button className={`btn btn-sm ${imageProvider==='imagen'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('imagen')}>🌐 Imagen 3</button>
+                <button className={`btn btn-sm ${imageProvider==='imagen'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('imagen')}>🌐 Imagen 4</button>
                 <button className={`btn btn-sm ${imageProvider==='grok'?'btn-primary':'btn-secondary'}`} onClick={()=>setImageProvider('grok')}>🤖 Grok Aurora</button>
               </div>
             </div>
@@ -1801,7 +1801,7 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
       React.createElement('select', {value:textProvider,onChange:e=>setTextProvider(e.target.value),disabled:running,style:{background:'#0d1117',color:'#e6edf3',border:'1px solid #30363d',borderRadius:6,padding:'4px 8px',fontSize:12}},
         React.createElement('option',{value:'gemini'},'Text: Gemini'), React.createElement('option',{value:'grok'},'Text: Grok')),
       React.createElement('select', {value:imageProvider,onChange:e=>setImageProvider(e.target.value),disabled:running,style:{background:'#0d1117',color:'#e6edf3',border:'1px solid #30363d',borderRadius:6,padding:'4px 8px',fontSize:12}},
-        React.createElement('option',{value:'imagen'},'Image: Imagen 3'), React.createElement('option',{value:'grok'},'Image: Grok Aurora')),
+        React.createElement('option',{value:'imagen'},'Image: Imagen 4'), React.createElement('option',{value:'grok'},'Image: Grok Aurora')),
       React.createElement('label',{style:{display:'flex',alignItems:'center',gap:4,color:'#8b949e',fontSize:12,cursor:'pointer'}},
         React.createElement('input',{type:'checkbox',checked:enableWebtoon,onChange:e=>setEnableWebtoon(e.target.checked),disabled:running}), 'Phase 5 \uC6F9\uD230\uD655\uC7A5'),
       React.createElement('span',{style:{marginLeft:'auto',padding:'3px 10px',borderRadius:12,fontSize:11,fontWeight:600,background:phase==='COMPLETED'?'#238636':phase==='ERROR'?'#da3633':running?'#1f6feb':'#30363d',color:'#fff'}}, PHASE_LABELS[phase]||phase)
