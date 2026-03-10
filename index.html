@@ -387,6 +387,79 @@ async function callGemini(systemPrompt, userPrompt, opts={}) {
 }
 
 // ============================================================
+// IMAGEN API CLIENT (A-4: 이미지 생성)
+// ============================================================
+
+async function callImagen(prompt, opts={}) {
+  const apiKey = getGeminiKey();
+  const model = opts.model || 'imagen-3.0-generate-002';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${apiKey}`;
+  const body = {
+    instances: [{prompt: prompt}],
+    parameters: {
+      sampleCount: opts.sampleCount || 1,
+      aspectRatio: opts.aspectRatio || '1:1',
+      personGeneration: 'allow_all'
+    }
+  };
+  const res = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Imagen API ${res.status}: ${errText}`);
+  }
+  const data = await res.json();
+  const predictions = data.predictions || [];
+  if(predictions.length === 0) throw new Error('이미지 생성 결과가 없습니다.');
+  return predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
+}
+
+// ============================================================
+// VEO API CLIENT (B-5: 영상 생성)
+// ============================================================
+
+async function callVeo(prompt, imageBase64, opts={}) {
+  const apiKey = getGeminiKey();
+  const model = opts.model || 'veo-2.0-generate-001';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predictLongRunning?key=${apiKey}`;
+  const instances = [{prompt: prompt}];
+  if(imageBase64) {
+    instances[0].image = {bytesBase64Encoded: imageBase64.replace(/^data:image\/[^;]+;base64,/,'')};
+  }
+  const body = {
+    instances,
+    parameters: {
+      aspectRatio: opts.aspectRatio || '16:9',
+      personGeneration: 'allow_all',
+      durationSeconds: opts.duration || 5
+    }
+  };
+  const res = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Veo API ${res.status}: ${errText}`);
+  }
+  const opData = await res.json();
+  const opName = opData.name;
+  if(!opName) throw new Error('Veo 작업 ID를 받지 못했습니다.');
+
+  // Poll for completion
+  const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${opName}?key=${apiKey}`;
+  for(let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+    const pollRes = await fetch(pollUrl);
+    if(!pollRes.ok) continue;
+    const pollData = await pollRes.json();
+    if(pollData.done) {
+      if(pollData.error) throw new Error(`Veo 오류: ${pollData.error.message}`);
+      const videos = pollData.response?.generateVideoResponse?.generatedSamples || [];
+      if(videos.length === 0) throw new Error('영상 생성 결과가 없습니다.');
+      return videos.map(v => `data:video/mp4;base64,${v.video.bytesBase64Encoded}`);
+    }
+  }
+  throw new Error('영상 생성 시간 초과 (5분)');
+}
+
+// ============================================================
 // PIPELINE A: 글콘티 → 이미지 프롬프트
 // ============================================================
 
@@ -775,6 +848,20 @@ ${dialogueText}
       ns2[activeSceneIdx] = {...ns2[activeSceneIdx], imagePrompt:imgPrompt, imageNegative:imgNeg, imagePromptFull:imgPromptResult, status:{...ns2[activeSceneIdx].status, image:'done'}};
       setScenes(ns2);
       addLog('info','[A-3] 이미지 프롬프트 생성 완료 ✓');
+
+      // Step A-4: 이미지 생성
+      setStep('A4');
+      addLog('api','[A-4] Imagen API로 이미지 생성 중... (약 10~30초 소요)');
+      try {
+        const imgUrls = await callImagen(imgPrompt, {aspectRatio:'9:16'});
+        const ns3 = [...scenes];
+        ns3[activeSceneIdx] = {...ns3[activeSceneIdx], imageUrl:imgUrls[0], imageUrls:imgUrls, status:{...ns3[activeSceneIdx].status, imageGen:'done'}};
+        setScenes(ns3);
+        addLog('info','[A-4] 이미지 생성 완료 ✓');
+      } catch(imgErr) {
+        addLog('warn', '[A-4] 이미지 생성 실패: ' + imgErr.message);
+        addLog('info', '[A-4] 프롬프트는 생성되었으니, 외부 도구에서 사용 가능합니다.');
+      }
       setStep('done');
     } catch(err) {
       addLog('error', `오류: ${err.message}`);
@@ -799,7 +886,7 @@ ${dialogueText}
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${step==='A3'?'active':scene.imagePrompt?'done':'pending'}`}>A-3 영문프롬프트</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${scene.imageUrl?'done':'pending'}`}>A-4 이미지생성</div>
+        <div className={`pipeline-step ${step==='A4'?'active':scene.imageUrl?'done':'pending'}`}>A-4 이미지생성</div>
       </div>
 
       <div className="grid-32">
@@ -844,6 +931,17 @@ ${dialogueText}
                     <div className="result-text english" style={{color:'var(--err)'}}>{scene.imageNegative}</div>
                   </>
                 )}
+              </div>
+            )}
+
+            {scene.imageUrl && (
+              <div style={{marginTop:16,padding:16,background:'var(--surface2)',borderRadius:12,textAlign:'center'}}>
+                <div style={{fontSize:13,fontWeight:700,marginBottom:8,color:'var(--success)'}}>A-4 생성 이미지</div>
+                <img src={scene.imageUrl} alt="생성된 이미지" style={{maxWidth:'100%',maxHeight:400,borderRadius:8,border:'1px solid var(--border)'}} />
+                <div style={{marginTop:8,display:'flex',gap:8,justifyContent:'center'}}>
+                  <a href={scene.imageUrl} download={`scene_${activeSceneIdx+1}.png`} className="btn btn-sm btn-success">다운로드</a>
+                  <button className="btn btn-sm btn-secondary" onClick={()=>copyToClipboard(scene.imagePrompt)}>프롬프트 복사</button>
+                </div>
               </div>
             )}
           </div>
@@ -947,6 +1045,21 @@ function VideoGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
       ns2[activeSceneIdx] = {...ns2[activeSceneIdx], motionPrompt, videoMode, status:{...ns2[activeSceneIdx].status, video:'done'}};
       setScenes(ns2);
       addLog('info','[B-3] 영문 모션 프롬프트 생성 완료 ✓');
+
+      // Step B-5: 영상 생성
+      setStep('B5');
+      addLog('api','[B-5] Veo API로 영상 생성 중... (약 1~3분 소요)');
+      try {
+        const imageB64 = scene.imageUrl || null;
+        const videoUrls = await callVeo(motionPrompt, imageB64, {aspectRatio:'9:16', duration:5});
+        const ns3 = [...scenes];
+        ns3[activeSceneIdx] = {...ns3[activeSceneIdx], videoUrl:videoUrls[0], videoUrls:videoUrls, status:{...ns3[activeSceneIdx].status, videoGen:'done'}};
+        setScenes(ns3);
+        addLog('info','[B-5] 영상 생성 완료 ✓');
+      } catch(vidErr) {
+        addLog('warn', '[B-5] 영상 생성 실패: ' + vidErr.message);
+        addLog('info', '[B-5] 모션 프롬프트는 생성되었으니, 외부 도구에서 사용 가능합니다.');
+      }
       setStep('done');
     } catch(err) {
       addLog('error', `오류: ${err.message}`);
@@ -969,7 +1082,7 @@ function VideoGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${step==='B3'?'active':scene.motionPrompt?'done':'pending'}`}>B-3 모션프롬프트</div>
         <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${scene.videoUrl?'done':'pending'}`}>B-5 영상생성</div>
+        <div className={`pipeline-step ${step==='B5'?'active':scene.videoUrl?'done':'pending'}`}>B-5 영상생성</div>
       </div>
 
       <div className="grid-32">
@@ -1028,6 +1141,17 @@ function VideoGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, a
               <div className="result-panel" style={{marginTop:8}}>
                 <div className="result-label"><button className="copy-btn" onClick={()=>copyToClipboard(scene.motionPrompt)}>복사</button>B-3 영문 모션 프롬프트 (EN)</div>
                 <div className="result-text english">{scene.motionPrompt}</div>
+              </div>
+            )}
+
+            {scene.videoUrl && (
+              <div style={{marginTop:16,padding:16,background:'var(--surface2)',borderRadius:12,textAlign:'center'}}>
+                <div style={{fontSize:13,fontWeight:700,marginBottom:8,color:'var(--success)'}}>B-5 생성 영상</div>
+                <video src={scene.videoUrl} controls style={{maxWidth:'100%',maxHeight:400,borderRadius:8,border:'1px solid var(--border)'}} />
+                <div style={{marginTop:8,display:'flex',gap:8,justifyContent:'center'}}>
+                  <a href={scene.videoUrl} download={`scene_${activeSceneIdx+1}.mp4`} className="btn btn-sm btn-success">다운로드</a>
+                  <button className="btn btn-sm btn-secondary" onClick={()=>copyToClipboard(scene.motionPrompt)}>프롬프트 복사</button>
+                </div>
               </div>
             )}
           </div>
@@ -1107,6 +1231,18 @@ function Workbench({scenes, setScenes, addLog}) {
         const imagePrompt = promptMatch ? promptMatch[1].trim() : imgResult;
         const imageNegative = negMatch ? negMatch[1].trim() : '';
 
+        // Step A-4: 이미지 생성
+        setStep('A-4');
+        addLog('api',`[장면 ${i+1}] [A-4] Imagen API로 이미지 생성 중...`);
+        try {
+          const imgUrls = await callImagen(imgPrompt, {aspectRatio:'9:16'});
+          ns[idx] = {...ns[idx], imageUrl:imgUrls[0], imageUrls:imgUrls, status:{...ns[idx].status, imageGen:'done'}};
+          setScenes([...ns]);
+          addLog('info',`[장면 ${i+1}] [A-4] 이미지 생성 완료 ✓`);
+        } catch(imgErr) {
+          addLog('warn', `[장면 ${i+1}] [A-4] 이미지 생성 실패: ${imgErr.message}`);
+        }
+
         addLog('info',`[장면 ${i+1}] Pipeline A 완료 ✓`);
 
         // Pipeline B: B-2 모션 콘티
@@ -1122,6 +1258,19 @@ function Workbench({scenes, setScenes, addLog}) {
         setCurrentStep('B-3');
         addLog('api',`[장면 ${i+1}] B-3 영문 모션 프롬프트 생성`);
         const motionPrompt = await callGemini(PIPELINE_B_SYSTEM.motionPrompt, motionConti, {thinkBudget:2048});
+
+        // Step B-5: 영상 생성
+        setStep('B-5');
+        addLog('api',`[장면 ${i+1}] [B-5] Veo API로 영상 생성 중... (약 1~3분)`);
+        try {
+          const imageB64 = ns[idx].imageUrl || null;
+          const videoUrls = await callVeo(motionPrompt, imageB64, {aspectRatio:'9:16', duration:5});
+          ns[idx] = {...ns[idx], videoUrl:videoUrls[0], videoUrls:videoUrls, status:{...ns[idx].status, videoGen:'done'}};
+          setScenes([...ns]);
+          addLog('info',`[장면 ${i+1}] [B-5] 영상 생성 완료 ✓`);
+        } catch(vidErr) {
+          addLog('warn', `[장면 ${i+1}] [B-5] 영상 생성 실패: ${vidErr.message}`);
+        }
 
         addLog('info',`[장면 ${i+1}] Pipeline B 완료 ✓`);
 
@@ -1155,13 +1304,13 @@ function Workbench({scenes, setScenes, addLog}) {
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${currentStep==='A-3'?'active':'pending'}`}>A-3 이미지프롬프트</div>
         <span className="pipeline-arrow">→</span>
-        <div className="pipeline-step pending" style={{opacity:.4}}>A-4 이미지생성</div>
+        <div className={`pipeline-step ${step==='A-4'?'active':wbScenes.every(s=>s.imageUrl)?'done':'pending'}`}>A-4 이미지생성</div>
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${currentStep==='B-2'?'active':'pending'}`}>B-2 모션콘티</div>
         <span className="pipeline-arrow">→</span>
         <div className={`pipeline-step ${currentStep==='B-3'?'active':'pending'}`}>B-3 모션프롬프트</div>
         <span className="pipeline-arrow">→</span>
-        <div className="pipeline-step pending" style={{opacity:.4}}>B-5 영상생성</div>
+        <div className={`pipeline-step ${step==='B-5'?'active':wbScenes.every(s=>s.videoUrl)?'done':'pending'}`}>B-5 영상생성</div>
       </div>
 
       <div className="stats-bar">
