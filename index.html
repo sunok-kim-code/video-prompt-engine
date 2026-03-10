@@ -3,748 +3,1295 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Video Prompt Engine — MoonTech Manager .AI</title>
+<title>MoonTech Manager .AI</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-:root {
-  --bg: #f5f5fa;
-  --surface: #ffffff;
-  --surface2: #f0f0f8;
-  --surface3: #e8e8f0;
-  --border: #d0d0e0;
-  --text: #1a1a2e;
-  --text2: #666688;
-  --accent: #6c5ce7;
-  --accent2: #7c6cf7;
-  --romance: #e0457b;
-  --action: #e03030;
-  --horror: #8e44ad;
-  --slice: #27ae60;
-  --drama: #2980b9;
-  --success: #00a8a8;
-  --warn: #d4a017;
-  --err: #e74c3c;
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+--bg:#f5f5fa;--surface:#ffffff;--surface2:#f0f0f8;--surface3:#e8e8f0;
+--border:#d0d0e0;--text:#1a1a2e;--text2:#666688;
+--accent:#6c5ce7;--accent2:#7c6cf7;
+--romance:#e0457b;--action:#e03030;--horror:#8e44ad;--slice:#27ae60;--drama:#2980b9;
+--success:#00a8a8;--warn:#d4a017;--err:#e74c3c;
+--radius:12px;--shadow:0 2px 12px rgba(0,0,0,0.08);
 }
-body { background:var(--bg); color:var(--text); font-family:'Segoe UI','Apple SD Gothic Neo',sans-serif; min-height:100vh; }
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+.app-header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow);}
+.app-logo{font-size:20px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--romance));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.app-logo span{font-size:12px;font-weight:400;-webkit-text-fill-color:var(--text2);margin-left:4px;}
+.nav-tabs{display:flex;gap:4px;margin-left:24px;}
+.nav-tab{padding:8px 16px;border-radius:8px;border:none;background:transparent;color:var(--text2);cursor:pointer;font-size:13px;font-weight:600;transition:all .2s;}
+.nav-tab:hover{background:var(--surface2);color:var(--text);}
+.nav-tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
+.nav-tab .tab-icon{margin-right:6px;}
+.main-content{max-width:1400px;margin:0 auto;padding:20px;}
 
-.app { max-width:1400px; margin:0 auto; padding:20px; }
+/* Pipeline indicator */
+.pipeline-bar{display:flex;align-items:center;gap:0;margin-bottom:20px;background:var(--surface);border-radius:var(--radius);padding:12px 20px;border:1px solid var(--border);}
+.pipeline-step{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;transition:all .3s;}
+.pipeline-step.done{background:#e8f5e9;color:#2e7d32;}
+.pipeline-step.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 2px 8px rgba(108,92,231,.3);}
+.pipeline-step.pending{background:var(--surface2);color:var(--text2);}
+.pipeline-arrow{margin:0 4px;color:var(--text2);font-size:16px;}
 
-/* Header */
-.header { display:flex; align-items:center; gap:16px; padding:20px 0; border-bottom:1px solid var(--border); margin-bottom:24px; }
-.header h1 { font-size:24px; font-weight:700; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-.header .badge { background:var(--accent); color:#fff; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; }
-.header .sub { color:var(--text2); font-size:13px; margin-left:auto; }
+/* Cards and panels */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow);}
+.card-title{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.card-title .badge{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--accent);color:#fff;font-weight:600;}
 
-/* Layout */
-.layout { display:grid; grid-template-columns:420px 1fr; gap:24px; }
-@media(max-width:900px) { .layout { grid-template-columns:1fr; } }
+/* Form elements */
+.form-group{margin-bottom:14px;}
+.form-label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
+.form-input,.form-textarea,.form-select{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--text);transition:border-color .2s;}
+.form-input:focus,.form-textarea:focus,.form-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,92,231,.1);}
+.form-textarea{resize:vertical;min-height:80px;font-family:inherit;}
 
-/* Panel */
-.panel { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; }
-.panel h2 { font-size:15px; font-weight:600; color:var(--accent2); margin-bottom:16px; display:flex; align-items:center; gap:8px; }
-.panel h2 .icon { font-size:18px; }
+/* Buttons */
+.btn{padding:10px 20px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 2px 8px rgba(108,92,231,.3);}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(108,92,231,.4);}
+.btn-primary:disabled{opacity:.5;transform:none;cursor:not-allowed;}
+.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.btn-secondary:hover{background:var(--surface3);}
+.btn-success{background:linear-gradient(135deg,#00a8a8,#00c9a7);color:#fff;}
+.btn-danger{background:var(--err);color:#fff;}
+.btn-sm{padding:6px 12px;font-size:11px;}
+.btn-block{width:100%;}
 
-/* Form */
-.form-group { margin-bottom:16px; }
-.form-group label { display:block; font-size:12px; color:var(--text2); margin-bottom:6px; font-weight:500; text-transform:uppercase; letter-spacing:0.5px; }
-.form-group textarea, .form-group input, .form-group select {
-  width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:10px;
-  padding:10px 14px; color:var(--text); font-size:14px; font-family:inherit; outline:none; transition:border 0.2s;
-}
-.form-group textarea:focus, .form-group input:focus, .form-group select:focus { border-color:var(--accent); }
-.form-group textarea { resize:vertical; min-height:80px; line-height:1.6; }
-.form-group select { cursor:pointer; }
+/* Grid */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+.grid-23{display:grid;grid-template-columns:2fr 3fr;gap:16px;}
+.grid-32{display:grid;grid-template-columns:3fr 2fr;gap:16px;}
 
 /* Genre chips */
-.genre-chips { display:flex; gap:8px; flex-wrap:wrap; }
-.genre-chip {
-  padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer;
-  border:2px solid transparent; transition:all 0.2s; opacity:0.6;
-}
-.genre-chip:hover { opacity:0.8; }
-.genre-chip.active { opacity:1; border-color:currentColor; }
-.genre-chip[data-g="romance"] { background:rgba(255,107,157,0.15); color:var(--romance); }
-.genre-chip[data-g="action"] { background:rgba(255,68,68,0.15); color:var(--action); }
-.genre-chip[data-g="horror"] { background:rgba(155,89,182,0.15); color:var(--horror); }
-.genre-chip[data-g="sliceOfLife"] { background:rgba(46,204,113,0.15); color:var(--slice); }
-.genre-chip[data-g="drama"] { background:rgba(52,152,219,0.15); color:var(--drama); }
+.genre-chips{display:flex;gap:6px;flex-wrap:wrap;}
+.genre-chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:2px solid transparent;transition:all .2s;}
+.genre-chip.romance{background:#fce4ec;color:var(--romance);border-color:transparent;}
+.genre-chip.romance.active{border-color:var(--romance);box-shadow:0 2px 8px rgba(224,69,123,.3);}
+.genre-chip.action{background:#ffebee;color:var(--action);}
+.genre-chip.action.active{border-color:var(--action);box-shadow:0 2px 8px rgba(224,48,48,.3);}
+.genre-chip.horror{background:#f3e5f5;color:var(--horror);}
+.genre-chip.horror.active{border-color:var(--horror);box-shadow:0 2px 8px rgba(142,68,173,.3);}
+.genre-chip.slice{background:#e8f5e9;color:var(--slice);}
+.genre-chip.slice.active{border-color:var(--slice);box-shadow:0 2px 8px rgba(39,174,96,.3);}
+.genre-chip.drama{background:#e3f2fd;color:var(--drama);}
+.genre-chip.drama.active{border-color:var(--drama);box-shadow:0 2px 8px rgba(41,128,185,.3);}
 
-/* Emotion selects */
-.emotion-row { display:flex; gap:10px; align-items:center; }
-.emotion-row select { flex:1; }
-.emotion-arrow { color:var(--accent2); font-size:18px; }
+/* Emotion selectors */
+.emotion-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;}
+.emotion-btn{padding:4px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:11px;text-align:center;transition:all .2s;}
+.emotion-btn:hover{border-color:var(--accent);}
+.emotion-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
 
-/* Options row */
-.options-row { display:flex; gap:12px; flex-wrap:wrap; }
-.option-chip {
-  display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px;
-  background:var(--surface2); border:1px solid var(--border); cursor:pointer; font-size:12px; transition:all 0.2s;
-}
-.option-chip.active { border-color:var(--accent); background:rgba(108,92,231,0.15); }
-.option-chip input { display:none; }
+/* Scene list */
+.scene-list{display:flex;flex-direction:column;gap:8px;max-height:500px;overflow-y:auto;padding-right:4px;}
+.scene-item{padding:12px;border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:all .2s;background:var(--surface);}
+.scene-item:hover{border-color:var(--accent);}
+.scene-item.active{border-color:var(--accent);background:rgba(108,92,231,.05);box-shadow:0 0 0 3px rgba(108,92,231,.1);}
+.scene-item .scene-num{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px;}
+.scene-item .scene-preview{font-size:12px;color:var(--text2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.scene-item .scene-status{display:flex;gap:4px;margin-top:6px;}
+.scene-item .status-dot{width:8px;height:8px;border-radius:50%;}
+.status-dot.empty{background:var(--border);}
+.status-dot.ready{background:var(--success);}
+.status-dot.processing{background:var(--warn);animation:pulse 1s infinite;}
+.status-dot.error{background:var(--err);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
 
-/* Run button */
-.run-btn {
-  width:100%; padding:14px; border:none; border-radius:12px; font-size:15px; font-weight:700;
-  background:linear-gradient(135deg,var(--accent),#a29bfe); color:#fff; cursor:pointer;
-  transition:all 0.3s; position:relative; overflow:hidden;
-}
-.run-btn:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(108,92,231,0.4); }
-.run-btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; box-shadow:none; }
-.run-btn .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px; vertical-align:middle; }
-@keyframes spin { to { transform:rotate(360deg); } }
+/* Dialogue editor */
+.dialogue-list{display:flex;flex-direction:column;gap:6px;}
+.dialogue-row{display:flex;gap:8px;align-items:center;}
+.dialogue-row select{width:100px;padding:6px;border-radius:6px;border:1px solid var(--border);font-size:12px;}
+.dialogue-row input{flex:1;}
+.dialogue-row .remove-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--err);font-size:14px;}
 
-/* Results area */
-.results { display:flex; flex-direction:column; gap:20px; }
+/* Result panels */
+.result-panel{background:var(--surface2);border-radius:8px;padding:14px;margin-top:12px;border:1px solid var(--border);}
+.result-label{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+.result-text{font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+.result-text.korean{color:#444;}
+.result-text.english{color:var(--text);font-family:'Consolas','Monaco',monospace;font-size:12px;}
+.copy-btn{padding:4px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:11px;color:var(--text2);float:right;}
+.copy-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
 
-.result-card {
-  background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden;
-  transition:border-color 0.3s;
-}
-.result-card.highlight { border-color:var(--accent); }
-.result-header {
-  padding:14px 18px; display:flex; align-items:center; gap:10px;
-  background:var(--surface2); border-bottom:1px solid var(--border);
-}
-.result-header .step-num {
-  width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-  font-size:12px; font-weight:700;
-}
-.step-1 .step-num { background:rgba(108,92,231,0.2); color:var(--accent2); }
-.step-2 .step-num { background:rgba(0,210,211,0.2); color:var(--success); }
-.step-3 .step-num { background:rgba(254,202,87,0.2); color:var(--warn); }
-.result-header .step-title { font-size:14px; font-weight:600; }
-.result-header .step-meta { margin-left:auto; font-size:11px; color:var(--text2); display:flex; gap:12px; }
-.result-body { padding:18px; }
-.result-text { font-size:14px; line-height:1.8; white-space:pre-wrap; word-break:break-word; }
-.result-text.korean { color:#444; }
-.result-text.english { color:var(--success); font-family:'JetBrains Mono','Fira Code',monospace; font-size:13px; line-height:1.7; }
+/* Camera dictionary */
+.camera-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.camera-card{padding:8px;border-radius:6px;border:1px solid var(--border);cursor:pointer;text-align:center;font-size:11px;transition:all .2s;background:var(--surface);}
+.camera-card:hover{border-color:var(--accent);background:rgba(108,92,231,.05);}
+.camera-card.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.camera-card .cam-icon{font-size:16px;display:block;margin-bottom:2px;}
 
-/* Copy button */
-.copy-btn {
-  padding:5px 12px; border:1px solid var(--border); border-radius:6px; background:var(--surface2);
-  color:var(--text2); font-size:11px; cursor:pointer; transition:all 0.2s;
-}
-.copy-btn:hover { border-color:var(--accent); color:var(--accent2); }
+/* Progress/Status */
+.progress-bar{height:4px;border-radius:2px;background:var(--surface3);overflow:hidden;margin-top:8px;}
+.progress-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--success));transition:width .5s ease;}
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;}
+.status-badge.idle{background:var(--surface2);color:var(--text2);}
+.status-badge.running{background:#fff3cd;color:#856404;}
+.status-badge.done{background:#d4edda;color:#155724;}
+.status-badge.error{background:#f8d7da;color:#721c24;}
 
-/* Stats bar */
-.stats-bar {
-  display:flex; gap:16px; padding:14px 18px; background:var(--surface2); border-radius:12px;
-  flex-wrap:wrap;
-}
-.stat { display:flex; flex-direction:column; gap:2px; }
-.stat-label { font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; }
-.stat-value { font-size:16px; font-weight:700; }
-.stat-value.time { color:var(--success); }
-.stat-value.tokens { color:var(--warn); }
-.stat-value.words { color:var(--accent2); }
+/* Workbench */
+.wb-timeline{display:flex;flex-direction:column;gap:0;}
+.wb-scene-row{display:grid;grid-template-columns:40px 1fr 1fr 1fr;gap:12px;padding:12px;border-bottom:1px solid var(--border);align-items:center;}
+.wb-scene-row:hover{background:rgba(108,92,231,.03);}
+.wb-scene-num{font-weight:700;color:var(--accent);font-size:14px;text-align:center;}
+.wb-cell{padding:8px;border-radius:6px;background:var(--surface2);font-size:12px;min-height:60px;position:relative;}
+.wb-cell .cell-label{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:4px;}
+.wb-cell .cell-content{color:var(--text);line-height:1.5;}
+.wb-cell.has-result{background:#e8f5e9;border:1px solid #c8e6c9;}
+.wb-cell.processing{background:#fff3cd;border:1px solid #ffeeba;}
+.wb-cell.error{background:#f8d7da;border:1px solid #f5c6cb;}
 
-/* Camera dict panel */
-.camera-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; max-height:300px; overflow-y:auto; }
-.camera-item {
-  padding:8px 10px; background:var(--surface2); border-radius:8px; cursor:pointer;
-  border:1px solid transparent; transition:all 0.2s; font-size:12px;
-}
-.camera-item:hover { border-color:var(--accent); }
-.camera-item .ko { font-weight:600; color:var(--text); }
-.camera-item .en { color:var(--text2); font-size:11px; margin-top:2px; }
+/* Template panel */
+.template-categories{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;}
+.template-cat{padding:4px 10px;border-radius:12px;font-size:11px;border:1px solid var(--border);cursor:pointer;background:var(--surface);transition:all .2s;}
+.template-cat.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.template-list{max-height:300px;overflow-y:auto;}
+.template-item{padding:8px;border-radius:6px;border:1px solid var(--border);margin-bottom:4px;cursor:pointer;font-size:12px;transition:all .2s;}
+.template-item:hover{border-color:var(--accent);}
+.template-item.active{background:rgba(108,92,231,.1);border-color:var(--accent);}
+.template-item .tpl-name{font-weight:600;}
+.template-item .tpl-desc{color:var(--text2);font-size:11px;margin-top:2px;}
 
-/* Progress */
-.progress-bar { width:100%; height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; margin:12px 0; }
-.progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--success)); transition:width 0.5s ease; border-radius:2px; }
+/* Image placeholder */
+.image-placeholder{width:100%;aspect-ratio:3/4;border-radius:8px;background:linear-gradient(135deg,var(--surface2),var(--surface3));border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text2);font-size:13px;gap:8px;}
+.image-result{width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--border);}
+.image-result img{width:100%;display:block;}
 
-/* Tabs */
-.tabs { display:flex; gap:2px; margin-bottom:16px; background:var(--surface2); border-radius:10px; padding:3px; }
-.tab {
-  flex:1; padding:8px 12px; border:none; background:transparent; color:var(--text2);
-  font-size:12px; font-weight:600; cursor:pointer; border-radius:8px; transition:all 0.2s; text-align:center;
-}
-.tab.active { background:var(--accent); color:#fff; }
+/* Mode selector */
+.mode-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.mode-card{padding:12px;border-radius:8px;border:2px solid var(--border);cursor:pointer;text-align:center;transition:all .2s;background:var(--surface);}
+.mode-card:hover{border-color:var(--accent);}
+.mode-card.active{border-color:var(--accent);background:rgba(108,92,231,.05);}
+.mode-card .mode-icon{font-size:24px;margin-bottom:4px;}
+.mode-card .mode-name{font-size:12px;font-weight:700;}
+.mode-card .mode-desc{font-size:10px;color:var(--text2);margin-top:2px;}
 
-/* Batch list */
-.batch-scene {
-  display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--surface2);
-  border-radius:10px; margin-bottom:8px; border:1px solid var(--border);
-}
-.batch-scene .num { width:30px; height:30px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; }
-.batch-scene .desc { flex:1; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.batch-scene .status { font-size:18px; flex-shrink:0; }
-.batch-scene .remove-btn { padding:4px 8px; border:1px solid var(--border); border-radius:6px; background:transparent; color:var(--text2); cursor:pointer; font-size:11px; }
+/* Stats */
+.stats-bar{display:flex;gap:16px;padding:8px 16px;background:var(--surface);border-radius:8px;border:1px solid var(--border);font-size:12px;color:var(--text2);margin-bottom:16px;}
+.stat-item{display:flex;align-items:center;gap:4px;}
+.stat-value{font-weight:700;color:var(--text);}
 
-/* History */
-.history-item {
-  padding:12px 14px; background:var(--surface2); border-radius:10px; margin-bottom:8px;
-  border:1px solid var(--border); cursor:pointer; transition:border-color 0.2s;
-}
-.history-item:hover { border-color:var(--accent); }
-.history-item .time { font-size:11px; color:var(--text2); }
-.history-item .preview { font-size:13px; margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--success); }
-
-/* Empty state */
-.empty-state { text-align:center; padding:60px 20px; color:var(--text2); }
-.empty-state .icon { font-size:48px; margin-bottom:12px; }
-.empty-state p { font-size:14px; line-height:1.6; }
+/* Log/console */
+.log-panel{background:#1a1a2e;border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;font-family:'Consolas','Monaco',monospace;font-size:11px;color:#a0a0c0;}
+.log-entry{margin-bottom:2px;line-height:1.4;}
+.log-entry .log-time{color:#666;margin-right:8px;}
+.log-entry.info{color:#69db7c;}
+.log-entry.warn{color:#ffd43b;}
+.log-entry.error{color:#ff6b6b;}
+.log-entry.api{color:#74c0fc;}
 
 /* Scrollbar */
-::-webkit-scrollbar { width:6px; }
-::-webkit-scrollbar-track { background:transparent; }
-::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
-::-webkit-scrollbar-thumb:hover { background:var(--text2); }
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:var(--text2);}
 
-/* Animate in */
-@keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-.fade-up { animation:fadeUp 0.4s ease both; }
+/* Toggle */
+.toggle-wrap{display:flex;align-items:center;gap:8px;}
+.toggle{position:relative;width:40px;height:22px;border-radius:11px;background:var(--border);cursor:pointer;transition:background .2s;}
+.toggle.on{background:var(--accent);}
+.toggle .toggle-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle.on .toggle-knob{left:20px;}
+
+/* Spinner */
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Responsive */
+@media(max-width:900px){
+.grid-2,.grid-3,.grid-23,.grid-32{grid-template-columns:1fr;}
+.mode-grid{grid-template-columns:repeat(2,1fr);}
+.camera-grid{grid-template-columns:repeat(2,1fr);}
+.emotion-grid{grid-template-columns:repeat(5,1fr);}
+.nav-tabs{overflow-x:auto;}
+}
 </style>
 </head>
 <body>
 <div id="root"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script type="text/babel">
-// ════════════════════════════════════════════════════════════
-// VIDEO PROMPT ENGINE — WEB APPLICATION
-// ════════════════════════════════════════════════════════════
+const {useState,useCallback,useRef,useEffect,useMemo} = React;
 
-const { useState, useCallback, useRef, useEffect } = React;
+// ============================================================
+// PROMPT ENGINE LAYER
+// ============================================================
 
-// ─── Constants ──────────────────────────────────────────────
+const GEMINI_KEY = 'AIzaSyD5dHoSa4kgA9zSLJujtU4xbCM_CRhX-XM';
 
-const GEMINI_API_KEY = 'AIzaSyD5dHoSa4kgA9zSLJujtU4xbCM_CRhX-XM';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+// Genre presets
+const GENRE_PRESETS = {
+  romance: {name:'로맨스',speed:0.7,color:'romance',desc:'느린 감성적 페이스',icon:'💕'},
+  action: {name:'액션',speed:1.5,color:'action',desc:'빠르고 역동적',icon:'⚔️'},
+  horror: {name:'호러',speed:0.8,color:'horror',desc:'느린 긴장감, 급변',icon:'👻'},
+  sliceOfLife: {name:'일상',speed:1.0,color:'slice',desc:'자연스러운 리듬',icon:'☀️'},
+  drama: {name:'드라마',speed:0.9,color:'drama',desc:'감정선 중심',icon:'🎭'}
+};
 
-const GENRES = [
-  { id:'romance', label:'로맨스', emoji:'💕', speed:0.7 },
-  { id:'action', label:'액션', emoji:'⚡', speed:1.5 },
-  { id:'horror', label:'공포', emoji:'👻', speed:0.8 },
-  { id:'sliceOfLife', label:'일상', emoji:'☀️', speed:1.0 },
-  { id:'drama', label:'드라마', emoji:'🎭', speed:0.9 },
-];
-
+// Expressions (15)
 const EXPRESSIONS = [
-  'happy','sad','angry','surprised','fear','disgusted','smiling',
-  'crying','shouting','shy','confused','smirking','thinking','winking','sleeping'
+  'happy','sad','angry','surprised','fear',
+  'disgusted','smiling','crying','shouting','shy',
+  'confused','smirking','thinking','winking','sleeping'
 ];
-
-const EXPRESSION_KO = {
-  happy:'행복',sad:'슬픔',angry:'분노',surprised:'넀람',fear:'공포',
-  disgusted:'혐오',smiling:'미소',crying:'울음',shouting:'외침',shy:'수줍음',
+const EXPR_LABELS = {
+  happy:'행복',sad:'슬픔',angry:'분노',surprised:'놀람',fear:'공포',
+  disgusted:'혐오',smiling:'미소',crying:'울음',shouting:'외침',shy:'수줍',
   confused:'혼란',smirking:'능글',thinking:'생각',winking:'윙크',sleeping:'수면'
 };
-
-const CAMERAS = [
-  {ko:'고정',en:'Static locked camera',use:'대화, 감정'},
-  {ko:'천천히 줌인',en:'Slow gradual zoom-in toward subject',use:'감정 고조'},
-  {ko:'빠른 줌인',en:'Quick snap zoom to close-up',use:'놈람, 충격'},
-  {ko:'줌아웃',en:'Camera pulling back to reveal wider scene',use:'장면 전환'},
-  {ko:'팬 (좌→우)',en:'Camera panning smoothly left to right',use:'공간 소개'},
-  {ko:'팬 (우→좌)',en:'Camera panning smoothly right to left',use:'역방향 추적'},
-  {ko:'틸트업',en:'Camera tilting upward',use:'위엄, 거대함'},
-  {ko:'틸트다운',en:'Camera tilting downward',use:'하강, 발견'},
-  {ko:'달리(전진)',en:'Camera dollying forward toward subject',use:'접근, 집중'},
-  {ko:'달리(후진)',en:'Camera dollying backward away',use:'이별, 멀어짐'},
-  {ko:'트래킹',en:'Camera tracking alongside subject',use:'동행, 추격'},
-  {ko:'오빗(회전)',en:'Camera orbiting around subject',use:'드라마틱 강조'},
-  {ko:'크레인업',en:'Camera craning upward rising',use:'해방감'},
-  {ko:'크레인다운',en:'Camera craning down descending',use:'발견'},
-  {ko:'흔들림',en:'Handheld camera shake',use:'공포, 전투'},
-  {ko:'더치앵글',en:'Dutch angle drift',use:'불안, 광기'},
-  {ko:'랑포커스',en:'Rack focus shift',use:'시선 유도'},
-  {ko:'위핑',en:'Fast whip pan with motion blur',use:'장면 전환'},
-];
-
-const GENRE_PRESETS = {
-  romance:{physics:'natural hair movement, fabric flow, light particles, soft focus transitions',ambient:'cherry blossom petals, dust motes in sunlight, warm golden particles',neg:'fast movement, camera shake, harsh lighting'},
-  action:{physics:'speed lines, impact effects, debris particles, motion blur, shockwave ripples',ambient:'dust clouds, sparks, energy effects, ground crack particles',neg:'slow motion, static camera, gentle movement'},
-  horror:{physics:'shadow shifting, flickering lights, unnatural pauses, micro-twitches',ambient:'fog/mist, shadow play, dark particles, distortion waves',neg:'bright lighting, cheerful motion, warm colors'},
-  sliceOfLife:{physics:'natural everyday physics, realistic weight, casual cloth movement',ambient:'sunlight through window, steam from food, floating dust in light',neg:'dramatic effects, speed lines, horror elements'},
-  drama:{physics:'micro-expressions, hand trembles, breath visualization, tear physics',ambient:'depth of field shifts, light/shadow interplay, rain/weather effects',neg:'comedic exaggeration, cartoonish physics'},
+const EXPR_ICONS = {
+  happy:'😊',sad:'😢',angry:'😠',surprised:'😲',fear:'😨',
+  disgusted:'🤢',smiling:'😄',crying:'😭',shouting:'🗣️',shy:'😳',
+  confused:'😵',smirking:'😏',thinking:'🤔',winking:'😉',sleeping:'😴'
 };
 
-// ─── System Prompts ─────────────────────────────────────────
+// Camera Dictionary (18)
+const CAMERA_DICT = [
+  {type:'static',name:'고정',icon:'📷',desc:'카메라 움직임 없음',prompt:'static shot, no camera movement'},
+  {type:'zoom_in',name:'줌 인',icon:'🔍',desc:'피사체에 가까이',prompt:'slow zoom in, gradually closer'},
+  {type:'zoom_out',name:'줌 아웃',icon:'🔭',desc:'넓은 화면으로',prompt:'zoom out revealing wider scene'},
+  {type:'pan_left',name:'팬 좌',icon:'⬅️',desc:'좌로 수평 이동',prompt:'camera pans left horizontally'},
+  {type:'pan_right',name:'팬 우',icon:'➡️',desc:'우로 수평 이동',prompt:'camera pans right horizontally'},
+  {type:'tilt_up',name:'틸트 업',icon:'⬆️',desc:'위로 수직 이동',prompt:'camera tilts upward vertically'},
+  {type:'tilt_down',name:'틸트 다운',icon:'⬇️',desc:'아래로 수직',prompt:'camera tilts downward'},
+  {type:'dolly_forward',name:'달리 전진',icon:'🎬',desc:'피사체 방향 전진',prompt:'dolly forward toward subject'},
+  {type:'dolly_backward',name:'달리 후진',icon:'🔙',desc:'피사체에서 후진',prompt:'dolly backward from subject'},
+  {type:'tracking',name:'트래킹',icon:'🏃',desc:'피사체 추적',prompt:'tracking shot following subject movement'},
+  {type:'orbit',name:'궤도',icon:'🔄',desc:'피사체 주위 회전',prompt:'orbiting around the subject'},
+  {type:'crane_up',name:'크레인 업',icon:'🏗️',desc:'높이 올라감',prompt:'crane shot rising upward'},
+  {type:'crane_down',name:'크레인 다운',icon:'⏬',desc:'높이 내려옴',prompt:'crane shot descending'},
+  {type:'shake',name:'핸듘헬드',icon:'📳',desc:'손떨림 효과',prompt:'handheld shaky camera for intensity'},
+  {type:'dutch',name:'더치 앵글',icon:'📐',desc:'기울어진 앵글',prompt:'dutch angle tilted frame for unease'},
+  {type:'rack_focus',name:'랙 포커스',icon:'🎯',desc:'초점 전환',prompt:'rack focus shifting from foreground to background'},
+  {type:'whip_pan',name:'휘팬',icon:'💨',desc:'빠른 수평 전환',prompt:'whip pan fast horizontal transition'},
+  {type:'push_pull',name:'푸시풀',icon:'↔️',desc:'줌+달리 혼합',prompt:'push-pull dolly zoom vertigo effect'}
+];
 
-const SYS_MOTION_CONVERT = (genre, preset) => `너는 "웹툰 장면 모션 변환기"다. 입력된 글콘티를 영상 모션 지시로 변환한다.
+// Image Template Categories (84 templates across 6 categories)
+const IMAGE_TEMPLATE_CATEGORIES = [
+  {id:'character',name:'캐릭터조작',icon:'👤',count:18,templates:[
+    {id:'char_emotion',name:'표정 변화',desc:'캐릭터 표정을 세밀하게 지시'},
+    {id:'char_pose',name:'포즈 지정',desc:'전신/반신 포즈 상세 지시'},
+    {id:'char_outfit',name:'의상 변경',desc:'캐릭터 복장 스타일 변경'},
+    {id:'char_age',name:'연령 변환',desc:'캐릭터 나이 조절'},
+    {id:'char_hair',name:'헤어스타일',desc:'머리 색상/스타일 변경'},
+    {id:'char_multi',name:'다중 캐릭터',desc:'2인 이상 장면 배치'}
+  ]},
+  {id:'style',name:'스타일전환',icon:'🎨',count:14,templates:[
+    {id:'style_anime',name:'애니메이션',desc:'일본 애니 스타일'},
+    {id:'style_manhwa',name:'만화/웹툰',desc:'한국 웹툰 스타일'},
+    {id:'style_realistic',name:'실사풍',desc:'사실적 렌더링'},
+    {id:'style_watercolor',name:'수채화',desc:'수채화 텍스처'},
+    {id:'style_pixel',name:'픽셀아트',desc:'도트 그래픽 스타일'},
+    {id:'style_ghibli',name:'지브리풍',desc:'스튜디오 지브리 느낌'}
+  ]},
+  {id:'coloring',name:'채색',icon:'🖌️',count:12,templates:[
+    {id:'color_full',name:'풀컬러',desc:'완전 채색'},
+    {id:'color_mono',name:'흑백',desc:'흑백 톤'},
+    {id:'color_sepia',name:'세피아',desc:'갈색 톤'},
+    {id:'color_pastel',name:'파스텔',desc:'부드러운 색감'},
+    {id:'color_vivid',name:'비비드',desc:'선명한 원색'},
+    {id:'color_neon',name:'네온',desc:'발광 네온 효과'}
+  ]},
+  {id:'background',name:'배경',icon:'🏞️',count:16,templates:[
+    {id:'bg_city',name:'도시',desc:'현대 도시 배경'},
+    {id:'bg_nature',name:'자연',desc:'자연 풍경 배경'},
+    {id:'bg_indoor',name:'실내',desc:'실내 공간 배경'},
+    {id:'bg_fantasy',name:'판타지',desc:'환상적 배경'},
+    {id:'bg_school',name:'학교',desc:'학교/교실 배경'},
+    {id:'bg_night',name:'야경',desc:'밤 도시/하늘 배경'}
+  ]},
+  {id:'editing',name:'편집',icon:'✂️',count:12,templates:[
+    {id:'edit_split',name:'분할',desc:'화면 분할 구도'},
+    {id:'edit_effect',name:'이펙트',desc:'빛/파티클 효과'},
+    {id:'edit_text',name:'텍스트',desc:'대사/효과음 배치'},
+    {id:'edit_border',name:'테두리',desc:'프레임/보더 효과'},
+    {id:'edit_overlay',name:'오버레이',desc:'레이어 합성'},
+    {id:'edit_filter',name:'필터',desc:'컬러 그레이딩'}
+  ]},
+  {id:'pose',name:'포즈',icon:'🤸',count:12,templates:[
+    {id:'pose_action',name:'액션',desc:'전투/역동적 포즈'},
+    {id:'pose_daily',name:'일상',desc:'자연스러운 일상 포즈'},
+    {id:'pose_romantic',name:'로맨틱',desc:'연인 포즈'},
+    {id:'pose_group',name:'단체',desc:'그룹 포즈 배치'},
+    {id:'pose_closeup',name:'클로즈업',desc:'얼굴/상반신 클로즈업'},
+    {id:'pose_dynamic',name:'역동',desc:'달리기/점프 동작'}
+  ]}
+];
 
-[핵심 규칙]
-1. 이미 완성된 고퀄리티 이미지가 소스로 존재 → 외형/복장/배경 묘사 절대 금지
-2. 오직 "움직임"만 기술: 동힑, 시선 이동, 표정 변화, 카메라 워크
-3. 각 장면당 상세한 모션 지시 작성
-4. 시간 흐름 명시: "천천히", "급격히", "2초에 걸쳐" 등
-5. 감정 전환이 있으메 반드시 표정 변화 폨함
-6. 효과음이 있으메 물리적 움직임으로 매핑
+// Video modes
+const VIDEO_MODES = [
+  {id:'single',name:'Single',desc:'이미지 1장 기반',icon:'🖼️'},
+  {id:'firstLast',name:'First-Last',desc:'시작/끝 2장',icon:'🔀'},
+  {id:'advanced',name:'Advanced',desc:'고급 제어',icon:'⚙️'},
+  {id:'advancedAudio',name:'Audio+',desc:'오디오 포함',icon:'🔊'}
+];
 
-[포맷]
-- 모션: [구체적 동작 묘사]
-- 부수동작: [머리카락, 옷, 물리 반응]
-- 카메라: [카메라 움직임]
-- 타이밍: [속도]
-- 감정흐름: [시작 → 끝]
+// ============================================================
+// GEMINI API CLIENT
+// ============================================================
 
-[금지] 캐릭터 외모 묘사, 배경 설명, 대사 포함, "~하는 장면" 메타 푘현
-
-[장르: ${genre}]
-- 속도: ${preset?.speed || 1.0}x
-- 물리 강조: ${preset?.physics || ''}
-- 분위기: ${preset?.ambient || ''}`;
-
-const SYS_MOTION_PROMPT = (genre, preset) => `You are an expert animation motion prompt engineer for webtoon-to-video conversion.
-Convert Korean motion directions into precise English video generation prompts.
-
-ABSOLUTE RULES:
-- Output ONLY the English motion prompt, nothing else
-- Max 80 words (concise prompts = better videos)
-- Focus EXCLUSIVELY on MOTION, CAMERA, and TIMING
-- NEVER describe character appearance, clothing, or background (source image has this)
-- Use present continuous tense ("walking", "turning", "zooming")
-- MUST include physics: "hair physics", "cloth simulation", "weight shift"
-
-STRUCTURE: [Subject action] + [Secondary motion/physics] + [Camera movement] + [Timing] + [Atmosphere]
-
-GENRE: ${genre}
-- Physics emphasis: ${preset?.physics || ''}
-- Ambient effects: ${preset?.ambient || ''}
-- AVOID: ${preset?.neg || ''}`;
-
-// ─── Gemini API ─────────────────────────────────────────────
-
-async function callGemini(systemPrompt, userPrompt) {
-  const r = await fetch(GEMINI_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-      generationConfig: { temperature: 0.35, topP: 0.85, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } }
-    })
-  });
-  if (!r.ok) throw new Error(`API Error: ${r.status}`);
-  const d = await r.json();
-  if (d.error) throw new Error(d.error.message);
-  const text = d.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('\n') || '';
-  return {
-    text: text.trim(),
-    inputTokens: d.usageMetadata?.promptTokenCount || 0,
-    outputTokens: d.usageMetadata?.candidatesTokenCount || 0,
+async function callGemini(systemPrompt, userPrompt, opts={}) {
+  const model = opts.model || 'gemini-2.5-flash';
+  const thinkBudget = opts.thinkBudget ?? 0;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`;
+  const body = {
+    systemInstruction: {parts:[{text:systemPrompt}]},
+    contents: [{role:'user',parts:[{text:userPrompt}]}],
+    generationConfig: {
+      temperature: opts.temperature || 0.7,
+      topP: opts.topP || 0.9,
+      maxOutputTokens: opts.maxTokens || 2048,
+      thinkingConfig: {thinkingBudget: thinkBudget}
+    }
   };
+  const res = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok) throw new Error(`Gemini API ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  return parts.filter(p=>!p.thought).map(p=>p.text).join('');
 }
 
-// ─── Components ─────────────────────────────────────────────
+// ============================================================
+// PIPELINE A: 글콘티 → 이미지 프롬프트
+// ============================================================
 
-function App() {
-  const [tab, setTab] = useState('single'); // single | batch | camera | history
-  const [genre, setGenre] = useState('romance');
-  const [description, setDescription] = useState('');
-  const [dialogue, setDialogue] = useState('');
-  const [sfx, setSfx] = useState('');
-  const [emotionStart, setEmotionStart] = useState('thinking');
-  const [emotionEnd, setEmotionEnd] = useState('thinking');
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [cameraFixed, setCameraFixed] = useState(false);
+const PIPELINE_A_SYSTEM = {
+  // A-2: 콘티 변환
+  contiConvert: `당신은 웹툰/만화 글콘티를 구조화된 형식으로 변환하는 전문가입틈다.
 
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [step1Result, setStep1Result] = useState(null);
-  const [step2Result, setStep2Result] = useState(null);
-  const [step1Time, setStep1Time] = useState(0);
-  const [step2Time, setStep2Time] = useState(0);
-  const [error, setError] = useState('');
-  const [history, setHistory] = useState([]);
+입력된 장면 정보(묘사, 대사, 효과음, 감정)를 분석하여 이미지 생성에 최적화된 구조화된 콘티로 변환합니다.
 
-  // Batch mode
-  const [batchScenes, setBatchScenes] = useState([]);
-  const [batchResults, setBatchResults] = useState([]);
-  const [batchProcessing, setBatchProcessing] = useState(false);
+출력 형식:
+[장면 구성]
+- 화면구도: (클로즈업/미디엄/풀샷/버드아이 등)
+- 인물수: N명
+- 인물배치: (좌/중/우, 전경/배경)
+- 표정/포즈: (상세)
+- 배경요소: (구체적)
+- 조명/분위기: (구체적)
+- 특수효과: (있다면)
 
-  const genreInfo = GENRES.find(g => g.id === genre);
-  const preset = GENRE_PRESETS[genre];
+반드시 한국어로 출력하세요.`,
 
-  // ─── Run Pipeline ─────────────────────────────────────────
+  // A-3: 영문 이미지 프롬프트 변환
+  imagePrompt: `You are an expert image generation prompt engineer specializing in webtoon/manga style artwork.
 
-  const runPipeline = useCallback(async (desc, dial, sfxStr, eStart, eEnd, genreId) => {
-    const p = GENRE_PRESETS[genreId];
-    const gInfo = GENRES.find(g => g.id === genreId);
+Convert the structured Korean scene description into an optimized English prompt for image generation (Grok or Stable Diffusion).
 
-    const scenePrompt = [
-      `[장면 묘사] ${desc}`,
-      dial ? `[대사] ${dial}` : '',
-      sfxStr ? `[효과음] ${sfxStr}` : '',
-      `[감정] ${eStart} → ${eEnd}`,
-    ].filter(Boolean).join('\n');
+Rules:
+1. Maximum 200 words
+2. Start with the most important visual element
+3. Include art style, composition, lighting, mood
+4. Use comma-separated descriptive tags
+5. Add quality boosters: masterpiece, best quality, highly detailed
+6. Specify aspect ratio hint if relevant (webtoon=portrait 3:4, manga=portrait 2:3)
+7. Include negative prompt suggestions after [NEGATIVE]:
 
-    // Step 1
-    const t1 = Date.now();
-    const r1 = await callGemini(
-      SYS_MOTION_CONVERT(gInfo.label, { ...p, speed: gInfo.speed }),
-      scenePrompt
-    );
-    const time1 = Date.now() - t1;
+Genre-specific adjustments:
+- Romance: soft lighting, warm colors, bokeh backgrounds
+- Action: dynamic angles, motion blur, impact effects
+- Horror: dark atmosphere, desaturated, dramatic shadows
+- Slice of Life: natural lighting, warm palette, cozy atmosphere
+- Drama: cinematic lighting, deep shadows, emotional contrast
 
-    // Step 2
-    const modeNote = cameraFixed ? '\nIMPORTANT: Camera is FIXED. Zero pan/tilt/zoom. All motion from subject only.' : '';
-    const audioNote = audioEnabled ? '\nInclude AUDIO direction: [Audio: sound description synchronized to motion]' : '';
+Output format:
+[PROMPT]: (the prompt)
+[NEGATIVE]: (negative prompt)
+[STYLE]: (recommended style/model)
+[RATIO]: (recommended aspect ratio)`
+};
 
-    const t2 = Date.now();
-    const r2 = await callGemini(
-      SYS_MOTION_PROMPT(gInfo.label, p) + modeNote + audioNote,
-      `Convert this Korean motion conti to an English motion prompt (max 80 words):\n\n${r1.text}`
-    );
-    const time2 = Date.now() - t2;
+// ============================================================
+// PIPELINE B: 이미지 → 영상 프롬프트
+// ============================================================
 
-    return { step1: r1, step2: r2, time1, time2 };
-  }, [audioEnabled, cameraFixed]);
+const PIPELINE_B_SYSTEM = {
+  // B-2: 모션 콘티 변환
+  motionConti: `당신은 웹툰/만화 장면을 영상용 모션 콘티로 변환하는 전문가입니다.
 
-  const handleRun = useCallback(async () => {
-    if (!description.trim()) return;
-    setLoading(true); setError(''); setStep1Result(null); setStep2Result(null); setProgress(0);
+입력: 장면 묘사, 대사, 효과음, 감정 전환, 이미지 설명
+출력: 영상 제작용 모션 콘티 (한국어)
 
-    try {
-      setProgress(20);
-      const { step1, step2, time1, time2 } = await runPipeline(
-        description, dialogue, sfx, emotionStart, emotionEnd, genre
-      );
+분석 항목:
+1. 주요 동작 (Primary Action): 캐릭터의 핵심 움직임
+2. 부수 모션 (Secondary Motion): 물리적 부수 움직임 (머리카락, 옷, 배경 등)
+3. 카메라 워크: 추천 카메라 움직임 + 속도 + 이징
+4. 타이밍: 장르별 속도감
+5. 감정 흐름: 시작→끝 감정 전환의 시각적 표현
+6. 효과음→모션 매핑: SFX를 시각적 모션으로
 
-      setProgress(60);
-      setStep1Result(step1); setStep1Time(time1);
-      setProgress(90);
-      setStep2Result(step2); setStep2Time(time2);
-      setProgress(100);
+출력 형식:
+[주요동작] (상세 설명)
+[부수모션] (물리 시뮬레이션 요소)
+[카메라] (타입 / 속도 / 이징)
+[타이밍] (장르 기반 속도)
+[감정흐름] (시작→끝 시각 표현)
+[SFX모션] (효과음별 모션 매핑)`,
 
-      setHistory(prev => [{
-        id: Date.now(),
-        time: new Date().toLocaleTimeString('ko-KR'),
-        description: description.slice(0, 60),
-        genre,
-        motionConti: step1.text,
-        motionPrompt: step2.text,
-        totalTime: time1 + time2,
-      }, ...prev].slice(0, 20));
+  // B-3: 영문 모션 프롬프트 변환
+  motionPrompt: `You are an expert video generation prompt engineer.
 
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-      setTimeout(() => setProgress(0), 1000);
-    }
-  }, [description, dialogue, sfx, emotionStart, emotionEnd, genre, runPipeline]);
+Convert Korean motion conti into an optimized English motion prompt for AI video generation.
 
-  // ─── Batch Processing ─────────────────────────────────────
+Rules:
+1. Maximum 80 words (video models have strict limits)
+2. Focus on MOTION, not static description
+3. Describe what CHANGES in the scene
+4. Include camera movement instruction
+5. Specify physics: hair flow, cloth movement, particle effects
+6. Temporal flow: start state → action → end state
+7. Do NOT describe the image itself (the image is provided separately)
 
-  const addBatchScene = () => {
-    if (!description.trim()) return;
-    setBatchScenes(prev => [...prev, {
-      id: Date.now(), description, dialogue, sfx, emotionStart, emotionEnd, genre, status: 'pending'
+Structure:
+[MOTION]: Primary character/object motion
+[PHYSICS]: Secondary physical motions
+[CAMERA]: Camera work directive
+[TEMPORAL]: Timeline description (X seconds)
+[MOOD]: Emotional atmosphere shift
+
+Genre modifiers:
+- Romance (0.7x speed): gentle, flowing, soft transitions
+- Action (1.5x speed): explosive, sharp, impactful
+- Horror (0.8x speed): creeping, subtle, sudden burst
+- Slice of Life (1.0x): natural, casual, breathing room
+- Drama (0.9x): measured, weighted, emotionally charged
+
+Final output: Single paragraph, English only, ≤80 words.`
+};
+
+// ============================================================
+// CONTEXT ANALYZER
+// ============================================================
+
+function analyzeContext(scene) {
+  const desc = (scene.description||'').toLowerCase();
+  const sfxCount = (scene.sfx||[]).length;
+  const dialogueCount = (scene.dialogues||[]).length;
+
+  // Action keywords
+  const actionWords = ['싸움','전투','달리','폭발','충돌','격투','추격','점프','공격','방어','파괴'];
+  const actionScore = actionWords.reduce((s,w)=>s+(desc.includes(w)?0.15:0),0);
+  const actionLevel = Math.min(1, actionScore + sfxCount*0.1);
+
+  // Emotion intensity from transition
+  const emotionStart = scene.emotionStart || 'smiling';
+  const emotionEnd = scene.emotionEnd || 'smiling';
+  const emotionDiff = emotionStart !== emotionEnd ? 0.6 : 0.2;
+  const highEmotions = ['crying','shouting','angry','fear','surprised'];
+  const emotionalIntensity = Math.min(1, emotionDiff + (highEmotions.includes(emotionEnd)?0.3:0));
+
+  const dialogueRatio = dialogueCount / (dialogueCount + sfxCount + 1);
+
+  // Recommend mode
+  let recommendedMode = 'single';
+  if(actionLevel > 0.7) recommendedMode = 'advanced';
+  else if(emotionalIntensity > 0.7) recommendedMode = 'advancedAudio';
+
+  // Recommend camera
+  let recommendedCamera = 'static';
+  if(actionLevel > 0.5) recommendedCamera = 'tracking';
+  else if(emotionalIntensity > 0.6) recommendedCamera = 'zoom_in';
+  else if(desc.includes('풍경')||desc.includes('전경')) recommendedCamera = 'pan_right';
+
+  return {actionLevel, emotionalIntensity, dialogueRatio, recommendedMode, recommendedCamera};
+}
+
+// ============================================================
+// COMPONENTS
+// ============================================================
+
+// --- Log Panel ---
+function LogPanel({logs}) {
+  const ref = useRef();
+  useEffect(()=>{if(ref.current) ref.current.scrollTop = ref.current.scrollHeight;},[logs]);
+  return (
+    <div className="log-panel" ref={ref}>
+      {logs.map((l,i)=>(
+        <div key={i} className={`log-entry ${l.type}`}>
+          <span className="log-time">{l.time}</span>{l.msg}
+        </div>
+      ))}
+      {logs.length===0 && <div className="log-entry">대기 중...</div>}
+    </div>
+  );
+}
+
+// --- Genre Selector ---
+function GenreSelector({value, onChange}) {
+  return (
+    <div className="genre-chips">
+      {Object.entries(GENRE_PRESETS).map(([k,v])=>(
+        <div key={k} className={`genre-chip ${v.color} ${value===k?'active':''}`} onClick={()=>onChange(k)}>
+          {v.icon} {v.name}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Emotion Picker ---
+function EmotionPicker({value, onChange, label}) {
+  return (
+    <div>
+      <div className="form-label">{label}</div>
+      <div className="emotion-grid">
+        {EXPRESSIONS.map(e=>(
+          <div key={e} className={`emotion-btn ${value===e?'active':''}`} onClick={()=>onChange(e)}>
+            {EXPR_ICONS[e]}<br/>{EXPR_LABELS[e]}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// --- Camera Selector ---
+function CameraSelector({value, onChange}) {
+  return (
+    <div className="camera-grid">
+      {CAMERA_DICT.map(c=>(
+        <div key={c.type} className={`camera-card ${value===c.type?'active':''}`} onClick={()=>onChange(c.type)}>
+          <span className="cam-icon">{c.icon}</span>
+          {c.name}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// --- Dialogue Editor ---
+function DialogueEditor({dialogues, onChange}) {
+  const add = () => onChange([...dialogues, {type:'speech',character:'',text:''}]);
+  const remove = (i) => onChange(dialogues.filter((_,j)=>j!==i));
+  const update = (i, field, val) => {
+    const nd = [...dialogues];
+    nd[i] = {...nd[i],[field]:val};
+    onChange(nd);
+  };
+  return (
+    <div>
+      <div className="dialogue-list">
+        {dialogues.map((d,i)=>(
+          <div key={i} className="dialogue-row">
+            <select value={d.type} onChange={e=>update(i,'type',e.target.value)}>
+              <option value="speech">대사</option>
+              <option value="thought">속마음</option>
+              <option value="offscreen">화면밖</option>
+              <option value="narration">나레이션</option>
+            </select>
+            <input className="form-input" placeholder="캐릭터명" value={d.character} onChange={e=>update(i,'character',e.target.value)} style={{width:'80px',flex:'none'}}/>
+            <input className="form-input" placeholder="대사 내용" value={d.text} onChange={e=>update(i,'text',e.target.value)}/>
+            <button className="remove-btn" onClick={()=>remove(i)}>×</button>
+          </div>
+        ))}
+      </div>
+      <button className="btn btn-secondary btn-sm" onClick={add} style={{marginTop:6}}>+ 대사 추가</button>
+    </div>
+  );
+}
+
+// ============================================================
+// MODULE 1: 글콘티 에디터
+// ============================================================
+
+function GlContiEditor({scenes, setScenes, activeSceneIdx, setActiveSceneIdx}) {
+  const scene = scenes[activeSceneIdx] || {};
+
+  const updateScene = (field, val) => {
+    const ns = [...scenes];
+    ns[activeSceneIdx] = {...ns[activeSceneIdx], [field]:val};
+    setScenes(ns);
+  };
+
+  const addScene = () => {
+    setScenes([...scenes, {
+      id: `scene_${Date.now()}`,
+      description:'', dialogues:[{type:'speech',character:'',text:''}],
+      sfx:[], sfxText:'',
+      emotionStart:'smiling', emotionEnd:'smiling',
+      cameraHint:'static', genre:'romance',
+      // Pipeline results
+      convertedConti:'', imagePrompt:'', imageNegative:'',
+      motionConti:'', motionPrompt:'',
+      imageUrl:'', videoUrl:'',
+      status:{conti:'idle',image:'idle',video:'idle'}
     }]);
-    setDescription(''); setDialogue(''); setSfx('');
+    setActiveSceneIdx(scenes.length);
   };
 
-  const removeBatchScene = (id) => {
-    setBatchScenes(prev => prev.filter(s => s.id !== id));
+  const removeScene = (i) => {
+    if(scenes.length <= 1) return;
+    const ns = scenes.filter((_,j)=>j!==i);
+    setScenes(ns);
+    if(activeSceneIdx >= ns.length) setActiveSceneIdx(ns.length-1);
   };
-
-  const runBatch = useCallback(async () => {
-    setBatchProcessing(true); setBatchResults([]);
-    const results = [];
-    for (let i = 0; i < batchScenes.length; i++) {
-      const sc = batchScenes[i];
-      setBatchScenes(prev => prev.map(s => s.id === sc.id ? {...s, status:'processing'} : s));
-      try {
-        const r = await runPipeline(sc.description, sc.dialogue, sc.sfx, sc.emotionStart, sc.emotionEnd, sc.genre);
-        results.push({ ...sc, ...r, status: 'done' });
-        setBatchScenes(prev => prev.map(s => s.id === sc.id ? {...s, status:'done'} : s));
-      } catch(e) {
-        results.push({ ...sc, error: e.message, status: 'error' });
-        setBatchScenes(prev => prev.map(s => s.id === sc.id ? {...s, status:'error'} : s));
-      }
-    }
-    setBatchResults(results);
-    setBatchProcessing(false);
-  }, [batchScenes, runPipeline]);
-
-  // ─── Copy ─────────────────────────────────────────────────
-
-  const copyText = (text) => {
-    navigator.clipboard?.writeText(text);
-  };
-
-  const wordCount = step2Result ? step2Result.text.split(/\s+/).length : 0;
-  const totalTokens = (step1Result?.inputTokens||0) + (step1Result?.outputTokens||0) + (step2Result?.inputTokens||0) + (step2Result?.outputTokens||0);
-
-  // ─── Render ───────────────────────────────────────────────
 
   return (
-    <div className="app">
-      <div className="header">
-        <h1>Video Prompt Engine</h1>
-        <span className="badge">v1.0</span>
-        <span className="sub">MoonTech Manager .AI — 영상 프롬프트 자동 생성</span>
+    <div className="grid-23">
+      <div>
+        <div className="card">
+          <div className="card-title">📋 장면 목록 <span className="badge">{scenes.length}장면</span></div>
+          <div className="scene-list">
+            {scenes.map((s,i)=>(
+              <div key={i} className={`scene-item ${i===activeSceneIdx?'active':''}`} onClick={()=>setActiveSceneIdx(i)}>
+                <div className="scene-num">
+                  장면 #{i+1}
+                  {scenes.length>1 && <button className="remove-btn" onClick={e=>{e.stopPropagation();removeScene(i);}} style={{float:'right',width:20,height:20,fontSize:12}}>×</button>}
+                </div>
+                <div className="scene-preview">{s.description || '(빈 장면)'}</div>
+                <div className="scene-status">
+                  <div className={`status-dot ${s.status?.conti==='done'?'ready':s.status?.conti==='running'?'processing':'empty'}`} title="콘티"/>
+                  <div className={`status-dot ${s.status?.image==='done'?'ready':s.status?.image==='running'?'processing':'empty'}`} title="이미지"/>
+                  <div className={`status-dot ${s.status?.video==='done'?'ready':s.status?.video==='running'?'processing':'empty'}`} title="영상"/>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button className="btn btn-secondary btn-block" onClick={addScene} style={{marginTop:8}}>+ 장면 추가</button>
+        </div>
       </div>
 
-      <div className="layout">
-        {/* LEFT PANEL */}
-        <div>
-          <div className="panel" style={{marginBottom:20}}>
-            <h2><span className="icon">🎬</span> 장면 입력</h2>
+      <div>
+        <div className="card">
+          <div className="card-title">✏️ 장면 #{activeSceneIdx+1} 편집</div>
 
-            <div className="form-group">
-              <label>장르</label>
-              <div className="genre-chips">
-                {GENRES.map(g => (
-                  <div key={g.id} className={`genre-chip ${genre===g.id?'active':''}`} data-g={g.id} onClick={() => setGenre(g.id)}>
-                    {g.emoji} {g.label} ({g.speed}x)
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>장면 묘사 *</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="예: 감정이 격해진 수아, 눈물을 참으며 고개를 돌린다. 빗소리가 세차게 내릴다." rows={4} />
-            </div>
-
-            <div className="form-group">
-              <label>대사 (선택)</label>
-              <input value={dialogue} onChange={e => setDialogue(e.target.value)}
-                placeholder='예: 대:(수아) ...가지 마.' />
-            </div>
-
-            <div className="form-group">
-              <label>효과음 (선택)</label>
-              <input value={sfx} onChange={e => setSfx(e.target.value)}
-                placeholder='예: 쾅!, 빗소리, 두근두근' />
-            </div>
-
-            <div className="form-group">
-              <label>감정 전환</label>
-              <div className="emotion-row">
-                <select value={emotionStart} onChange={e => setEmotionStart(e.target.value)}>
-                  {EXPRESSIONS.map(ex => <option key={ex} value={ex}>{EXPRESSION_KO[ex]} ({ex})</option>)}
-                </select>
-                <span className="emotion-arrow">→</span>
-                <select value={emotionEnd} onChange={e => setEmotionEnd(e.target.value)}>
-                  {EXPRESSIONS.map(ex => <option key={ex} value={ex}>{EXPRESSION_KO[ex]} ({ex})</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label>옵션</label>
-              <div className="options-row">
-                <label className={`option-chip ${audioEnabled?'active':''}`}>
-                  <input type="checkbox" checked={audioEnabled} onChange={e => setAudioEnabled(e.target.checked)} />
-                  🔊 오디오 포함
-                </label>
-                <label className={`option-chip ${cameraFixed?'active':''}`}>
-                  <input type="checkbox" checked={cameraFixed} onChange={e => setCameraFixed(e.target.checked)} />
-                  📌 카메라 고정
-                </label>
-              </div>
-            </div>
-
-            {progress > 0 && (
-              <div className="progress-bar"><div className="progress-fill" style={{width:`${progress}%`}} /></div>
-            )}
-
-            <div style={{display:'flex',gap:8}}>
-              <button className="run-btn" onClick={handleRun} disabled={loading || !description.trim()}>
-                {loading && <span className="spinner" />}
-                {loading ? '생성 중...' : '🚀 모션 프롬프트 생성'}
-              </button>
-              {tab === 'batch' && (
-                <button className="run-btn" style={{flex:'0 0 auto',width:'auto',padding:'14px 20px',background:'var(--surface3)',border:'1px solid var(--border)'}}
-                  onClick={addBatchScene} disabled={!description.trim()}>
-                  + 추가
-                </button>
-              )}
-            </div>
-
-            {error && <p style={{color:'var(--err)',fontSize:13,marginTop:10}}>⚠️ {error}</p>}
+          <div className="form-group">
+            <label className="form-label">장르</label>
+            <GenreSelector value={scene.genre||'romance'} onChange={v=>updateScene('genre',v)}/>
           </div>
 
-          {/* Camera Dictionary */}
-          <div className="panel">
-            <h2><span className="icon">📷</span> 카메라 워크 사전</h2>
-            <div className="camera-grid">
-              {CAMERAS.map((c,i) => (
-                <div key={i} className="camera-item" onClick={() => {
-                  setDescription(prev => prev + (prev ? ' ' : '') + c.ko + '.');
-                }}>
-                  <div className="ko">{c.ko}</div>
-                  <div className="en">{c.en}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT PANEL */}
-        <div className="results">
-          <div className="tabs">
-            <button className={`tab ${tab==='single'?'active':''}`} onClick={() => setTab('single')}>단일 장면</button>
-            <button className={`tab ${tab==='batch'?'active':''}`} onClick={() => setTab('batch')}>배치 처리</button>
-            <button className={`tab ${tab==='history'?'active':''}`} onClick={() => setTab('history')}>기록 ({history.length})</button>
+          <div className="form-group">
+            <label className="form-label">장면 묘사 (한국어)</label>
+            <textarea className="form-textarea" rows={4} placeholder="장면을 상세히 묘사하세요. 배경, 인물, 상황 등..." value={scene.description||''} onChange={e=>updateScene('description',e.target.value)}/>
           </div>
 
-          {tab === 'single' && (
-            <>
-              {!step1Result && !loading && (
-                <div className="empty-state">
-                  <div className="icon">🎬</div>
-                  <p>왼쪽에서 장면을 입력하고<br/>「모션 프롬프트 생성」을 클릭하세요</p>
-                  <p style={{marginTop:12,fontSize:12,color:'var(--text2)'}}>
-                    글콘티 → 모션 콘티(한국어) → 영문 모션 프롬프트<br/>3단계 파이플라인이 자동으로 실행됩니다
-                  </p>
-                </div>
-              )}
+          <div className="form-group">
+            <label className="form-label">대사</label>
+            <DialogueEditor dialogues={scene.dialogues||[]} onChange={v=>updateScene('dialogues',v)}/>
+          </div>
 
-              {step1Result && (
-                <div className="fade-up">
-                  <div className="stats-bar" style={{marginBottom:16}}>
-                    <div className="stat">
-                      <span className="stat-label">총 소요시간</span>
-                      <span className="stat-value time">{((step1Time+step2Time)/1000).toFixed(1)}s</span>
-                    </div>
-                    <div className="stat">
-                      <span className="stat-label">토큰 사용</span>
-                      <span className="stat-value tokens">{totalTokens}</span>
-                    </div>
-                    <div className="stat">
-                      <span className="stat-label">프롬프트 단어</span>
-                      <span className="stat-value words">{wordCount}/80</span>
-                    </div>
-                    <div className="stat">
-                      <span className="stat-label">장르</span>
-                      <span className="stat-value">{genreInfo?.emoji} {genreInfo?.label}</span>
-                    </div>
-                    <div className="stat">
-                      <span className="stat-label">감정</span>
-                      <span className="stat-value" style={{fontSize:13}}>{EXPRESSION_KO[emotionStart]}→{EXPRESSION_KO[emotionEnd]}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
+          <div className="form-group">
+            <label className="form-label">효과음 (SFX) — 쉼표로 구분</label>
+            <input className="form-input" placeholder="쾅, 우르르, 바스락..." value={scene.sfxText||''} onChange={e=>updateScene('sfxText',e.target.value)}/>
+          </div>
 
-              {step1Result && (
-                <div className="result-card step-1 fade-up" style={{animationDelay:'0.1s'}}>
-                  <div className="result-header">
-                    <div className="step-num">1</div>
-                    <span className="step-title">모션 콘티 (한국어)</span>
-                    <div className="step-meta">
-                      <span>⏱ {(step1Time/1000).toFixed(1)}s</span>
-                      <span>📊 {step1Result.inputTokens}+{step1Result.outputTokens} tokens</span>
-                    </div>
-                    <button className="copy-btn" onClick={() => copyText(step1Result.text)}>복사</button>
-                  </div>
-                  <div className="result-body">
-                    <div className="result-text korean">{step1Result.text}</div>
-                  </div>
-                </div>
-              )}
+          <div className="grid-2">
+            <EmotionPicker value={scene.emotionStart||'smiling'} onChange={v=>updateScene('emotionStart',v)} label="시작 감정"/>
+            <EmotionPicker value={scene.emotionEnd||'smiling'} onChange={v=>updateScene('emotionEnd',v)} label="끝 감정"/>
+          </div>
 
-              {step2Result && (
-                <div className="result-card step-2 highlight fade-up" style={{animationDelay:'0.2s'}}>
-                  <div className="result-header">
-                    <div className="step-num">2</div>
-                    <span className="step-title">영문 모션 프롬프트 (Video API용)</span>
-                    <div className="step-meta">
-                      <span>⏱ {(step2Time/1000).toFixed(1)}s</span>
-                      <span>📝 {wordCount} words</span>
-                    </div>
-                    <button className="copy-btn" onClick={() => copyText(step2Result.text)}>복사</button>
-                  </div>
-                  <div className="result-body">
-                    <div className="result-text english">{step2Result.text}</div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {tab === 'batch' && (
-            <>
-              {batchScenes.length === 0 && !batchProcessing && (
-                <div className="empty-state">
-                  <div className="icon">📦</div>
-                  <p>장면을 입력하고 「+ 추가」 버튼으로 배치에 추가하세요<br/>여러 장면을 한번에 처리할 수 있습니다</p>
-                </div>
-              )}
-
-              {batchScenes.map((sc, i) => (
-                <div key={sc.id} className="batch-scene">
-                  <div className="num">{i+1}</div>
-                  <div className="desc">
-                    {GENRES.find(g=>g.id===sc.genre)?.emoji} {sc.description}
-                  </div>
-                  <div className="status">
-                    {sc.status === 'pending' && '⏳'}
-                    {sc.status === 'processing' && <span className="spinner" style={{width:16,height:16,borderWidth:2}} />}
-                    {sc.status === 'done' && '✅'}
-                    {sc.status === 'error' && '❌'}
-                  </div>
-                  {!batchProcessing && <button className="remove-btn" onClick={() => removeBatchScene(sc.id)}>삭제</button>}
-                </div>
-              ))}
-
-              {batchScenes.length > 0 && !batchProcessing && (
-                <button className="run-btn" onClick={runBatch}>
-                  🚀 {batchScenes.length}개 장면 일괄 생성
-                </button>
-              )}
-
-              {batchResults.map((r, i) => (
-                <div key={i} className="result-card step-2 fade-up" style={{animationDelay:`${i*0.1}s`}}>
-                  <div className="result-header">
-                    <div className="step-num" style={{background:'rgba(0,168,168,0.15)',color:'var(--success)'}}>{i+1}</div>
-                    <span className="step-title" style={{fontSize:12}}>{r.description?.slice(0,40)}...</span>
-                    <div className="step-meta"><span>⏱ {((r.time1+r.time2)/1000).toFixed(1)}s</span></div>
-                    <button className="copy-btn" onClick={() => copyText(r.step2?.text || '')}>복사</button>
-                  </div>
-                  <div className="result-body">
-                    {r.error ? (
-                      <div style={{color:'var(--err)'}}>⚠️ {r.error}</div>
-                    ) : (
-                      <>
-                        <div className="result-text korean" style={{marginBottom:12,paddingBottom:12,borderBottom:'1px solid var(--border)',fontSize:12}}>{r.step1?.text}</div>
-                        <div className="result-text english">{r.step2?.text}</div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-
-          {tab === 'history' && (
-            <>
-              {history.length === 0 && (
-                <div className="empty-state">
-                  <div className="icon">📜</div>
-                  <p>아직 생성 기록이 없습니다</p>
-                </div>
-              )}
-              {history.map(h => (
-                <div key={h.id} className="history-item" onClick={() => {
-                  setStep1Result({text:h.motionConti,inputTokens:0,outputTokens:0});
-                  setStep2Result({text:h.motionPrompt,inputTokens:0,outputTokens:0});
-                  setStep1Time(0); setStep2Time(h.totalTime);
-                  setTab('single');
-                }}>
-                  <div style={{display:'flex',justifyContent:'space-between'}}>
-                    <span style={{fontSize:13}}>{GENRES.find(g=>g.id===h.genre)?.emoji} {h.description}...</span>
-                    <span className="time">{h.time} · {(h.totalTime/1000).toFixed(1)}s</span>
-                  </div>
-                  <div className="preview">{h.motionPrompt.slice(0, 100)}...</div>
-                </div>
-              ))}
-            </>
-          )}
+          <div className="form-group" style={{marginTop:14}}>
+            <label className="form-label">카메라 힌트</label>
+            <CameraSelector value={scene.cameraHint||'static'} onChange={v=>updateScene('cameraHint',v)}/>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+// ============================================================
+// MODULE 2: 이미지G 생성기 (Pipeline A)
+// ============================================================
+
+function ImageGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, addLog}) {
+  const [processing, setProcessing] = useState(false);
+  const [step, setStep] = useState('idle'); // idle, A2, A3, done
+  const [selectedCat, setSelectedCat] = useState('character');
+  const [selectedTpl, setSelectedTpl] = useState('');
+  const scene = scenes[activeSceneIdx] || {};
+
+  const runPipelineA = async () => {
+    if(!scene.description) { addLog('warn','장면 묘사를 먼저 입력하세요.'); return; }
+    setProcessing(true);
+
+    // Step A-2: 콘티 변환
+    try {
+      setStep('A2');
+      addLog('api','[A-2] 글콘티 → 구조화 콘티 변환 시작...');
+      const sfxList = (scene.sfxText||'').split(',').map(s=>s.trim()).filter(Boolean);
+      const dialogueText = (scene.dialogues||[]).map(d=>`[${d.type}] ${d.character}: ${d.text}`).join('\n');
+      const userInput = `장면 묘사: ${scene.description}
+대사:
+${dialogueText}
+효과음: ${sfxList.join(', ')}
+감정: ${EXPR_LABELS[scene.emotionStart]||scene.emotionStart} → ${EXPR_LABELS[scene.emotionEnd]||scene.emotionEnd}
+장르: ${GENRE_PRESETS[scene.genre]?.name||scene.genre}`;
+
+      const convertedConti = await callGemini(PIPELINE_A_SYSTEM.contiConvert, userInput, {thinkBudget:1024});
+      const ns = [...scenes];
+      ns[activeSceneIdx] = {...ns[activeSceneIdx], convertedConti, status:{...scene.status, conti:'done'}};
+      setScenes(ns);
+      addLog('info','[A-2] 콘티 변환 완료 ✓');
+
+      // Step A-3: 영문 프롬프트 변환
+      setStep('A3');
+      addLog('api','[A-3] 구조화 콘티 → 영문 이미지 프롬프트 변환...');
+      const tplHint = selectedTpl ? `\n사용할 템플릿 카테고리: ${selectedCat}, 테플릿: ${selectedTpl}` : '';
+      const imgPromptResult = await callGemini(PIPELINE_A_SYSTEM.imagePrompt, convertedConti + tplHint, {thinkBudget:1024});
+
+      // Parse result
+      const promptMatch = imgPromptResult.match(/\[PROMPT\]:\s*([\s\S]*?)(?=\[NEGATIVE\])/);
+      const negMatch = imgPromptResult.match(/\[NEGATIVE\]:\s*([\s\S]*?)(?=\[STYLE\])/);
+      const imgPrompt = promptMatch ? promptMatch[1].trim() : imgPromptResult;
+      const imgNeg = negMatch ? negMatch[1].trim() : '';
+
+      const ns2 = [...scenes];
+      ns2[activeSceneIdx] = {...ns2[activeSceneIdx], imagePrompt:imgPrompt, imageNegative:imgNeg, imagePromptFull:imgPromptResult, status:{...ns2[activeSceneIdx].status, image:'done'}};
+      setScenes(ns2);
+      addLog('info','[A-3] 이미지 프롬프트 생성 완료 ✓');
+      setStep('done');
+    } catch(err) {
+      addLog('error', `오류: ${err.message}`);
+      setStep('idle');
+    }
+    setProcessing(false);
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard?.writeText(text);
+    addLog('info','클립보드에 복사됨 ✓');
+  };
+
+  const cat = IMAGE_TEMPLATE_CATEGORIES.find(c=>c.id===selectedCat);
+
+  return (
+    <div>
+      <div className="pipeline-bar">
+        <div className={`pipeline-step ${step==='A2'?'active':scene.convertedConti?'done':'pending'}`}>A-1 글콘티</div>
+        <span className="pipeline-arrow">→</span>
+        <div className={`pipeline-step ${step==='A2'?'active':scene.convertedConti?'done':'pending'}`}>A-2 콘티변환</div>
+        <span className="pipeline-arrow">→</span>
+        <div className={`pipeline-step ${step==='A3'?'active':scene.imagePrompt?'done':'pending'}`}>A-3 영문프롬프트</div>
+        <span className="pipeline-arrow">→</span>
+        <div className={`pipeline-step ${scene.imageUrl?'done':'pending'}`}>A-4 이미지생성</div>
+      </div>
+
+      <div className="grid-32">
+        <div>
+          <div className="card">
+            <div className="card-title">🖼️ 이미지 프롬프트 생성 <span className="badge">Pipeline A</span></div>
+
+            <div className="form-group">
+              <label className="form-label">현재 장면: #{activeSceneIdx+1}</label>
+              <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
+                {scenes.map((s,i)=>(
+                  <button key={i} className={`btn btn-sm ${i===activeSceneIdx?'btn-primary':'btn-secondary'}`} onClick={()=>setActiveSceneIdx(i)}>#{i+1}</button>
+                ))}
+              </div>
+              <p style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>
+                {scene.description ? scene.description.substring(0,100)+'...' : '(장면 묘사가 비어있습니다. 글콘티 에디터에서 먼저 작성하세요.)'}
+              </p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">장르 프리셋: {GENRE_PRESETS[scene.genre]?.icon} {GENRE_PRESETS[scene.genre]?.name}</label>
+            </div>
+
+            <button className="btn btn-primary btn-block" onClick={runPipelineA} disabled={processing || !scene.description}>
+              {processing ? <><span className="spinner"/> 변환 중...</> : '🚀 파이프라인 A 실행 (콘티→이미지 프롬프트)'}
+            </button>
+
+            {scene.convertedConti && (
+              <div className="result-panel">
+                <div className="result-label"><button className="copy-btn" onClick={()=>copyToClipboard(scene.convertedConti)}>복사</button>A-2 구조화 콘티</div>
+                <div className="result-text korean">{scene.convertedConti}</div>
+              </div>
+            )}
+
+            {scene.imagePrompt && (
+              <div className="result-panel" style={{marginTop:8}}>
+                <div className="result-label"><button className="copy-btn" onClick={()=>copyToClipboard(scene.imagePrompt)}>복사</button>A-3 이미지 프롬프트 (EN)</div>
+                <div className="result-text english">{scene.imagePrompt}</div>
+                {scene.imageNegative && (
+                  <>
+                    <div className="result-label" style={{marginTop:8}}>Negative Prompt</div>
+                    <div className="result-text english" style={{color:'var(--err)'}}>{scene.imageNegative}</div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="card">
+            <div className="card-title">📚 이미지 템플릿 <span className="badge">84종</span></div>
+            <div className="template-categories">
+              {IMAGE_TEMPLATE_CATEGORIES.map(c=>(
+                <div key={c.id} className={`template-cat ${selectedCat===c.id?'active':''}`} onClick={()=>setSelectedCat(c.id)}>
+                  {c.icon} {c.name} ({c.count})
+                </div>
+              ))}
+            </div>
+            {cat && (
+              <div className="template-list">
+                {cat.templates.map(t=>(
+                  <div key={t.id} className={`template-item ${selectedTpl===t.id?'active':''}`} onClick={()=>setSelectedTpl(t.id)}>
+                    <div className="tpl-name">{t.name}</div>
+                    <div className="tpl-desc">{t.desc}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card">
+            <div className="card-title">🎯 컨텍스트 분석</div>
+            {scene.description ? (()=>{
+              const ctx = analyzeContext(scene);
+              return (
+                <div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,fontSize:12}}>
+                    <div>액션 레벨: <strong>{(ctx.actionLevel*100).toFixed(0)}%</strong>
+                      <div className="progress-bar"><div className="progress-fill" style={{width:`${ctx.actionLevel*100}%`}}/></div>
+                    </div>
+                    <div>감정 강도: <strong>{(ctx.emotionalIntensity*100).toFixed(0)}%</strong>
+                      <div className="progress-bar"><div className="progress-fill" style={{width:`${ctx.emotionalIntensity*100}%`}}/></div>
+                    </div>
+                    <div>대화 비중: <strong>{(ctx.dialogueRatio*100).toFixed(0)}%</strong></div>
+                    <div>추천 모드: <strong>{ctx.recommendedMode}</strong></div>
+                  </div>
+                  <div style={{fontSize:11,color:'var(--text2)',marginTop:8}}>
+                    추천 카메라: {CAMERA_DICT.find(c=>c.type===ctx.recommendedCamera)?.icon} {CAMERA_DICT.find(c=>c.type===ctx.recommendedCamera)?.name}
+                  </div>
+                </div>
+              );
+            })() : <p style={{fontSize:12,color:'var(--text2)'}}>장면을 작성하면 자동 분석됩니다.</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MODULE 3: 영상G 생성기 (Pipeline B)
+// ============================================================
+
+function VideoGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, addLog}) {
+  const [processing, setProcessing] = useState(false);
+  const [step, setStep] = useState('idle');
+  const [videoMode, setVideoMode] = useState('single');
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [cameraFixed, setCameraFixed] = useState(false);
+  const scene = scenes[activeSceneIdx] || {};
+
+  const runPipelineB = async () => {
+    if(!scene.description) { addLog('warn','장면 묘사가 필요합니다.'); return; }
+    setProcessing(true);
+
+    try {
+      // B-2: 모션 콘티 변환
+      setStep('B2');
+      addLog('api','[B-2] 모션 콘티 변환 시작...');
+      const sfxList = (scene.sfxText||'').split(',').map(s=>s.trim()).filter(Boolean);
+      const cam = CAMERA_DICT.find(c=>c.type===(scene.cameraHint||'static'));
+      const genre = GENRE_PRESETS[scene.genre||'romance'];
+      const userInput = `장면: ${scene.description}
+대사: ${(scene.dialogues||[]).map(d=>`[${d.type}] ${d.character}: ${d.text}`).join('; ')}
+효과음: ${sfxList.join(', ')}
+감정: ${EXPR_LABELS[scene.emotionStart]} → ${EXPR_LABELS[scene.emotionEnd]}
+카메라 힌트: ${cam?.name} (${cam?.desc})
+장르: ${genre?.name} (속도 ${genre?.speed}x)
+이미지 프롬프트: ${scene.imagePrompt || '(없음)'}`;
+
+      const motionConti = await callGemini(PIPELINE_B_SYSTEM.motionConti, userInput, {thinkBudget:2048});
+      const ns = [...scenes];
+      ns[activeSceneIdx] = {...ns[activeSceneIdx], motionConti};
+      setScenes(ns);
+      addLog('info','[B-2] 모션 콘티 변환 완료 ✓');
+
+      // B-3: 영문 모션 프롬프트
+      setStep('B3');
+      addLog('api','[B-3] 영문 모션 프롬프트 생성...');
+      const modeInfo = `영상 모드: ${videoMode}, 오디오: ${audioEnabled?'ON':'OFF'}, 카메라 고정: ${cameraFixed?'ON':'OFF'}`;
+      const motionPrompt = await callGemini(PIPELINE_B_SYSTEM.motionPrompt, motionConti + '\n' + modeInfo, {thinkBudget:2048});
+
+      const ns2 = [...scenes];
+      ns2[activeSceneIdx] = {...ns2[activeSceneIdx], motionPrompt, videoMode, status:{...ns2[activeSceneIdx].status, video:'done'}};
+      setScenes(ns2);
+      addLog('info','[B-3] 영문 모션 프롬프트 생성 완료 ✓');
+      setStep('done');
+    } catch(err) {
+      addLog('error', `오류: ${err.message}`);
+      setStep('idle');
+    }
+    setProcessing(false);
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard?.writeText(text);
+    addLog('info','클립보드에 복사됨 ✓');
+  };
+
+  return (
+    <div>
+      <div className="pipeline-bar">
+        <div className={`pipeline-step ${scene.imagePrompt?'done':'pending'}`}>A완료 이미지</div>
+        <span className="pipeline-arrow">→</span>
+        <div className={`pipeline-step ${step==='B2'?'active':scene.motionConti?'done':'pending'}`}>B-2 모션콘티</div>
+        <span className="pipeline-arrow">→</span>
+        <div className={`pipeline-step ${step==='B3'?'active':scene.motionPrompt?'done':'pending'}`}>B-3 모션프롬프트</div>
+        <span className="pipeline-arrow">→</span>
+        <div className={`pipeline-step ${scene.videoUrl?'done':'pending'}`}>B-5 영상생성</div>
+      </div>
+
+      <div className="grid-32">
+        <div>
+          <div className="card">
+            <div className="card-title">🎬 영상 프롬프트 생성 <span className="badge">Pipeline B</span></div>
+
+            <div className="form-group">
+              <label className="form-label">장면 선택</label>
+              <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
+                {scenes.map((s,i)=>(
+                  <button key={i} className={`btn btn-sm ${i===activeSceneIdx?'btn-primary':'btn-secondary'}`} onClick={()=>setActiveSceneIdx(i)}>#{i+1}</button>
+                ))}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">영상 모드</label>
+              <div className="mode-grid">
+                {VIDEO_MODES.map(m=>(
+                  <div key={m.id} className={`mode-card ${videoMode===m.id?'active':''}`} onClick={()=>setVideoMode(m.id)}>
+                    <div className="mode-icon">{m.icon}</div>
+                    <div className="mode-name">{m.name}</div>
+                    <div className="mode-desc">{m.desc}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid-2" style={{marginBottom:14}}>
+              <div className="toggle-wrap">
+                <div className={`toggle ${audioEnabled?'on':''}`} onClick={()=>setAudioEnabled(!audioEnabled)}>
+                  <div className="toggle-knob"/>
+                </div>
+                <span style={{fontSize:13}}>🔊 오디오 포함</span>
+              </div>
+              <div className="toggle-wrap">
+                <div className={`toggle ${cameraFixed?'on':''}`} onClick={()=>setCameraFixed(!cameraFixed)}>
+                  <div className="toggle-knob"/>
+                </div>
+                <span style={{fontSize:13}}>📷 카메라 고정</span>
+              </div>
+            </div>
+
+            <button className="btn btn-primary btn-block" onClick={runPipelineB} disabled={processing || !scene.description}>
+              {processing ? <><span className="spinner"/> 변환 중...</> : '🎬 파이프라인 B 실행 (이미지→영상 프롬프트)'}
+            </button>
+
+            {scene.motionConti && (
+              <div className="result-panel">
+                <div className="result-label"><button className="copy-btn" onClick={()=>copyToClipboard(scene.motionConti)}>복사</button>B-2 모션 콘티 (KR)</div>
+                <div className="result-text korean">{scene.motionConti}</div>
+              </div>
+            )}
+            {scene.motionPrompt && (
+              <div className="result-panel" style={{marginTop:8}}>
+                <div className="result-label"><button className="copy-btn" onClick={()=>copyToClipboard(scene.motionPrompt)}>복사</button>B-3 영문 모션 프롬프트 (EN)</div>
+                <div className="result-text english">{scene.motionPrompt}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="card">
+            <div className="card-title">📹 카메라 워크 사전 <span className="badge">18종</span></div>
+            <CameraSelector value={scene.cameraHint||'static'} onChange={v=>{
+              const ns=[...scenes]; ns[activeSceneIdx]={...ns[activeSceneIdx],cameraHint:v}; setScenes(ns);
+            }}/>
+            {scene.cameraHint && (()=>{
+              const cam = CAMERA_DICT.find(c=>c.type===scene.cameraHint);
+              return cam ? (
+                <div className="result-panel" style={{marginTop:8}}>
+                  <div style={{fontSize:13}}><strong>{cam.icon} {cam.name}</strong></div>
+                  <div style={{fontSize:12,color:'var(--text2)'}}>{cam.desc}</div>
+                  <div className="result-text english" style={{marginTop:4,fontSize:11}}>{cam.prompt}</div>
+                </div>
+              ) : null;
+            })()}
+          </div>
+
+          <div className="card">
+            <div className="card-title">📊 장르 타이밍</div>
+            {Object.entries(GENRE_PRESETS).map(([k,v])=>(
+              <div key={k} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,opacity:scene.genre===k?1:0.5}}>
+                <span>{v.icon}</span>
+                <span style={{fontSize:12,width:50}}>{v.name}</span>
+                <div className="progress-bar" style={{flex:1}}>
+                  <div className="progress-fill" style={{width:`${v.speed/1.5*100}%`,background:scene.genre===k?'var(--accent)':'var(--border)'}}/>
+                </div>
+                <span style={{fontSize:11,fontWeight:700}}>{v.speed}x</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MODULE 4: 웹툰제작 워크벤치 (통합 파이프라인)
+// ============================================================
+
+function Workbench({scenes, setScenes, addLog}) {
+  const [running, setRunning] = useState(false);
+  const [currentScene, setCurrentScene] = useState(-1);
+  const [currentStep, setCurrentStep] = useState('');
+
+  const runFullPipeline = async () => {
+    if(scenes.every(s=>!s.description)) { addLog('warn','최소 1개 장면에 묘사를 입력하세요.'); return; }
+    setRunning(true);
+
+    for(let i = 0; i < scenes.length; i++) {
+      const sc = scenes[i];
+      if(!sc.description) continue;
+      setCurrentScene(i);
+
+      try {
+        // Pipeline A: A-2 콘티 변환
+        setCurrentStep('A-2');
+        addLog('api',`[장면 ${i+1}] A-2 콘티 변환 시작`);
+        const sfxList = (sc.sfxText||'').split(',').map(s=>s.trim()).filter(Boolean);
+        const dialogueText = (sc.dialogues||[]).map(d=>`[${d.type}] ${d.character}: ${d.text}`).join('\n');
+        const userInputA = `장면 묘사: ${sc.description}\n대사:\n${dialogueText}\n효과음: ${sfxList.join(', ')}\n감정: ${EXPR_LABELS[sc.emotionStart]||'미소'} → ${EXPR_LABELS[sc.emotionEnd]||'미소'}\n장르: ${GENRE_PRESETS[sc.genre]?.name||'로맨스'}`;
+
+        const convertedConti = await callGemini(PIPELINE_A_SYSTEM.contiConvert, userInputA, {thinkBudget:1024});
+
+        // A-3 이미지 프롬프트
+        setCurrentStep('A-3');
+        addLog('api',`[장면 ${i+1}] A-3 영문 이미지 프롬프트 생성`);
+        const imgResult = await callGemini(PIPELINE_A_SYSTEM.imagePrompt, convertedConti, {thinkBudget:1024});
+        const promptMatch = imgResult.match(/\[PROMPT\]:\s*([\s\S]*?)(?=\[NEGATIVE\])/);
+        const negMatch = imgResult.match(/\[NEGATIVE\]:\s*([\s\S]*?)(?=\[STYLE\])/);
+        const imagePrompt = promptMatch ? promptMatch[1].trim() : imgResult;
+        const imageNegative = negMatch ? negMatch[1].trim() : '';
+
+        addLog('info',`[장면 ${i+1}] Pipeline A 완료 ✓`);
+
+        // Pipeline B: B-2 모션 콘티
+        setCurrentStep('B-2');
+        addLog('api',`[장면 ${i+1}] B-2 모션 콘티 변환`);
+        const cam = CAMERA_DICT.find(c=>c.type===(sc.cameraHint||'static'));
+        const genre = GENRE_PRESETS[sc.genre||'romance'];
+        const userInputB = `장면: ${sc.description}\n대사: ${(sc.dialogues||[]).map(d=>`${d.character}: ${d.text}`).join('; ')}\n효과음: ${sfxList.join(', ')}\n감정: ${EXPR_LABELS[sc.emotionStart]} → ${EXPR_LABELS[sc.emotionEnd]}\n카메라: ${cam?.name}\n장르: ${genre?.name} (${genre?.speed}x)\n이미지 프롬프트: ${imagePrompt}`;
+
+        const motionConti = await callGemini(PIPELINE_B_SYSTEM.motionConti, userInputB, {thinkBudget:2048});
+
+        // B-3 영문 모션 프롬프트
+        setCurrentStep('B-3');
+        addLog('api',`[장면 ${i+1}] B-3 영문 모션 프롬프트 생성`);
+        const motionPrompt = await callGemini(PIPELINE_B_SYSTEM.motionPrompt, motionConti, {thinkBudget:2048});
+
+        addLog('info',`[장면 ${i+1}] Pipeline B 완료 ✓`);
+
+        // Update scene
+        const ns = [...scenes];
+        ns[i] = {...ns[i], convertedConti, imagePrompt, imageNegative, imagePromptFull:imgResult, motionConti, motionPrompt,
+          status:{conti:'done',image:'done',video:'done'}};
+        setScenes(ns);
+
+      } catch(err) {
+        addLog('error',`[장면 ${i+1}] 오류: ${err.message}`);
+        const ns = [...scenes];
+        ns[i] = {...ns[i], status:{...ns[i].status, conti:'error'}};
+        setScenes(ns);
+      }
+    }
+
+    setRunning(false);
+    setCurrentScene(-1);
+    setCurrentStep('');
+    addLog('info','🎉 전체 파이프라인 완료!');
+  };
+
+  const completedScenes = scenes.filter(s=>s.status?.video==='done').length;
+  const totalScenes = scenes.filter(s=>s.description).length;
+
+  return (
+    <div>
+      <div className="pipeline-bar">
+        <div className={`pipeline-step ${currentStep==='A-2'?'active':'pending'}`}>A-2 콘티변환</div>
+        <span className="pipeline-arrow">→</span>
+        <div className={`pipeline-step ${currentStep==='A-3'?'active':'pending'}`}>A-3 이미지프롬프트</div>
+        <span className="pipeline-arrow">→</span>
+        <div className="pipeline-step pending" style={{opacity:.4}}>A-4 이미지생성</div>
+        <span className="pipeline-arrow">→</span>
+        <div className={`pipeline-step ${currentStep==='B-2'?'active':'pending'}`}>B-2 모션콘티</div>
+        <span className="pipeline-arrow">→</span>
+        <div className={`pipeline-step ${currentStep==='B-3'?'active':'pending'}`}>B-3 모션프롬프트</div>
+        <span className="pipeline-arrow">→</span>
+        <div className="pipeline-step pending" style={{opacity:.4}}>B-5 영상생성</div>
+      </div>
+
+      <div className="stats-bar">
+        <div className="stat-item">장면: <span className="stat-value">{totalScenes}</span></div>
+        <div className="stat-item">완료: <span className="stat-value">{completedScenes}/{totalScenes}</span></div>
+        <div className="stat-item">장르: <span className="stat-value">{GENRE_PRESETS[scenes[0]?.genre]?.icon} {GENRE_PRESETS[scenes[0]?.genre]?.name}</span></div>
+        {running && <div className="stat-item"><span className="spinner"/> 장면 #{currentScene+1} — {currentStep}</div>}
+      </div>
+
+      <div className="card">
+        <div className="card-title">🔄 통합 파이프라인: 글콘티 → 이미지 → 영상
+          <button className="btn btn-primary" onClick={runFullPipeline} disabled={running} style={{marginLeft:'auto'}}>
+            {running ? <><span className="spinner"/> 처리 중...</> : '🚀 전체 실행'}
+          </button>
+        </div>
+
+        {totalScenes > 0 && (
+          <div className="progress-bar" style={{height:6,marginBottom:16}}>
+            <div className="progress-fill" style={{width:`${(completedScenes/totalScenes)*100}%`}}/>
+          </div>
+        )}
+
+        <div className="wb-timeline">
+          <div className="wb-scene-row" style={{fontWeight:700,fontSize:11,color:'var(--text2)',background:'var(--surface2)',borderRadius:'8px 8px 0 0'}}>
+            <div style={{textAlign:'center'}}>#</div>
+            <div>글콘티 / 구조화 콘티</div>
+            <div>이미지 프롬프트 (EN)</div>
+            <div>영상 모션 프롬프트 (EN)</div>
+          </div>
+          {scenes.map((sc,i)=>{
+            if(!sc.description) return null;
+            const isCurrent = running && currentScene === i;
+            return (
+              <div key={i} className="wb-scene-row" style={{background: isCurrent ? 'rgba(108,92,231,.05)' : 'transparent'}}>
+                <div className="wb-scene-num">{i+1}</div>
+                <div className={`wb-cell ${sc.convertedConti?'has-result':isCurrent&&(currentStep==='A-2')?'processing':''}`}>
+                  <div className="cell-label">글콘티 → 구조화</div>
+                  <div className="cell-content" style={{fontSize:11}}>
+                    {sc.convertedConti ? sc.convertedConti.substring(0,150)+'...' : sc.description.substring(0,80)+'...'}
+                  </div>
+                </div>
+                <div className={`wb-cell ${sc.imagePrompt?'has-result':isCurrent&&currentStep==='A-3'?'processing':''}`}>
+                  <div className="cell-label">이미지 프롬프트</div>
+                  <div className="cell-content" style={{fontSize:11,fontFamily:'monospace'}}>
+                    {sc.imagePrompt ? sc.imagePrompt.substring(0,150)+'...' : '—'}
+                  </div>
+                </div>
+                <div className={`wb-cell ${sc.motionPrompt?'has-result':isCurrent&&(currentStep==='B-2'||currentStep==='B-3')?'processing':''}`}>
+                  <div className="cell-label">모션 프롬프트</div>
+                  <div className="cell-content" style={{fontSize:11,fontFamily:'monospace'}}>
+                    {sc.motionPrompt ? sc.motionPrompt.substring(0,150)+'...' : '—'}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Expanded results */}
+      {scenes.some(s=>s.motionPrompt) && (
+        <div className="card" style={{marginTop:16}}>
+          <div className="card-title">📋 전체 결과 상세</div>
+          {scenes.map((sc,i)=>{
+            if(!sc.motionPrompt) return null;
+            return (
+              <div key={i} style={{marginBottom:20,paddingBottom:16,borderBottom:'1px solid var(--border)'}}>
+                <h4 style={{fontSize:14,marginBottom:8}}>장면 #{i+1}: {sc.description?.substring(0,60)}</h4>
+                <div className="grid-3">
+                  <div className="result-panel">
+                    <div className="result-label">구조화 콘티 (KR)</div>
+                    <div className="result-text korean" style={{fontSize:11,maxHeight:120,overflow:'auto'}}>{sc.convertedConti}</div>
+                  </div>
+                  <div className="result-panel">
+                    <div className="result-label">이미지 프롬프트 (EN)</div>
+                    <div className="result-text english" style={{fontSize:10,maxHeight:120,overflow:'auto'}}>{sc.imagePrompt}</div>
+                  </div>
+                  <div className="result-panel">
+                    <div className="result-label">모션 프롬프트 (EN)</div>
+                    <div className="result-text english" style={{fontSize:10,maxHeight:120,overflow:'auto'}}>{sc.motionPrompt}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN APP
+// ============================================================
+
+function App() {
+  const [activeTab, setActiveTab] = useState('conti');
+  const [scenes, setScenes] = useState([{
+    id:'scene_1', description:'', dialogues:[{type:'speech',character:'',text:''}],
+    sfx:[], sfxText:'', emotionStart:'smiling', emotionEnd:'smiling',
+    cameraHint:'static', genre:'romance',
+    convertedConti:'', imagePrompt:'', imageNegative:'', imagePromptFull:'',
+    motionConti:'', motionPrompt:'', imageUrl:'', videoUrl:'',
+    status:{conti:'idle',image:'idle',video:'idle'}
+  }]);
+  const [activeSceneIdx, setActiveSceneIdx] = useState(0);
+  const [logs, setLogs] = useState([]);
+
+  const addLog = useCallback((type, msg) => {
+    const now = new Date();
+    const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+    setLogs(prev => [...prev.slice(-100), {type, msg, time}]);
+  }, []);
+
+  const tabs = [
+    {id:'conti', label:'글콘티 에디터', icon:'📋'},
+    {id:'imageGen', label:'이미지G 생성기', icon:'🖼️'},
+    {id:'videoGen', label:'영상G 생성기', icon:'🎬'},
+    {id:'workbench', label:'웹툰제작 워크벤치', icon:'🔄'}
+  ];
+
+  return (
+    <div>
+      <div className="app-header">
+        <div className="app-logo">MoonTech Manager .AI <span>v1.0</span></div>
+        <div className="nav-tabs">
+          {tabs.map(t=>(
+            <button key={t.id} className={`nav-tab ${activeTab===t.id?'active':''}`} onClick={()=>setActiveTab(t.id)}>
+              <span className="tab-icon">{t.icon}</span>{t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="main-content">
+        {activeTab === 'conti' && (
+          <GlContiEditor scenes={scenes} setScenes={setScenes} activeSceneIdx={activeSceneIdx} setActiveSceneIdx={setActiveSceneIdx}/>
+        )}
+        {activeTab === 'imageGen' && (
+          <ImageGenerator scenes={scenes} setScenes={setScenes} activeSceneIdx={activeSceneIdx} setActiveSceneIdx={setActiveSceneIdx} addLog={addLog}/>
+        )}
+        {activeTab === 'videoGen' && (
+          <VideoGenerator scenes={scenes} setScenes={setScenes} activeSceneIdx={activeSceneIdx} setActiveSceneIdx={setActiveSceneIdx} addLog={addLog}/>
+        )}
+        {activeTab === 'workbench' && (
+          <Workbench scenes={scenes} setScenes={setScenes} addLog={addLog}/>
+        )}
+
+        {/* Log Panel */}
+        <div className="card" style={{marginTop:16}}>
+          <div className="card-title">🖥️ 시스템 로그
+            <button className="btn btn-sm btn-secondary" onClick={()=>setLogs([])} style={{marginLeft:'auto'}}>지우기</button>
+          </div>
+          <LogPanel logs={logs}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>
