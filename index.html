@@ -1964,6 +1964,16 @@ const runPhase1 = useCallback(async () => {
         React.createElement('input',{placeholder:'Project Title',value:projectTitle,onChange:e=>setProjectTitle(e.target.value),disabled:running,style:{background:'#0d1117',color:'#e6edf3',border:'1px solid #30363d',borderRadius:8,padding:'8px 12px',fontSize:13}}),
         React.createElement('textarea',{placeholder:'Enter full story/web novel text here...\n\nPaste the complete text for the AI to analyze.',value:sourceText,onChange:e=>setSourceText(e.target.value),disabled:running,style:{flex:1,background:'#0d1117',color:'#e6edf3',border:'1px solid #30363d',borderRadius:8,padding:12,fontSize:12,lineHeight:1.6,resize:'none',fontFamily:'inherit'}}),
         React.createElement('div',{style:{fontSize:11,color:'#484f58',textAlign:'right'}}, sourceText.length.toLocaleString()+' chars | '+lfScenes.length+' scenes'),
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:4}},
+            React.createElement('span',{style:{fontSize:12,color:'var(--text2)'}},'이미지 모델:'),
+            React.createElement('select',{value:imageProvider,onChange:e=>setImageProvider(e.target.value),disabled:running,style:{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,cursor:'pointer'}},
+              React.createElement('option',{value:'imagen4'},'Imagen 4'),
+              React.createElement('option',{value:'imagen4ultra'},'Imagen 4 Ultra'),
+              React.createElement('option',{value:'nanoBananaPro'},'Nano Banana Pro'),
+              React.createElement('option',{value:'nanoBanana'},'Nano Banana')
+            )
+          ),
+          
         React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
           !running && phase==='IDLE' && React.createElement('button',{onClick:runFullPipeline,disabled:!sourceText.trim(),style:{flex:1,padding:'10px 16px',background:'linear-gradient(135deg,#6c5ce7,#a29bfe)',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer',opacity:sourceText.trim()?1:0.4}},'Full Pipeline Start'),
           !running && phase==='ERROR' && React.createElement('button',{onClick:resumePipeline,style:{flex:1,padding:'10px 16px',background:'linear-gradient(135deg,#f0883e,#f9826c)',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}},'Resume from Error'),
