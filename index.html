@@ -3,234 +3,114 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>웹툰 생성기</title>
+<title>웹툰 프로덕션</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
 --bg:#f5f5fa;--surface:#ffffff;--surface2:#f0f0f8;--surface3:#e8e8f0;
 --border:#d0d0e0;--text:#1a1a2e;--text2:#666688;
 --accent:#6c5ce7;--accent2:#7c6cf7;
---romance:#e0457b;--action:#e03030;--horror:#8e44ad;--slice:#27ae60;--drama:#2980b9;
 --success:#00a8a8;--warn:#d4a017;--err:#e74c3c;
 --radius:12px;--shadow:0 2px 12px rgba(0,0,0,0.08);
 }
 body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 .app-header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow);}
-.app-logo{font-size:20px;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--romance));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.app-logo span{font-size:12px;font-weight:400;-webkit-text-fill-color:var(--text2);margin-left:4px;}
-.nav-tabs{display:flex;gap:4px;margin-left:24px;}
+.app-logo{font-size:20px;font-weight:800;background:linear-gradient(135deg,var(--accent),#e0457b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.nav-tabs{display:flex;gap:4px;margin-left:24px;flex:1;}
 .nav-tab{padding:8px 16px;border-radius:8px;border:none;background:transparent;color:var(--text2);cursor:pointer;font-size:13px;font-weight:600;transition:all .2s;}
 .nav-tab:hover{background:var(--surface2);color:var(--text);}
 .nav-tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
-.nav-tab .tab-icon{margin-right:6px;}
-.main-content{max-width:1400px;margin:0 auto;padding:20px;}
-
-/* Pipeline indicator */
-.pipeline-bar{display:flex;align-items:center;gap:0;margin-bottom:20px;background:var(--surface);border-radius:var(--radius);padding:12px 20px;border:1px solid var(--border);}
-.pipeline-step{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;transition:all .3s;}
-.pipeline-step.done{background:#e8f5e9;color:#2e7d32;}
-.pipeline-step.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 2px 8px rgba(108,92,231,.3);}
-.pipeline-step.pending{background:var(--surface2);color:var(--text2);}
-.pipeline-arrow{margin:0 4px;color:var(--text2);font-size:16px;}
-
-/* Cards and panels */
+.api-key-btn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;transition:all .2s;}
+.api-key-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.api-key-btn.connected{border-color:#27ae60;color:#27ae60;}
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text2);}
+.status-badge.running{background:#fff3cd;color:#856404;}
+.status-badge.done{background:#d4edda;color:#155724;}
+.status-badge.error{background:#f8d7da;color:#721c24;}
+.main-content{max-width:1400px;margin:0 auto;padding:20px;display:flex;flex-direction:column;height:calc(100vh - 80px);}
+.tabs-container{display:flex;gap:12px;height:100%;min-height:0;}
+.tab-content{flex:1;display:flex;flex-direction:column;gap:12px;overflow:hidden;}
+.tab-content.active{display:flex;}
+.tab-content.inactive{display:none;}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow);}
 .card-title{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
-.card-title .badge{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--accent);color:#fff;font-weight:600;}
-
-/* Form elements */
 .form-group{margin-bottom:14px;}
 .form-label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
 .form-input,.form-textarea,.form-select{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--text);transition:border-color .2s;}
 .form-input:focus,.form-textarea:focus,.form-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,92,231,.1);}
-.form-textarea{resize:vertical;min-height:80px;font-family:inherit;}
-
-/* Buttons */
+.form-textarea{resize:vertical;min-height:200px;font-family:inherit;}
 .btn{padding:10px 20px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px;}
 .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 2px 8px rgba(108,92,231,.3);}
 .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(108,92,231,.4);}
 .btn-primary:disabled{opacity:.5;transform:none;cursor:not-allowed;}
 .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
-.btn-secondary:hover{background:var(--surface3);}
-.btn-success{background:linear-gradient(135deg,#00a8a8,#00c9a7);color:#fff;}
+.btn-success{background:#27ae60;color:#fff;}
 .btn-danger{background:var(--err);color:#fff;}
 .btn-sm{padding:6px 12px;font-size:11px;}
 .btn-block{width:100%;}
-
-/* Grid */
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
-.grid-23{display:grid;grid-template-columns:2fr 3fr;gap:16px;}
-.grid-32{display:grid;grid-template-columns:3fr 2fr;gap:16px;}
-
-/* Genre chips */
-.genre-chips{display:flex;gap:6px;flex-wrap:wrap;}
-.genre-chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:2px solid transparent;transition:all .2s;}
-.genre-chip.romance{background:#fce4ec;color:var(--romance);border-color:transparent;}
-.genre-chip.romance.active{border-color:var(--romance);box-shadow:0 2px 8px rgba(224,69,123,.3);}
-.genre-chip.action{background:#ffebee;color:var(--action);}
-.genre-chip.action.active{border-color:var(--action);box-shadow:0 2px 8px rgba(224,48,48,.3);}
-.genre-chip.horror{background:#f3e5f5;color:var(--horror);}
-.genre-chip.horror.active{border-color:var(--horror);box-shadow:0 2px 8px rgba(142,68,173,.3);}
-.genre-chip.slice{background:#e8f5e9;color:var(--slice);}
-.genre-chip.slice.active{border-color:var(--slice);box-shadow:0 2px 8px rgba(39,174,96,.3);}
-.genre-chip.drama{background:#e3f2fd;color:var(--drama);}
-.genre-chip.drama.active{border-color:var(--drama);box-shadow:0 2px 8px rgba(41,128,185,.3);}
-
-/* Emotion selectors */
-.emotion-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;}
-.emotion-btn{padding:4px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:11px;text-align:center;transition:all .2s;}
-.emotion-btn:hover{border-color:var(--accent);}
-.emotion-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
-
-/* Scene list */
-.scene-list{display:flex;flex-direction:column;gap:8px;max-height:500px;overflow-y:auto;padding-right:4px;}
-.scene-item{padding:12px;border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:all .2s;background:var(--surface);}
-.scene-item:hover{border-color:var(--accent);}
-.scene-item.active{border-color:var(--accent);background:rgba(108,92,231,.05);box-shadow:0 0 0 3px rgba(108,92,231,.1);}
-.scene-item .scene-num{font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px;}
-.scene-item .scene-preview{font-size:12px;color:var(--text2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.scene-item .scene-status{display:flex;gap:4px;margin-top:6px;}
-.scene-item .status-dot{width:8px;height:8px;border-radius:50%;}
-.status-dot.empty{background:var(--border);}
-.status-dot.ready{background:var(--success);}
-.status-dot.processing{background:var(--warn);animation:pulse 1s infinite;}
-.status-dot.error{background:var(--err);}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
-
-/* Dialogue editor */
-.dialogue-list{display:flex;flex-direction:column;gap:6px;}
-.dialogue-row{display:flex;gap:8px;align-items:center;}
-.dialogue-row select{width:100px;padding:6px;border-radius:6px;border:1px solid var(--border);font-size:12px;}
-.dialogue-row input{flex:1;}
-.dialogue-row .remove-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--err);font-size:14px;}
-
-/* Result panels */
-.result-panel{background:var(--surface2);border-radius:8px;padding:14px;margin-top:12px;border:1px solid var(--border);}
-.result-label{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
-.result-text{font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
-.result-text.korean{color:#444;}
-.result-text.english{color:var(--text);font-family:'Consolas','Monaco',monospace;font-size:12px;}
-.copy-btn{padding:4px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);cursor:pointer;font-size:11px;color:var(--text2);float:right;}
-.copy-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
-
-/* Camera dictionary */
-.camera-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
-.camera-card{padding:8px;border-radius:6px;border:1px solid var(--border);cursor:pointer;text-align:center;font-size:11px;transition:all .2s;background:var(--surface);}
-.camera-card:hover{border-color:var(--accent);background:rgba(108,92,231,.05);}
-.camera-card.active{background:var(--accent);color:#fff;border-color:var(--accent);}
-.camera-card .cam-icon{font-size:16px;display:block;margin-bottom:2px;}
-
-/* Progress/Status */
-.progress-bar{height:4px;border-radius:2px;background:var(--surface3);overflow:hidden;margin-top:8px;}
+.scene-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}
+.scene-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;overflow:hidden;}
+.scene-card h3{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--accent);}
+.scene-card .scene-num{font-size:11px;color:var(--text2);}
+.scene-card .scene-summary{font-size:12px;color:var(--text);line-height:1.4;margin-bottom:10px;}
+.scene-card .scene-prompt{background:var(--surface2);border-radius:4px;padding:8px;font-size:11px;font-family:monospace;color:var(--text2);max-height:100px;overflow-y:auto;margin-bottom:8px;}
+.scene-card .scene-image{width:100%;aspect-ratio:16/9;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--text2);margin-bottom:8px;font-size:12px;}
+.scene-card .scene-image img{width:100%;height:100%;object-fit:cover;}
+.scene-card .scene-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.scene-card .scene-actions button{flex:1;min-width:60px;padding:6px 8px;font-size:11px;}
+.image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+.char-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;text-align:center;}
+.char-card img{width:100%;height:200px;object-fit:cover;}
+.char-card .card-content{padding:10px;}
+.char-card .char-name{font-weight:700;color:var(--text);font-size:12px;}
+.char-card .char-role{font-size:10px;color:var(--accent);margin-top:2px;}
+.char-card .char-desc{font-size:10px;color:var(--text2);margin-top:4px;}
+.bg-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;text-align:center;}
+.bg-card img{width:100%;height:180px;object-fit:cover;}
+.bg-card .card-content{padding:10px;}
+.bg-card .bg-name{font-weight:700;color:var(--text);font-size:12px;}
+.bg-card .bg-type{font-size:10px;color:var(--accent);margin-top:2px;}
+.progress-bar{height:4px;border-radius:2px;background:var(--surface3);overflow:hidden;margin-bottom:12px;}
 .progress-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--success));transition:width .5s ease;}
-.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;}
-.status-badge.idle{background:var(--surface2);color:var(--text2);}
-.status-badge.running{background:#fff3cd;color:#856404;}
-.status-badge.done{background:#d4edda;color:#155724;}
-.status-badge.error{background:#f8d7da;color:#721c24;}
-
-/* Workbench */
-.wb-timeline{display:flex;flex-direction:column;gap:0;}
-.wb-scene-row{display:grid;grid-template-columns:40px 1fr 1fr 1fr;gap:12px;padding:12px;border-bottom:1px solid var(--border);align-items:center;}
-.wb-scene-row:hover{background:rgba(108,92,231,.03);}
-.wb-scene-num{font-weight:700;color:var(--accent);font-size:14px;text-align:center;}
-.wb-cell{padding:8px;border-radius:6px;background:var(--surface2);font-size:12px;min-height:60px;position:relative;}
-.wb-cell .cell-label{font-size:10px;font-weight:700;color:var(--text2);text-transform:uppercase;margin-bottom:4px;}
-.wb-cell .cell-content{color:var(--text);line-height:1.5;}
-.wb-cell.has-result{background:#e8f5e9;border:1px solid #c8e6c9;}
-.wb-cell.processing{background:#fff3cd;border:1px solid #ffeeba;}
-.wb-cell.error{background:#f8d7da;border:1px solid #f5c6cb;}
-
-/* Template panel */
-.template-categories{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;}
-.template-cat{padding:4px 10px;border-radius:12px;font-size:11px;border:1px solid var(--border);cursor:pointer;background:var(--surface);transition:all .2s;}
-.template-cat.active{background:var(--accent);color:#fff;border-color:var(--accent);}
-.template-list{max-height:300px;overflow-y:auto;}
-.template-item{padding:8px;border-radius:6px;border:1px solid var(--border);margin-bottom:4px;cursor:pointer;font-size:12px;transition:all .2s;}
-.template-item:hover{border-color:var(--accent);}
-.template-item.active{background:rgba(108,92,231,.1);border-color:var(--accent);}
-.template-item .tpl-name{font-weight:600;}
-.template-item .tpl-desc{color:var(--text2);font-size:11px;margin-top:2px;}
-
-/* Image placeholder */
-.image-placeholder{width:100%;aspect-ratio:3/4;border-radius:8px;background:linear-gradient(135deg,var(--surface2),var(--surface3));border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text2);font-size:13px;gap:8px;}
-.image-result{width:100%;border-radius:8px;overflow:hidden;border:1px solid var(--border);}
-.image-result img{width:100%;display:block;}
-
-/* Mode selector */
-.mode-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
-.mode-card{padding:12px;border-radius:8px;border:2px solid var(--border);cursor:pointer;text-align:center;transition:all .2s;background:var(--surface);}
-.mode-card:hover{border-color:var(--accent);}
-.mode-card.active{border-color:var(--accent);background:rgba(108,92,231,.05);}
-.mode-card .mode-icon{font-size:24px;margin-bottom:4px;}
-.mode-card .mode-name{font-size:12px;font-weight:700;}
-.mode-card .mode-desc{font-size:10px;color:var(--text2);margin-top:2px;}
-
-/* Stats */
-.stats-bar{display:flex;gap:16px;padding:8px 16px;background:var(--surface);border-radius:8px;border:1px solid var(--border);font-size:12px;color:var(--text2);margin-bottom:16px;}
-.stat-item{display:flex;align-items:center;gap:4px;}
-.stat-value{font-weight:700;color:var(--text);}
-
-/* Log/console */
-.log-panel{background:#1a1a2e;border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;font-family:'Consolas','Monaco',monospace;font-size:11px;color:#a0a0c0;}
+.log-panel{background:#1a1a2e;border-radius:8px;padding:12px;max-height:150px;overflow-y:auto;font-family:'Consolas','Monaco',monospace;font-size:11px;color:#a0a0c0;border:1px solid var(--border);}
 .log-entry{margin-bottom:2px;line-height:1.4;}
-.log-entry .log-time{color:#666;margin-right:8px;}
 .log-entry.info{color:#69db7c;}
 .log-entry.warn{color:#ffd43b;}
 .log-entry.error{color:#ff6b6b;}
-.log-entry.api{color:#74c0fc;}
-
-/* Scrollbar */
-::-webkit-scrollbar{width:6px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-::-webkit-scrollbar-thumb:hover{background:var(--text2);}
-
-/* Toggle */
-.toggle-wrap{display:flex;align-items:center;gap:8px;}
-.toggle{position:relative;width:40px;height:22px;border-radius:11px;background:var(--border);cursor:pointer;transition:background .2s;}
-.toggle.on{background:var(--accent);}
-.toggle .toggle-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
-.toggle.on .toggle-knob{left:20px;}
-
-/* Spinner */
-.spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
-
-/* Responsive */
-@media(max-width:900px){
-.grid-2,.grid-3,.grid-23,.grid-32{grid-template-columns:1fr;}
-.mode-grid{grid-template-columns:repeat(2,1fr);}
-.camera-grid{grid-template-columns:repeat(2,1fr);}
-.emotion-grid{grid-template-columns:repeat(5,1fr);}
-.nav-tabs{overflow-x:auto;}
-}
-
-.api-key-btn{margin-left:auto;padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;transition:all .2s;}
-.api-key-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
-.api-key-btn.connected{border-color:#27ae60;color:#27ae60;}
-.api-key-btn.connected:hover{background:#27ae60;color:#fff;}
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000;}
 .modal-box{background:var(--surface);border-radius:16px;padding:28px;width:460px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.2);}
 .modal-title{font-size:18px;font-weight:700;margin-bottom:6px;}
 .modal-desc{font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.5;}
-.modal-input{width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;background:var(--surface2);color:var(--text);font-family:monospace;}
+.modal-input{width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;background:var(--surface2);color:var(--text);font-family:monospace;margin-bottom:12px;}
 .modal-input:focus{outline:none;border-color:var(--accent);}
 .modal-actions{display:flex;gap:10px;margin-top:16px;justify-content:flex-end;}
 .modal-actions button{padding:10px 20px;border-radius:8px;border:none;font-weight:600;cursor:pointer;font-size:13px;}
 .modal-actions .btn-save{background:var(--accent);color:#fff;}
 .modal-actions .btn-cancel{background:var(--surface2);color:var(--text2);}
-.modal-actions .btn-delete{background:var(--err);color:#fff;}
 .key-status{display:flex;align-items:center;gap:6px;margin:10px 0;font-size:12px;color:var(--text2);}
-.key-status .dot{width:8px;height:8px;border-radius:50%;}
+.key-status .dot{width:8px;height:8px;border-radius:50%;background:#e03030;}
 .key-status .dot.on{background:#27ae60;}
-.key-status .dot.off{background:var(--err);}
+.edit-prompt-area{display:flex;flex-direction:column;gap:8px;background:var(--surface2);padding:10px;border-radius:6px;}
+.edit-prompt-area textarea{padding:8px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:monospace;min-height:80px;}
+.edit-prompt-area .edit-btns{display:flex;gap:6px;}
+.edit-prompt-area button{padding:6px 12px;border-radius:4px;border:none;font-size:11px;cursor:pointer;font-weight:600;}
+.placeholder{padding:40px;text-align:center;color:var(--text2);font-size:13px;background:var(--surface);border-radius:8px;border:1px dashed var(--border);}
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:var(--text2);}
+@media(max-width:900px){
+.grid-2,.grid-3{grid-template-columns:1fr;}
+.scene-grid{grid-template-columns:1fr;}
+.nav-tabs{flex-wrap:wrap;}
+}
 </style>
 </head>
 <body>
@@ -250,7 +130,7 @@ function getFirebaseConfig() {
 }
 function saveFirebaseConfig(cfg) {
   localStorage.setItem('firebase_config', JSON.stringify(cfg));
-  _db = null; // reset
+  _db = null;
   initFirebase();
 }
 function initFirebase() {
@@ -269,7 +149,6 @@ function getDb() {
   return initFirebase();
 }
 
-// Firestore CRUD for projects
 async function fbListProjects() {
   const db = getDb();
   if (!db) throw new Error('Firebase not configured');
@@ -285,7 +164,6 @@ async function fbSaveProject(projectId, data) {
     ...data,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   };
-  // Remove large binary data (images/videos stored as base64) from main doc
   if (payload.scenes) {
     payload.sceneCount = payload.scenes.length;
   }
@@ -304,7 +182,6 @@ async function fbLoadProject(projectId) {
 async function fbDeleteProject(projectId) {
   const db = getDb();
   if (!db) throw new Error('Firebase not configured');
-  // Delete phase subcollections first
   const phases = await db.collection('webtoon_projects').doc(projectId).collection('phases').get();
   const batch = db.batch();
   phases.docs.forEach(d => batch.delete(d.ref));
@@ -337,23 +214,16 @@ async function fbListPhases(projectId) {
   return snap.docs.map(d => ({id: d.id, ...d.data()}));
 }
 
-// Initialize on load
-// Auto-load config from Vercel serverless API (env vars)
-// Falls back to localStorage if API unavailable (e.g. GitHub Pages)
 async function autoLoadServerConfig() {
   try {
     const res = await fetch('/api/firebase-config');
     if (!res.ok) throw new Error('API ' + res.status);
     const data = await res.json();
     console.log('[Config] Server config loaded:', data.status);
-
-    // Auto-configure Firebase
     if (data.firebase) {
       saveFirebaseConfig(data.firebase);
       console.log('[Config] Firebase auto-configured from server');
     }
-
-    // Auto-configure Vertex AI
     if (data.vertex) {
       if (data.vertex.projectId) localStorage.setItem('VERTEX_PROJECT_ID', data.vertex.projectId);
       if (data.vertex.location) localStorage.setItem('VERTEX_LOCATION', data.vertex.location);
@@ -362,179 +232,70 @@ async function autoLoadServerConfig() {
       console.log('[Config] Vertex AI auto-configured from server');
     }
   } catch(e) {
-    // API not available (GitHub Pages or local dev) - use localStorage
     console.log('[Config] Server config not available, using localStorage:', e.message);
     try { initFirebase(); } catch(e2) {}
   }
 }
 autoLoadServerConfig();
 
-
 const {useState,useCallback,useRef,useEffect,useMemo} = React;
 
 // ============================================================
-// PROMPT ENGINE LAYER
+// TOKEN & API KEY MANAGEMENT
 // ============================================================
 
-// API key stored in browser localStorage (never hardcoded)
-        // Token cache: avoid fetching a new token for every call
-    let _cachedToken = null;
-    let _tokenExpiry = 0;
+let _cachedToken = null;
+let _tokenExpiry = 0;
 
-    async function fetchFreshToken() {
-      const now = Date.now();
-      if (_cachedToken && _tokenExpiry > now + 300000) {
+async function fetchFreshToken() {
+  const now = Date.now();
+  if (_cachedToken && _tokenExpiry > now + 300000) {
+    return _cachedToken;
+  }
+  try {
+    const res = await fetch('/api/vertex-token');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.access_token) {
+        _cachedToken = data.access_token;
+        _tokenExpiry = now + (data.expires_in || 3600) * 1000;
+        localStorage.setItem('VERTEX_ACCESS_TOKEN', data.access_token);
+        console.log('[Token] Fresh token obtained from server');
         return _cachedToken;
       }
-      try {
-        const res = await fetch('/api/vertex-token');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.access_token) {
-            _cachedToken = data.access_token;
-            _tokenExpiry = now + (data.expires_in || 3600) * 1000;
-            localStorage.setItem('VERTEX_ACCESS_TOKEN', data.access_token);
-            console.log('[Token] Fresh token obtained from server (expires in ' + data.expires_in + 's)');
-            return _cachedToken;
-          }
-        }
-      } catch(e) {
-        console.warn('[Token] Server token fetch failed, falling back to localStorage:', e.message);
-      }
-      return localStorage.getItem('VERTEX_ACCESS_TOKEN');
     }
+  } catch(e) {
+    console.warn('[Token] Server token fetch failed, falling back to localStorage:', e.message);
+  }
+  return localStorage.getItem('VERTEX_ACCESS_TOKEN');
+}
+
 async function getVertexConfig() {
   const projectId = localStorage.getItem('VERTEX_PROJECT_ID');
   const location = localStorage.getItem('VERTEX_LOCATION') || 'us-central1';
   const accessToken = await fetchFreshToken();
-  if (!projectId || !accessToken) throw new Error('Vertex AI config not set. Set Project ID and Access Token.');
+  if (!projectId || !accessToken) throw new Error('Vertex AI config not set');
   return {projectId, location, accessToken};
 }
+
 async function getGeminiKey() {
   return (await getVertexConfig()).accessToken;
 }
+
 function setGeminiKey(k) { localStorage.setItem('GEMINI_API_KEY', k); }
 function hasGeminiKey() { return !!(localStorage.getItem('VERTEX_PROJECT_ID') || localStorage.getItem('GEMINI_API_KEY')); }
 
-// xAI (Grok) API Key Management
 function getXaiKey() {
   const k = localStorage.getItem('XAI_API_KEY');
   if (!k) throw new Error('XAI_KEY_MISSING');
   return k;
 }
+
 function setXaiKey(k) { localStorage.setItem('XAI_API_KEY', k); }
 function hasXaiKey() { return !!localStorage.getItem('XAI_API_KEY'); }
 
-// Genre presets
-const GENRE_PRESETS = {
-  romance: {name:'로맨스',speed:0.7,color:'romance',desc:'느린 감성적 페이스',icon:'💕'},
-  action: {name:'액션',speed:1.5,color:'action',desc:'빠르고 역동적',icon:'⚔️'},
-  horror: {name:'호러',speed:0.8,color:'horror',desc:'느린 긴장감, 급변',icon:'👻'},
-  sliceOfLife: {name:'일상',speed:1.0,color:'slice',desc:'자연스러운 리듬',icon:'☀️'},
-  drama: {name:'드라마',speed:0.9,color:'drama',desc:'감정선 중심',icon:'🎭'}
-};
-
-// Expressions (15)
-const EXPRESSIONS = [
-  'happy','sad','angry','surprised','fear',
-  'disgusted','smiling','crying','shouting','shy',
-  'confused','smirking','thinking','winking','sleeping'
-];
-const EXPR_LABELS = {
-  happy:'행복',sad:'슬픔',angry:'분노',surprised:'놀람',fear:'공포',
-  disgusted:'혐오',smiling:'미소',crying:'울음',shouting:'외침',shy:'수줍',
-  confused:'혼란',smirking:'능글',thinking:'생각',winking:'윙크',sleeping:'수면'
-};
-const EXPR_ICONS = {
-  happy:'😊',sad:'😢',angry:'😠',surprised:'😲',fear:'😨',
-  disgusted:'🤢',smiling:'😄',crying:'😭',shouting:'🗣️',shy:'😳',
-  confused:'😵',smirking:'😏',thinking:'🤔',winking:'😉',sleeping:'😴'
-};
-
-// Camera Dictionary (18)
-const CAMERA_DICT = [
-  {type:'static',name:'고정',icon:'📷',desc:'카메라 움직임 없음',prompt:'static shot, no camera movement'},
-  {type:'zoom_in',name:'줌 인',icon:'🔍',desc:'피사체에 가까이',prompt:'slow zoom in, gradually closer'},
-  {type:'zoom_out',name:'줌 아웃',icon:'🔭',desc:'넓은 화면으로',prompt:'zoom out revealing wider scene'},
-  {type:'pan_left',name:'팬 좌',icon:'⬅️',desc:'좌로 수평 이동',prompt:'camera pans left horizontally'},
-  {type:'pan_right',name:'팬 우',icon:'➡️',desc:'우로 수평 이동',prompt:'camera pans right horizontally'},
-  {type:'tilt_up',name:'틸트 업',icon:'⬆️',desc:'위로 수직 이동',prompt:'camera tilts upward vertically'},
-  {type:'tilt_down',name:'틸트 다운',icon:'⬇️',desc:'아래로 수직',prompt:'camera tilts downward'},
-  {type:'dolly_forward',name:'달리 전진',icon:'🎬',desc:'피사체 방향 전진',prompt:'dolly forward toward subject'},
-  {type:'dolly_backward',name:'달리 후진',icon:'🔙',desc:'피사체에서 후진',prompt:'dolly backward from subject'},
-  {type:'tracking',name:'트래킹',icon:'🏃',desc:'피사체 추적',prompt:'tracking shot following subject movement'},
-  {type:'orbit',name:'궤도',icon:'🔄',desc:'피사체 주위 회전',prompt:'orbiting around the subject'},
-  {type:'crane_up',name:'크레인 업',icon:'🏗️',desc:'높이 올라감',prompt:'crane shot rising upward'},
-  {type:'crane_down',name:'크레인 다운',icon:'⏬',desc:'높이 내려옴',prompt:'crane shot descending'},
-  {type:'shake',name:'핸듘헬드',icon:'📳',desc:'손떨림 효과',prompt:'handheld shaky camera for intensity'},
-  {type:'dutch',name:'더치 앵글',icon:'📐',desc:'기울어진 앵글',prompt:'dutch angle tilted frame for unease'},
-  {type:'rack_focus',name:'랙 포커스',icon:'🎯',desc:'초점 전환',prompt:'rack focus shifting from foreground to background'},
-  {type:'whip_pan',name:'휘팬',icon:'💨',desc:'빠른 수평 전환',prompt:'whip pan fast horizontal transition'},
-  {type:'push_pull',name:'푸시풀',icon:'↔️',desc:'줌+달리 혼합',prompt:'push-pull dolly zoom vertigo effect'}
-];
-
-// Image Template Categories (84 templates across 6 categories)
-const IMAGE_TEMPLATE_CATEGORIES = [
-  {id:'character',name:'캐릭터조작',icon:'👤',count:18,templates:[
-    {id:'char_emotion',name:'표정 변화',desc:'캐릭터 표정을 세밀하게 지시'},
-    {id:'char_pose',name:'포즈 지정',desc:'전신/반신 포즈 상세 지시'},
-    {id:'char_outfit',name:'의상 변경',desc:'캐릭터 복장 스타일 변경'},
-    {id:'char_age',name:'연령 변환',desc:'캐릭터 나이 조절'},
-    {id:'char_hair',name:'헤어스타일',desc:'머리 색상/스타일 변경'},
-    {id:'char_multi',name:'다중 캐릭터',desc:'2인 이상 장면 배치'}
-  ]},
-  {id:'style',name:'스타일전환',icon:'🎨',count:14,templates:[
-    {id:'style_anime',name:'애니메이션',desc:'일본 애니 스타일'},
-    {id:'style_manhwa',name:'만화/웹툰',desc:'한국 웹툰 스타일'},
-    {id:'style_realistic',name:'실사풍',desc:'사실적 렌더링'},
-    {id:'style_watercolor',name:'수채화',desc:'수채화 텍스처'},
-    {id:'style_pixel',name:'픽셀아트',desc:'도트 그래픽 스타일'},
-    {id:'style_ghibli',name:'지브리풍',desc:'스튜디오 지브리 느낌'}
-  ]},
-  {id:'coloring',name:'채색',icon:'🖌️',count:12,templates:[
-    {id:'color_full',name:'풀컬러',desc:'완전 채색'},
-    {id:'color_mono',name:'흑백',desc:'흑백 톤'},
-    {id:'color_sepia',name:'세피아',desc:'갈색 톤'},
-    {id:'color_pastel',name:'파스텔',desc:'부드러운 색감'},
-    {id:'color_vivid',name:'비비드',desc:'선명한 원색'},
-    {id:'color_neon',name:'네온',desc:'발광 네온 효과'}
-  ]},
-  {id:'background',name:'배경',icon:'🏞️',count:16,templates:[
-    {id:'bg_city',name:'도시',desc:'현대 도시 배경'},
-    {id:'bg_nature',name:'자연',desc:'자연 풍경 배경'},
-    {id:'bg_indoor',name:'실내',desc:'실내 공간 배경'},
-    {id:'bg_fantasy',name:'판타지',desc:'환상적 배경'},
-    {id:'bg_school',name:'학교',desc:'학교/교실 배경'},
-    {id:'bg_night',name:'야경',desc:'밤 도시/하늘 배경'}
-  ]},
-  {id:'editing',name:'편집',icon:'✂️',count:12,templates:[
-    {id:'edit_split',name:'분할',desc:'화면 분할 구도'},
-    {id:'edit_effect',name:'이펙트',desc:'빛/파티클 효과'},
-    {id:'edit_text',name:'텍스트',desc:'대사/효과음 배치'},
-    {id:'edit_border',name:'테두리',desc:'프레임/보더 효과'},
-    {id:'edit_overlay',name:'오버레이',desc:'레이어 합성'},
-    {id:'edit_filter',name:'필터',desc:'컬러 그레이딩'}
-  ]},
-  {id:'pose',name:'포즈',icon:'🤸',count:12,templates:[
-    {id:'pose_action',name:'액션',desc:'전투/역동적 포즈'},
-    {id:'pose_daily',name:'일상',desc:'자연스러운 일상 포즈'},
-    {id:'pose_romantic',name:'로맨틱',desc:'연인 포즈'},
-    {id:'pose_group',name:'단체',desc:'그룹 포즈 배치'},
-    {id:'pose_closeup',name:'클로즈업',desc:'얼굴/상반신 클로즈업'},
-    {id:'pose_dynamic',name:'역동',desc:'달리기/점프 동작'}
-  ]}
-];
-
-// Video modes
-const VIDEO_MODES = [
-  {id:'single',name:'Single',desc:'이미지 1장 기반',icon:'🖼️'},
-  {id:'firstLast',name:'First-Last',desc:'시작/끝 2장',icon:'🔀'},
-  {id:'advanced',name:'Advanced',desc:'고급 제어',icon:'⚙️'},
-  {id:'advancedAudio',name:'Audio+',desc:'오디오 포함',icon:'🔊'}
-];
-
 // ============================================================
-// GEMINI API CLIENT
+// API CLIENTS
 // ============================================================
 
 async function callGemini(systemPrompt, userPrompt, opts={}) {
@@ -563,53 +324,41 @@ async function callGemini(systemPrompt, userPrompt, opts={}) {
   return textParts.map(p => p.text).join('');
 }
 
-// ============================================================
-// IMAGEN API CLIENT (A-4: 이미지 생성)
-// ============================================================
-
 async function callImagen(prompt, opts = {}) {
-    const {projectId, location, accessToken} = await getVertexConfig();
-    const model = opts.model || 'imagen-4.0-ultra-generate-001';
-    console.log('[Imagen] Using model via Vertex AI: ' + model);
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
-    const body = {instances:[{prompt}], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
-    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error('Imagen API ' + res.status + ': ' + errText.substring(0, 200));
-    }
-    const data = await res.json();
-    const predictions = data.predictions;
-    if (!predictions || predictions.length === 0) throw new Error('No predictions returned');
-    console.log('[Imagen] Success with model: ' + model);
-    return predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
+  const {projectId, location, accessToken} = await getVertexConfig();
+  const model = opts.model || 'imagen-4.0-ultra-generate-001';
+  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
+  const body = {instances:[{prompt}], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
+  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error('Imagen API ' + res.status + ': ' + errText.substring(0, 200));
   }
+  const data = await res.json();
+  const predictions = data.predictions;
+  if (!predictions || predictions.length === 0) throw new Error('No predictions returned');
+  return predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
+}
 
-  async function callNanoBanana(prompt, opts = {}) {
-    const {projectId, location, accessToken} = await getVertexConfig();
-    const model = opts.model || 'gemini-2.0-flash-preview-image-generation';
-    console.log('[NanoBanana] Generating image via Vertex AI: ' + model);
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
-    const body = {
-      contents: [{role:'user', parts:[{text: prompt}]}],
-      generationConfig: {responseModalities: ['TEXT','IMAGE'], temperature: 1.0}
-    };
-    const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error('NanoBanana API ' + res.status + ': ' + errText.substring(0, 200));
-    }
-    const data = await res.json();
-    const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
-    const imgParts = parts.filter(p => p.inlineData && p.inlineData.mimeType && p.inlineData.mimeType.startsWith('image/'));
-    if (imgParts.length === 0) throw new Error('No image generated');
-    console.log('[NanoBanana] Success, got ' + imgParts.length + ' image(s)');
-    return imgParts.map(p => `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`);
+async function callNanoBanana(prompt, opts = {}) {
+  const {projectId, location, accessToken} = await getVertexConfig();
+  const model = opts.model || 'gemini-2.0-flash-preview-image-generation';
+  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+  const body = {
+    contents: [{role:'user', parts:[{text: prompt}]}],
+    generationConfig: {responseModalities: ['TEXT','IMAGE'], temperature: 1.0}
+  };
+  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error('NanoBanana API ' + res.status + ': ' + errText.substring(0, 200));
   }
-
-  // ============================================================
-// GROK IMAGE API CLIENT (xAI Aurora)
-// ============================================================
+  const data = await res.json();
+  const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+  const imgParts = parts.filter(p => p.inlineData && p.inlineData.mimeType && p.inlineData.mimeType.startsWith('image/'));
+  if (imgParts.length === 0) throw new Error('No image generated');
+  return imgParts.map(p => `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`);
+}
 
 async function callGrokImage(prompt, opts={}) {
   const xaiKey = getXaiKey();
@@ -637,10 +386,6 @@ async function callGrokImage(prompt, opts={}) {
   if(images.length === 0) throw new Error('Grok 이미지 생성 결과가 없습니다.');
   return images.map(img => img.url || `data:image/jpeg;base64,${img.b64_json}`);
 }
-
-// ============================================================
-// GROK CHAT API CLIENT (xAI Grok Text)
-// ============================================================
 
 async function callGrok(systemPrompt, userPrompt, opts={}) {
   const xaiKey = getXaiKey();
@@ -671,10 +416,6 @@ async function callGrok(systemPrompt, userPrompt, opts={}) {
   return data.choices?.[0]?.message?.content || '';
 }
 
-// ============================================================
-// VEO API CLIENT (B-5: 영상 생성)
-// ============================================================
-
 async function callVeo(prompt, imageBase64, opts={}) {
   const {projectId, location, accessToken} = await getVertexConfig();
   const model = opts.model || 'veo-2.0-generate-001';
@@ -682,9 +423,8 @@ async function callVeo(prompt, imageBase64, opts={}) {
   const instances = [{prompt: prompt}];
   if(imageBase64) {
     let b64 = imageBase64.replace(/^data:image\/[^;]+;base64,/,'');
-    // Limit image size to prevent request too large errors
     if (b64.length > 5000000) {
-      console.warn('[callVeo] Image base64 too large (' + Math.round(b64.length/1024/1024) + 'MB), generating without image');
+      console.warn('[callVeo] Image base64 too large');
     } else {
       instances[0].image = {bytesBase64Encoded: b64, mimeType: 'image/png'};
     }
@@ -697,42 +437,39 @@ async function callVeo(prompt, imageBase64, opts={}) {
       durationSeconds: opts.duration || 5
     }
   };
-  let res;
-  try {
-    res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
-  } catch(fetchErr) {
-    throw new Error('Veo API network error (Failed to fetch). Check: 1) Access token valid 2) Veo API enabled in GCP project 3) Browser CORS. Detail: ' + fetchErr.message);
-  }
-  if(!res.ok) {
+  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
+  if (!res.ok) {
     const errText = await res.text();
-    throw new Error('Veo API ' + res.status + ': ' + errText.substring(0, 300));
+    throw new Error('Veo API ' + res.status + ': ' + errText.substring(0, 200));
   }
   const opData = await res.json();
-  const opName = opData.name;
-  if(!opName) throw new Error('No operation name returned');
-  const pollUrl = `https://${location}-aiplatform.googleapis.com/v1/${opName}`;
-  for(let i = 0; i < 60; i++) {
-    await new Promise(r => setTimeout(r, 5000));
-    let pollRes;
-    try {
-      pollRes = await fetch(pollUrl, {headers:{'Authorization':'Bearer '+accessToken}});
-    } catch(pe) { console.warn('[callVeo] Poll fetch error: ' + pe.message); continue; }
-    if(!pollRes.ok) continue;
+  if (!opData.name) throw new Error('No operation name returned');
+  const pollUrl = `https://${location}-aiplatform.googleapis.com/v1/${opData.name}`;
+  let attempt = 0;
+  while(attempt < 30) {
+    await new Promise(r => setTimeout(r, 2000));
+    const pollRes = await fetch(pollUrl, {method:'GET', headers:{'Authorization':'Bearer '+accessToken}});
+    if (!pollRes.ok) throw new Error('Poll failed: ' + pollRes.status);
     const pollData = await pollRes.json();
-    if(pollData.done) {
-      const predictions = pollData.response && pollData.response.predictions;
-      if(!predictions || predictions.length === 0) throw new Error('No video generated');
-      return predictions.map(p => p.videoUri || ('data:video/mp4;base64,' + p.bytesBase64Encoded));
+    if (pollData.done) {
+      if (pollData.response) {
+        const predictions = pollData.response.predictions || [];
+        if (predictions.length > 0 && predictions[0].mpeg4Bytes) {
+          return predictions[0].mpeg4Bytes;
+        }
+      }
+      throw new Error('No video generated');
     }
+    attempt++;
   }
-  throw new Error('Video generation timed out');
+  throw new Error('Veo generation timeout');
 }
+
 // ============================================================
-// PIPELINE A: 글콘티 → 이미지 프롬프트
+// CONSTANTS & PROMPTS
 // ============================================================
 
 const PIPELINE_A_SYSTEM = {
-  // Scene splitting for LongForm Phase 2 - outputs JSON
   sceneSplit: `You are an expert story analyst. Split the given story/script into individual scenes for webtoon production.
 
 CRITICAL: You MUST respond with ONLY a valid JSON array. No markdown, no explanation, no code fences.
@@ -751,27 +488,10 @@ Example output format:
 
 Split the story naturally by location changes, time jumps, or dramatic beats.
 Respond with ONLY the JSON array.`,
-  // A-2: 콘티 변환
-  contiConvert: `당신은 웹툰/만화 글콘티를 구조화된 형식으로 변환하는 전문가입틈다.
 
-입력된 장면 정보(묘사, 대사, 효과음, 감정)를 분석하여 이미지 생성에 최적화된 구조화된 콘티로 변환합니다.
-
-출력 형식:
-[장면 구성]
-- 화면구도: (클로즈업/미디엄/풀샷/버드아이 등)
-- 인물수: N명
-- 인물배치: (좌/중/우, 전경/배경)
-- 표정/포즈: (상세)
-- 배경요소: (구체적)
-- 조명/분위기: (구체적)
-- 특수효과: (있다면)
-
-반드시 한국어로 출력하세요.`,
-
-  // A-3: 영문 이미지 프롬프트 변환
   imagePrompt: `You are an expert image generation prompt engineer specializing in webtoon/manga style artwork.
 
-Convert the structured Korean scene description into an optimized English prompt for image generation (Grok or Stable Diffusion).
+Convert the structured Korean scene description into an optimized English prompt for image generation.
 
 Rules:
 1. Maximum 200 words
@@ -779,15 +499,8 @@ Rules:
 3. Include art style, composition, lighting, mood
 4. Use comma-separated descriptive tags
 5. Add quality boosters: masterpiece, best quality, highly detailed
-6. Specify aspect ratio hint if relevant (webtoon=portrait 3:4, manga=portrait 2:3)
+6. Specify aspect ratio hint if relevant (webtoon=portrait 3:4)
 7. Include negative prompt suggestions after [NEGATIVE]:
-
-Genre-specific adjustments:
-- Romance: soft lighting, warm colors, bokeh backgrounds
-- Action: dynamic angles, motion blur, impact effects
-- Horror: dark atmosphere, desaturated, dramatic shadows
-- Slice of Life: natural lighting, warm palette, cozy atmosphere
-- Drama: cinematic lighting, deep shadows, emotional contrast
 
 Output format:
 [PROMPT]: (the prompt)
@@ -796,37 +509,10 @@ Output format:
 [RATIO]: (recommended aspect ratio)`
 };
 
-// ============================================================
-// PIPELINE B: 이미지 → 영상 프롬프트
-// ============================================================
-
 const PIPELINE_B_SYSTEM = {
-  // B-2: 모션 콘티 변환
-  motionConti: `당신은 웹툰/만화 장면을 영상용 모션 콘티로 변환하는 전문가입니다.
-
-입력: 장면 묘사, 대사, 효과음, 감정 전환, 이미지 설명
-출력: 영상 제작용 모션 콘티 (한국어)
-
-분석 항목:
-1. 주요 동작 (Primary Action): 캐릭터의 핵심 움직임
-2. 부수 모션 (Secondary Motion): 물리적 부수 움직임 (머리카락, 옷, 배경 등)
-3. 카메라 워크: 추천 카메라 움직임 + 속도 + 이징
-4. 타이밍: 장르별 속도감
-5. 감정 흐름: 시작→끝 감정 전환의 시각적 표현
-6. 효과음→모션 매핑: SFX를 시각적 모션으로
-
-출력 형식:
-[주요동작] (상세 설명)
-[부수모션] (물리 시뮬레이션 요소)
-[카메라] (타입 / 속도 / 이징)
-[타이밍] (장르 기반 속도)
-[감정흐름] (시작→끝 시각 표현)
-[SFX모션] (효과음별 모션 매핑)`,
-
-  // B-3: 영문 모션 프롬프트 변환
   motionPrompt: `You are an expert video generation prompt engineer.
 
-Convert Korean motion conti into an optimized English motion prompt for AI video generation.
+Convert scene description into an optimized English motion prompt for AI video generation.
 
 Rules:
 1. Maximum 80 words (video models have strict limits)
@@ -835,904 +521,10 @@ Rules:
 4. Include camera movement instruction
 5. Specify physics: hair flow, cloth movement, particle effects
 6. Temporal flow: start state → action → end state
-7. Do NOT describe the image itself (the image is provided separately)
-
-Structure:
-[MOTION]: Primary character/object motion
-[PHYSICS]: Secondary physical motions
-[CAMERA]: Camera work directive
-[TEMPORAL]: Timeline description (X seconds)
-[MOOD]: Emotional atmosphere shift
-
-Genre modifiers:
-- Romance (0.7x speed): gentle, flowing, soft transitions
-- Action (1.5x speed): explosive, sharp, impactful
-- Horror (0.8x speed): creeping, subtle, sudden burst
-- Slice of Life (1.0x): natural, casual, breathing room
-- Drama (0.9x): measured, weighted, emotionally charged
+7. Do NOT describe the image itself
 
 Final output: Single paragraph, English only, ≤80 words.`
 };
-
-// ============================================================
-// CONTEXT ANALYZER
-// ============================================================
-
-function analyzeContext(scene) {
-  const desc = (scene.description||'').toLowerCase();
-  const sfxCount = (scene.sfx||[]).length;
-  const dialogueCount = (scene.dialogues||[]).length;
-
-  // Action keywords
-  const actionWords = ['싸움','전투','달리','폭발','충돌','격투','추격','점프','공격','방어','파괴'];
-  const actionScore = actionWords.reduce((s,w)=>s+(desc.includes(w)?0.15:0),0);
-  const actionLevel = Math.min(1, actionScore + sfxCount*0.1);
-
-  // Emotion intensity from transition
-  const emotionStart = scene.emotionStart || 'smiling';
-  const emotionEnd = scene.emotionEnd || 'smiling';
-  const emotionDiff = emotionStart !== emotionEnd ? 0.6 : 0.2;
-  const highEmotions = ['crying','shouting','angry','fear','surprised'];
-  const emotionalIntensity = Math.min(1, emotionDiff + (highEmotions.includes(emotionEnd)?0.3:0));
-
-  const dialogueRatio = dialogueCount / (dialogueCount + sfxCount + 1);
-
-  // Recommend mode
-  let recommendedMode = 'single';
-  if(actionLevel > 0.7) recommendedMode = 'advanced';
-  else if(emotionalIntensity > 0.7) recommendedMode = 'advancedAudio';
-
-  // Recommend camera
-  let recommendedCamera = 'static';
-  if(actionLevel > 0.5) recommendedCamera = 'tracking';
-  else if(emotionalIntensity > 0.6) recommendedCamera = 'zoom_in';
-  else if(desc.includes('풍경')||desc.includes('전경')) recommendedCamera = 'pan_right';
-
-  return {actionLevel, emotionalIntensity, dialogueRatio, recommendedMode, recommendedCamera};
-}
-
-// ============================================================
-// COMPONENTS
-// ============================================================
-
-// --- Log Panel ---
-function LogPanel({logs}) {
-  const ref = useRef();
-  useEffect(()=>{if(ref.current) ref.current.scrollTop = ref.current.scrollHeight;},[logs]);
-  return (
-    <div className="log-panel" ref={ref}>
-      {logs.map((l,i)=>(
-        <div key={i} className={`log-entry ${l.type}`}>
-          <span className="log-time">{l.time}</span>{l.msg}
-        </div>
-      ))}
-      {logs.length===0 && <div className="log-entry">대기 중...</div>}
-    </div>
-  );
-}
-
-// --- Genre Selector ---
-function GenreSelector({value, onChange}) {
-  return (
-    <div className="genre-chips">
-      {Object.entries(GENRE_PRESETS).map(([k,v])=>(
-        <div key={k} className={`genre-chip ${v.color} ${value===k?'active':''}`} onClick={()=>onChange(k)}>
-          {v.icon} {v.name}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// --- Emotion Picker ---
-function EmotionPicker({value, onChange, label}) {
-  return (
-    <div>
-      <div className="form-label">{label}</div>
-      <div className="emotion-grid">
-        {EXPRESSIONS.map(e=>(
-          <div key={e} className={`emotion-btn ${value===e?'active':''}`} onClick={()=>onChange(e)}>
-            {EXPR_ICONS[e]}<br/>{EXPR_LABELS[e]}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// --- Camera Selector ---
-function CameraSelector({value, onChange}) {
-  return (
-    <div className="camera-grid">
-      {CAMERA_DICT.map(c=>(
-        <div key={c.type} className={`camera-card ${value===c.type?'active':''}`} onClick={()=>onChange(c.type)}>
-          <span className="cam-icon">{c.icon}</span>
-          {c.name}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// --- Dialogue Editor ---
-function DialogueEditor({dialogues, onChange}) {
-  const add = () => onChange([...dialogues, {type:'speech',character:'',text:''}]);
-  const remove = (i) => onChange(dialogues.filter((_,j)=>j!==i));
-  const update = (i, field, val) => {
-    const nd = [...dialogues];
-    nd[i] = {...nd[i],[field]:val};
-    onChange(nd);
-  };
-  return (
-    <div>
-      <div className="dialogue-list">
-        {dialogues.map((d,i)=>(
-          <div key={i} className="dialogue-row">
-            <select value={d.type} onChange={e=>update(i,'type',e.target.value)}>
-              <option value="speech">대사</option>
-              <option value="thought">속마음</option>
-              <option value="offscreen">화면밖</option>
-              <option value="narration">나레이션</option>
-            </select>
-            <input className="form-input" placeholder="캐릭터명" value={d.character} onChange={e=>update(i,'character',e.target.value)} style={{width:'80px',flex:'none'}}/>
-            <input className="form-input" placeholder="대사 내용" value={d.text} onChange={e=>update(i,'text',e.target.value)}/>
-            <button className="remove-btn" onClick={()=>remove(i)}>×</button>
-          </div>
-        ))}
-      </div>
-      <button className="btn btn-secondary btn-sm" onClick={add} style={{marginTop:6}}>+ 대사 추가</button>
-    </div>
-  );
-}
-
-// ============================================================
-// MODULE 1: 글콘티 에디터
-// ============================================================
-
-function GlContiEditor({scenes, setScenes, activeSceneIdx, setActiveSceneIdx}) {
-  const scene = scenes[activeSceneIdx] || {};
-
-  const updateScene = (field, val) => {
-    const ns = [...scenes];
-    ns[activeSceneIdx] = {...ns[activeSceneIdx], [field]:val};
-    setScenes(ns);
-  };
-
-  const addScene = () => {
-    setScenes([...scenes, {
-      id: `scene_${Date.now()}`,
-      description:'', dialogues:[{type:'speech',character:'',text:''}],
-      sfx:[], sfxText:'',
-      emotionStart:'smiling', emotionEnd:'smiling',
-      cameraHint:'static', genre:'romance',
-      // Pipeline results
-      convertedConti:'', imagePrompt:'', imageNegative:'',
-      motionConti:'', motionPrompt:'',
-      imageUrl:'', videoUrl:'',
-      status:{conti:'idle',image:'idle',video:'idle'}
-    }]);
-    setActiveSceneIdx(scenes.length);
-  };
-
-  const removeScene = (i) => {
-    if(scenes.length <= 1) return;
-    const ns = scenes.filter((_,j)=>j!==i);
-    setScenes(ns);
-    if(activeSceneIdx >= ns.length) setActiveSceneIdx(ns.length-1);
-  };
-
-  return (
-    <div className="grid-23">
-      <div>
-        <div className="card">
-          <div className="card-title">📋 장면 목록 <span className="badge">{scenes.length}장면</span></div>
-          <div className="scene-list">
-            {scenes.map((s,i)=>(
-              <div key={i} className={`scene-item ${i===activeSceneIdx?'active':''}`} onClick={()=>setActiveSceneIdx(i)}>
-                <div className="scene-num">
-                  장면 #{i+1}
-                  {scenes.length>1 && <button className="remove-btn" onClick={e=>{e.stopPropagation();removeScene(i);}} style={{float:'right',width:20,height:20,fontSize:12}}>×</button>}
-                </div>
-                <div className="scene-preview">{s.description || '(빈 장면)'}</div>
-                <div className="scene-status">
-                  <div className={`status-dot ${s.status?.conti==='done'?'ready':s.status?.conti==='running'?'processing':'empty'}`} title="콘티"/>
-                  <div className={`status-dot ${s.status?.image==='done'?'ready':s.status?.image==='running'?'processing':'empty'}`} title="이미지"/>
-                  <div className={`status-dot ${s.status?.video==='done'?'ready':s.status?.video==='running'?'processing':'empty'}`} title="영상"/>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button className="btn btn-secondary btn-block" onClick={addScene} style={{marginTop:8}}>+ 장면 추가</button>
-        </div>
-      </div>
-
-      <div>
-        <div className="card">
-          <div className="card-title">✏️ 장면 #{activeSceneIdx+1} 편집</div>
-
-          <div className="form-group">
-            <label className="form-label">장르</label>
-            <GenreSelector value={scene.genre||'romance'} onChange={v=>updateScene('genre',v)}/>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">장면 묘사 (한국어)</label>
-            <textarea className="form-textarea" rows={4} placeholder="장면을 상세히 묘사하세요. 배경, 인물, 상황 등..." value={scene.description||''} onChange={e=>updateScene('description',e.target.value)}/>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">대사</label>
-            <DialogueEditor dialogues={scene.dialogues||[]} onChange={v=>updateScene('dialogues',v)}/>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">효과음 (SFX) — 쉼표로 구분</label>
-            <input className="form-input" placeholder="쾅, 우르르, 바스락..." value={scene.sfxText||''} onChange={e=>updateScene('sfxText',e.target.value)}/>
-          </div>
-
-          <div className="grid-2">
-            <EmotionPicker value={scene.emotionStart||'smiling'} onChange={v=>updateScene('emotionStart',v)} label="시작 감정"/>
-            <EmotionPicker value={scene.emotionEnd||'smiling'} onChange={v=>updateScene('emotionEnd',v)} label="끝 감정"/>
-          </div>
-
-          <div className="form-group" style={{marginTop:14}}>
-            <label className="form-label">카메라 힌트</label>
-            <CameraSelector value={scene.cameraHint||'static'} onChange={v=>updateScene('cameraHint',v)}/>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// MODULE 2: 이미지G 생성기 (Pipeline A)
-// ============================================================
-
-function ImageGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, addLog}) {
-  const [processing, setProcessing] = useState(false);
-  const [step, setStep] = useState('idle'); // idle, A2, A3, done
-      const currentStep = step;
-  const [selectedCat, setSelectedCat] = useState('character');
-  const [imageProvider, setImageProvider] = React.useState('imagen4');
-  const [textProvider, setTextProvider] = React.useState('gemini');
-  const [selectedTpl, setSelectedTpl] = useState('');
-  const scene = scenes[activeSceneIdx] || {};
-
-  const runPipelineA = async () => {
-    if(!scene.description) { addLog('warn','장면 묘사를 먼저 입력하세요.'); return; }
-    setProcessing(true);
-
-    // Step A-2: 콘티 변환
-    try {
-      setStep('A2');
-      addLog('api','[A-2] 글콘티 → 구조화 콘티 변환 시작...');
-      const sfxList = (scene.sfxText||'').split(',').map(s=>s.trim()).filter(Boolean);
-      const dialogueText = (scene.dialogues||[]).map(d=>`[${d.type}] ${d.character}: ${d.text}`).join('\n');
-      const userInput = `장면 묘사: ${scene.description}
-대사:
-${dialogueText}
-효과음: ${sfxList.join(', ')}
-감정: ${EXPR_LABELS[scene.emotionStart]||scene.emotionStart} → ${EXPR_LABELS[scene.emotionEnd]||scene.emotionEnd}
-장르: ${GENRE_PRESETS[scene.genre]?.name||scene.genre}`;
-
-      const callText = textProvider==='grok' ? callGrok : callGemini;
-      const convertedConti = await callText(PIPELINE_A_SYSTEM.contiConvert, userInput, {thinkBudget:1024});
-      const ns = [...scenes];
-      ns[activeSceneIdx] = {...ns[activeSceneIdx], convertedConti, status:{...scene.status, conti:'done'}};
-      setScenes(ns);
-      addLog('info','[A-2] 콘티 변환 완료 ✓');
-
-      // Step A-3: 영문 프롬프트 변환
-      setStep('A3');
-      addLog('api','[A-3] 구조화 콘티 → 영문 이미지 프롬프트 변환...');
-      const tplHint = selectedTpl ? `\n사용할 템플릿 카테고리: ${selectedCat}, 테플릿: ${selectedTpl}` : '';
-      const imgPromptResult = await callText(PIPELINE_A_SYSTEM.imagePrompt, convertedConti + tplHint, {thinkBudget:1024});
-
-      // Parse result
-      const promptMatch = imgPromptResult.match(/\[PROMPT\]:\s*([\s\S]*?)(?=\[NEGATIVE\])/);
-      const negMatch = imgPromptResult.match(/\[NEGATIVE\]:\s*([\s\S]*?)(?=\[STYLE\])/);
-      const imgPrompt = promptMatch ? promptMatch[1].trim() : imgPromptResult;
-      const imgNeg = negMatch ? negMatch[1].trim() : '';
-
-      const ns2 = [...scenes];
-      ns2[activeSceneIdx] = {...ns2[activeSceneIdx], imagePrompt:imgPrompt, imageNegative:imgNeg, imagePromptFull:imgPromptResult, status:{...ns2[activeSceneIdx].status, image:'done'}};
-      setScenes(ns2);
-      addLog('info','[A-3] 이미지 프롬프트 생성 완료 ✓');
-
-      // Step A-4: 이미지 생성
-      setStep('A4');
-      addLog('api',`[A-4] ${imageProvider==='grok'?'Grok Aurora':'Imagen 4'} API로 이미지 생성 중...`);
-      try {
-        const imgUrls = imageProvider==='grok' ? await callGrokImage(imgPrompt) : await callImagen(imgPrompt, {aspectRatio:'9:16'});
-        const ns3 = [...scenes];
-        ns3[activeSceneIdx] = {...ns3[activeSceneIdx], imageUrl:imgUrls[0], imageUrls:imgUrls, status:{...ns3[activeSceneIdx].status, imageGen:'done'}};
-        setScenes(ns3);
-        addLog('info','[A-4] 이미지 생성 완료 ✓');
-      } catch(imgErr) {
-        addLog('warn', '[A-4] 이미지 생성 실패: ' + imgErr.message);
-        addLog('info', '[A-4] 프롬프트는 생성되었으니, 외부 도구에서 사용 가능합니다.');
-      }
-      setStep('done');
-    } catch(err) {
-      addLog('error', `오류: ${err.message}`);
-      setStep('idle');
-    }
-    setProcessing(false);
-  };
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard?.writeText(text);
-    addLog('info','클립보드에 복사됨 ✓');
-  };
-
-  const cat = IMAGE_TEMPLATE_CATEGORIES.find(c=>c.id===selectedCat);
-
-  return (
-    <div>
-      <div className="pipeline-bar">
-        <div className={`pipeline-step ${currentStep==='A2'?'active':scene.convertedConti?'done':'pending'}`}>A-1 글콘티</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='A2'?'active':scene.convertedConti?'done':'pending'}`}>A-2 콘티변환</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='A3'?'active':scene.imagePrompt?'done':'pending'}`}>A-3 영문프롬프트</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='A4'?'active':scene.imageUrl?'done':'pending'}`}>A-4 이미지생성</div>
-      </div>
-
-      <div className="grid-32">
-        <div>
-          <div className="card">
-            <div className="card-title">🖼️ 이미지 프롬프트 생성 <span className="badge">Pipeline A</span></div>
-
-            <div className="form-group">
-              <label className="form-label">현재 장면: #{activeSceneIdx+1}</label>
-              <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
-                {scenes.map((s,i)=>(
-                  <button key={i} className={`btn btn-sm ${i===activeSceneIdx?'btn-primary':'btn-secondary'}`} onClick={()=>setActiveSceneIdx(i)}>#{i+1}</button>
-                ))}
-              </div>
-              <p style={{fontSize:12,color:'var(--text2)',marginBottom:8}}>
-                {scene.description ? scene.description.substring(0,100)+'...' : '(장면 묘사가 비어있습니다. 글콘티 에디터에서 먼저 작성하세요.)'}
-              </p>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">장르 프리셋: {GENRE_PRESETS[scene.genre]?.icon} {GENRE_PRESETS[scene.genre]?.name}</label>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">텍스트 생성 엔진 (A-2, A-3)</label>
-              <div style={{display:'flex',gap:6}}>
-                <button className={`btn btn-sm ${textProvider==='gemini'?'btn-primary':'btn-secondary'}`} onClick={()=>setTextProvider('gemini')}>💎 Gemini</button>
-                <button className={`btn btn-sm ${textProvider==='grok'?'btn-primary':'btn-secondary'}`} onClick={()=>setTextProvider('grok')}>🤖 Grok</button>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">이미지 생성 엔진</label>
-              <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                <select value={imageProvider} onChange={e=>setImageProvider(e.target.value)} style={{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:13,cursor:'pointer'}}>
-                  <option value="imagen4">Imagen 4</option>
-                  <option value="imagen4ultra">Imagen 4 Ultra</option>
-                  <option value="nanoBananaPro">Nano Banana Pro</option>
-                  <option value="nanoBanana">Nano Banana</option>
-                </select>
-              </div>
-            </div>
-
-            <button className="btn btn-primary btn-block" onClick={runPipelineA} disabled={processing || !scene.description}>
-              {processing ? <><span className="spinner"/> 변환 중...</> : '🚀 파이프라인 A 실행 (콘티→이미지 프롬프트)'}
-            </button>
-
-            {scene.convertedConti && (
-              <div className="result-panel">
-                <div className="result-label"><button className="copy-btn" onClick={()=>copyToClipboard(scene.convertedConti)}>복사</button>A-2 구조화 콘티</div>
-                <div className="result-text korean">{scene.convertedConti}</div>
-              </div>
-            )}
-
-            {scene.imagePrompt && (
-              <div className="result-panel" style={{marginTop:8}}>
-                <div className="result-label"><button className="copy-btn" onClick={()=>copyToClipboard(scene.imagePrompt)}>복사</button>A-3 이미지 프롬프트 (EN)</div>
-                <div className="result-text english">{scene.imagePrompt}</div>
-                {scene.imageNegative && (
-                  <>
-                    <div className="result-label" style={{marginTop:8}}>Negative Prompt</div>
-                    <div className="result-text english" style={{color:'var(--err)'}}>{scene.imageNegative}</div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {scene.imageUrl && (
-              <div style={{marginTop:16,padding:16,background:'var(--surface2)',borderRadius:12,textAlign:'center'}}>
-                <div style={{fontSize:13,fontWeight:700,marginBottom:8,color:'var(--success)'}}>A-4 생성 이미지</div>
-                <img src={scene.imageUrl} alt="생성된 이미지" style={{maxWidth:'100%',maxHeight:400,borderRadius:8,border:'1px solid var(--border)'}} />
-                <div style={{marginTop:8,display:'flex',gap:8,justifyContent:'center'}}>
-                  <a href={scene.imageUrl} download={`scene_${activeSceneIdx+1}.png`} className="btn btn-sm btn-success">다운로드</a>
-                  <button className="btn btn-sm btn-secondary" onClick={()=>copyToClipboard(scene.imagePrompt)}>프롬프트 복사</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <div className="card">
-            <div className="card-title">📚 이미지 템플릿 <span className="badge">84종</span></div>
-            <div className="template-categories">
-              {IMAGE_TEMPLATE_CATEGORIES.map(c=>(
-                <div key={c.id} className={`template-cat ${selectedCat===c.id?'active':''}`} onClick={()=>setSelectedCat(c.id)}>
-                  {c.icon} {c.name} ({c.count})
-                </div>
-              ))}
-            </div>
-            {cat && (
-              <div className="template-list">
-                {cat.templates.map(t=>(
-                  <div key={t.id} className={`template-item ${selectedTpl===t.id?'active':''}`} onClick={()=>setSelectedTpl(t.id)}>
-                    <div className="tpl-name">{t.name}</div>
-                    <div className="tpl-desc">{t.desc}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="card">
-            <div className="card-title">🎯 컨텍스트 분석</div>
-            {scene.description ? (()=>{
-              const ctx = analyzeContext(scene);
-              return (
-                <div>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,fontSize:12}}>
-                    <div>액션 레벨: <strong>{(ctx.actionLevel*100).toFixed(0)}%</strong>
-                      <div className="progress-bar"><div className="progress-fill" style={{width:`${ctx.actionLevel*100}%`}}/></div>
-                    </div>
-                    <div>감정 강도: <strong>{(ctx.emotionalIntensity*100).toFixed(0)}%</strong>
-                      <div className="progress-bar"><div className="progress-fill" style={{width:`${ctx.emotionalIntensity*100}%`}}/></div>
-                    </div>
-                    <div>대화 비중: <strong>{(ctx.dialogueRatio*100).toFixed(0)}%</strong></div>
-                    <div>추천 모드: <strong>{ctx.recommendedMode}</strong></div>
-                  </div>
-                  <div style={{fontSize:11,color:'var(--text2)',marginTop:8}}>
-                    추천 카메라: {CAMERA_DICT.find(c=>c.type===ctx.recommendedCamera)?.icon} {CAMERA_DICT.find(c=>c.type===ctx.recommendedCamera)?.name}
-                  </div>
-                </div>
-              );
-            })() : <p style={{fontSize:12,color:'var(--text2)'}}>장면을 작성하면 자동 분석됩니다.</p>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// MODULE 3: 영상G 생성기 (Pipeline B)
-// ============================================================
-
-function VideoGenerator({scenes, setScenes, activeSceneIdx, setActiveSceneIdx, addLog}) {
-  const [processing, setProcessing] = useState(false);
-  const [step, setStep] = useState('idle');
-  const [videoMode, setVideoMode] = useState('single');
-  const [textProviderB, setTextProviderB] = React.useState('gemini');
-  const [audioEnabled, setAudioEnabled] = useState(false);
-  const [cameraFixed, setCameraFixed] = useState(false);
-  const scene = scenes[activeSceneIdx] || {};
-
-  const runPipelineB = async () => {
-    if(!scene.description) { addLog('warn','장면 묘사가 필요합니다.'); return; }
-    setProcessing(true);
-
-    try {
-      // B-2: 모션 콘티 변환
-      setStep('B2');
-      addLog('api','[B-2] 모션 콘티 변환 시작...');
-      const sfxList = (scene.sfxText||'').split(',').map(s=>s.trim()).filter(Boolean);
-      const cam = CAMERA_DICT.find(c=>c.type===(scene.cameraHint||'static'));
-      const genre = GENRE_PRESETS[scene.genre||'romance'];
-      const userInput = `장면: ${scene.description}
-대사: ${(scene.dialogues||[]).map(d=>`[${d.type}] ${d.character}: ${d.text}`).join('; ')}
-효과음: ${sfxList.join(', ')}
-감정: ${EXPR_LABELS[scene.emotionStart]} → ${EXPR_LABELS[scene.emotionEnd]}
-카메라 힌트: ${cam?.name} (${cam?.desc})
-장르: ${genre?.name} (속도 ${genre?.speed}x)
-이미지 프롬프트: ${scene.imagePrompt || '(없음)'}`;
-
-      const callTextB = textProviderB==='grok' ? callGrok : callGemini;
-      const motionConti = await callTextB(PIPELINE_B_SYSTEM.motionConti, userInput, {thinkBudget:2048});
-      const ns = [...scenes];
-      ns[activeSceneIdx] = {...ns[activeSceneIdx], motionConti};
-      setScenes(ns);
-      addLog('info','[B-2] 모션 콘티 변환 완료 ✓');
-
-      // B-3: 영문 모션 프롬프트
-      setStep('B3');
-      addLog('api','[B-3] 영문 모션 프롬프트 생성...');
-      const modeInfo = `영상 모드: ${videoMode}, 오디오: ${audioEnabled?'ON':'OFF'}, 카메라 고정: ${cameraFixed?'ON':'OFF'}`;
-      const motionPrompt = await callTextB(PIPELINE_B_SYSTEM.motionPrompt, motionConti + '\n' + modeInfo, {thinkBudget:2048});
-
-      const ns2 = [...scenes];
-      ns2[activeSceneIdx] = {...ns2[activeSceneIdx], motionPrompt, videoMode, status:{...ns2[activeSceneIdx].status, video:'done'}};
-      setScenes(ns2);
-      addLog('info','[B-3] 영문 모션 프롬프트 생성 완료 ✓');
-
-      // Step B-5: 영상 생성
-      setStep('B5');
-      addLog('api','[B-5] Veo API로 영상 생성 중... (약 1~3분 소요)');
-      try {
-        const imageB64 = scene.imageUrl || null;
-        const videoUrls = await callVeo(motionPrompt, imageB64, {aspectRatio:'9:16', duration:5});
-        const ns3 = [...scenes];
-        ns3[activeSceneIdx] = {...ns3[activeSceneIdx], videoUrl:videoUrls[0], videoUrls:videoUrls, status:{...ns3[activeSceneIdx].status, videoGen:'done'}};
-        setScenes(ns3);
-        addLog('info','[B-5] 영상 생성 완료 ✓');
-      } catch(vidErr) {
-        addLog('warn', '[B-5] 영상 생성 실패: ' + vidErr.message);
-        addLog('info', '[B-5] 모션 프롬프트는 생성되었으니, 외부 도구에서 사용 가능합니다.');
-      }
-      setStep('done');
-    } catch(err) {
-      addLog('error', `오류: ${err.message}`);
-      setStep('idle');
-    }
-    setProcessing(false);
-  };
-
-  const copyToClipboard = (text) => {
-    navigator.clipboard?.writeText(text);
-    addLog('info','클립보드에 복사됨 ✓');
-  };
-
-  return (
-    <div>
-      <div className="pipeline-bar">
-        <div className={`pipeline-step ${scene.imagePrompt?'done':'pending'}`}>A완료 이미지</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='B2'?'active':scene.motionConti?'done':'pending'}`}>B-2 모션콘티</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='B3'?'active':scene.motionPrompt?'done':'pending'}`}>B-3 모션프롬프트</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='B5'?'active':scene.videoUrl?'done':'pending'}`}>B-5 영상생성</div>
-      </div>
-
-      <div className="grid-32">
-        <div>
-          <div className="card">
-            <div className="card-title">🎬 영상 프롬프트 생성 <span className="badge">Pipeline B</span></div>
-
-            <div className="form-group">
-              <label className="form-label">장면 선택</label>
-              <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                {scenes.map((s,i)=>(
-                  <button key={i} className={`btn btn-sm ${i===activeSceneIdx?'btn-primary':'btn-secondary'}`} onClick={()=>setActiveSceneIdx(i)}>#{i+1}</button>
-                ))}
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">영상 모드</label>
-              <div className="mode-grid">
-                {VIDEO_MODES.map(m=>(
-                  <div key={m.id} className={`mode-card ${videoMode===m.id?'active':''}`} onClick={()=>setVideoMode(m.id)}>
-                    <div className="mode-icon">{m.icon}</div>
-                    <div className="mode-name">{m.name}</div>
-                    <div className="mode-desc">{m.desc}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid-2" style={{marginBottom:14}}>
-              <div className="toggle-wrap">
-                <div className={`toggle ${audioEnabled?'on':''}`} onClick={()=>setAudioEnabled(!audioEnabled)}>
-                  <div className="toggle-knob"/>
-                </div>
-                <span style={{fontSize:13}}>🔊 오디오 포함</span>
-              </div>
-              <div className="toggle-wrap">
-                <div className={`toggle ${cameraFixed?'on':''}`} onClick={()=>setCameraFixed(!cameraFixed)}>
-                  <div className="toggle-knob"/>
-                </div>
-                <span style={{fontSize:13}}>📷 카메라 고정</span>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">텍스트 생성 엔진 (B-2, B-3)</label>
-              <div style={{display:'flex',gap:6}}>
-                <button className={`btn btn-sm ${textProviderB==='gemini'?'btn-primary':'btn-secondary'}`} onClick={()=>setTextProviderB('gemini')}>💎 Gemini</button>
-                <button className={`btn btn-sm ${textProviderB==='grok'?'btn-primary':'btn-secondary'}`} onClick={()=>setTextProviderB('grok')}>🤖 Grok</button>
-              </div>
-            </div>
-
-            <button className="btn btn-primary btn-block" onClick={runPipelineB} disabled={processing || !scene.description}>
-              {processing ? <><span className="spinner"/> 변환 중...</> : '🎬 파이프라인 B 실행 (이미지→영상 프롬프트)'}
-            </button>
-
-            {scene.motionConti && (
-              <div className="result-panel">
-                <div className="result-label"><button className="copy-btn" onClick={()=>copyToClipboard(scene.motionConti)}>복사</button>B-2 모션 콘티 (KR)</div>
-                <div className="result-text korean">{scene.motionConti}</div>
-              </div>
-            )}
-            {scene.motionPrompt && (
-              <div className="result-panel" style={{marginTop:8}}>
-                <div className="result-label"><button className="copy-btn" onClick={()=>copyToClipboard(scene.motionPrompt)}>복사</button>B-3 영문 모션 프롬프트 (EN)</div>
-                <div className="result-text english">{scene.motionPrompt}</div>
-              </div>
-            )}
-
-            {scene.videoUrl && (
-              <div style={{marginTop:16,padding:16,background:'var(--surface2)',borderRadius:12,textAlign:'center'}}>
-                <div style={{fontSize:13,fontWeight:700,marginBottom:8,color:'var(--success)'}}>B-5 생성 영상</div>
-                <video src={scene.videoUrl} controls style={{maxWidth:'100%',maxHeight:400,borderRadius:8,border:'1px solid var(--border)'}} />
-                <div style={{marginTop:8,display:'flex',gap:8,justifyContent:'center'}}>
-                  <a href={scene.videoUrl} download={`scene_${activeSceneIdx+1}.mp4`} className="btn btn-sm btn-success">다운로드</a>
-                  <button className="btn btn-sm btn-secondary" onClick={()=>copyToClipboard(scene.motionPrompt)}>프롬프트 복사</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <div className="card">
-            <div className="card-title">📹 카메라 워크 사전 <span className="badge">18종</span></div>
-            <CameraSelector value={scene.cameraHint||'static'} onChange={v=>{
-              const ns=[...scenes]; ns[activeSceneIdx]={...ns[activeSceneIdx],cameraHint:v}; setScenes(ns);
-            }}/>
-            {scene.cameraHint && (()=>{
-              const cam = CAMERA_DICT.find(c=>c.type===scene.cameraHint);
-              return cam ? (
-                <div className="result-panel" style={{marginTop:8}}>
-                  <div style={{fontSize:13}}><strong>{cam.icon} {cam.name}</strong></div>
-                  <div style={{fontSize:12,color:'var(--text2)'}}>{cam.desc}</div>
-                  <div className="result-text english" style={{marginTop:4,fontSize:11}}>{cam.prompt}</div>
-                </div>
-              ) : null;
-            })()}
-          </div>
-
-          <div className="card">
-            <div className="card-title">📊 장르 타이밍</div>
-            {Object.entries(GENRE_PRESETS).map(([k,v])=>(
-              <div key={k} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,opacity:scene.genre===k?1:0.5}}>
-                <span>{v.icon}</span>
-                <span style={{fontSize:12,width:50}}>{v.name}</span>
-                <div className="progress-bar" style={{flex:1}}>
-                  <div className="progress-fill" style={{width:`${v.speed/1.5*100}%`,background:scene.genre===k?'var(--accent)':'var(--border)'}}/>
-                </div>
-                <span style={{fontSize:11,fontWeight:700}}>{v.speed}x</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-// MODULE 4: 웹툰제작 워크벤치 (통합 파이프라인)
-// ============================================================
-
-function Workbench({scenes, setScenes, addLog}) {
-  const [running, setRunning] = useState(false);
-  const [currentScene, setCurrentScene] = useState(-1);
-  const [currentStep, setCurrentStep] = useState('');
-
-  const runFullPipeline = async () => {
-    if(scenes.every(s=>!s.description)) { addLog('warn','최소 1개 장면에 묘사를 입력하세요.'); return; }
-    setRunning(true);
-
-    for(let i = 0; i < scenes.length; i++) {
-      const sc = scenes[i];
-      if(!sc.description) continue;
-      setCurrentScene(i);
-
-      try {
-        // Pipeline A: A-2 콘티 변환
-        setCurrentStep('A-2');
-        addLog('api',`[장면 ${i+1}] A-2 콘티 변환 시작`);
-        const sfxList = (sc.sfxText||'').split(',').map(s=>s.trim()).filter(Boolean);
-        const dialogueText = (sc.dialogues||[]).map(d=>`[${d.type}] ${d.character}: ${d.text}`).join('\n');
-        const userInputA = `장면 묘사: ${sc.description}\n대사:\n${dialogueText}\n효과음: ${sfxList.join(', ')}\n감정: ${EXPR_LABELS[sc.emotionStart]||'미소'} → ${EXPR_LABELS[sc.emotionEnd]||'미소'}\n장르: ${GENRE_PRESETS[sc.genre]?.name||'로맨스'}`;
-
-        const convertedConti = await callGemini(PIPELINE_A_SYSTEM.contiConvert, userInputA, {thinkBudget:1024});
-
-        // A-3 이미지 프롬프트
-        setCurrentStep('A-3');
-        addLog('api',`[장면 ${i+1}] A-3 영문 이미지 프롬프트 생성`);
-        const imgResult = await callGemini(PIPELINE_A_SYSTEM.imagePrompt, convertedConti, {thinkBudget:1024});
-        const promptMatch = imgResult.match(/\[PROMPT\]:\s*([\s\S]*?)(?=\[NEGATIVE\])/);
-        const negMatch = imgResult.match(/\[NEGATIVE\]:\s*([\s\S]*?)(?=\[STYLE\])/);
-        const imagePrompt = promptMatch ? promptMatch[1].trim() : imgResult;
-        const imageNegative = negMatch ? negMatch[1].trim() : '';
-
-        // Step A-4: 이미지 생성
-        setStep('A-4');
-        addLog('api',`[장면 ${i+1}] [A-4] Imagen API로 이미지 생성 중...`);
-        try {
-          const imgUrls = await callImagen(imgPrompt, {aspectRatio:'9:16'});
-          ns[idx] = {...ns[idx], imageUrl:imgUrls[0], imageUrls:imgUrls, status:{...ns[idx].status, imageGen:'done'}};
-          setScenes([...ns]);
-          addLog('info',`[장면 ${i+1}] [A-4] 이미지 생성 완료 ✓`);
-        } catch(imgErr) {
-          addLog('warn', `[장면 ${i+1}] [A-4] 이미지 생성 실패: ${imgErr.message}`);
-        }
-
-        addLog('info',`[장면 ${i+1}] Pipeline A 완료 ✓`);
-
-        // Pipeline B: B-2 모션 콘티
-        setCurrentStep('B-2');
-        addLog('api',`[장면 ${i+1}] B-2 모션 콘티 변환`);
-        const cam = CAMERA_DICT.find(c=>c.type===(sc.cameraHint||'static'));
-        const genre = GENRE_PRESETS[sc.genre||'romance'];
-        const userInputB = `장면: ${sc.description}\n대사: ${(sc.dialogues||[]).map(d=>`${d.character}: ${d.text}`).join('; ')}\n효과음: ${sfxList.join(', ')}\n감정: ${EXPR_LABELS[sc.emotionStart]} → ${EXPR_LABELS[sc.emotionEnd]}\n카메라: ${cam?.name}\n장르: ${genre?.name} (${genre?.speed}x)\n이미지 프롬프트: ${imagePrompt}`;
-
-        const motionConti = await callGemini(PIPELINE_B_SYSTEM.motionConti, userInputB, {thinkBudget:2048});
-
-        // B-3 영문 모션 프롬프트
-        setCurrentStep('B-3');
-        addLog('api',`[장면 ${i+1}] B-3 영문 모션 프롬프트 생성`);
-        const motionPrompt = await callGemini(PIPELINE_B_SYSTEM.motionPrompt, motionConti, {thinkBudget:2048});
-
-        // Step B-5: 영상 생성
-        setStep('B-5');
-        addLog('api',`[장면 ${i+1}] [B-5] Veo API로 영상 생성 중... (약 1~3분)`);
-        try {
-          const imageB64 = ns[idx].imageUrl || null;
-          const videoUrls = await callVeo(motionPrompt, imageB64, {aspectRatio:'9:16', duration:5});
-          ns[idx] = {...ns[idx], videoUrl:videoUrls[0], videoUrls:videoUrls, status:{...ns[idx].status, videoGen:'done'}};
-          setScenes([...ns]);
-          addLog('info',`[장면 ${i+1}] [B-5] 영상 생성 완료 ✓`);
-        } catch(vidErr) {
-          addLog('warn', `[장면 ${i+1}] [B-5] 영상 생성 실패: ${vidErr.message}`);
-        }
-
-        addLog('info',`[장면 ${i+1}] Pipeline B 완료 ✓`);
-
-        // Update scene
-        const ns = [...scenes];
-        ns[i] = {...ns[i], convertedConti, imagePrompt, imageNegative, imagePromptFull:imgResult, motionConti, motionPrompt,
-          status:{conti:'done',image:'done',video:'done'}};
-        setScenes(ns);
-
-      } catch(err) {
-        addLog('error',`[장면 ${i+1}] 오류: ${err.message}`);
-        const ns = [...scenes];
-        ns[i] = {...ns[i], status:{...ns[i].status, conti:'error'}};
-        setScenes(ns);
-      }
-    }
-
-    setRunning(false);
-    setCurrentScene(-1);
-    setCurrentStep('');
-    addLog('info','🎉 전체 파이프라인 완료!');
-  };
-
-  const completedScenes = scenes.filter(s=>s.status?.video==='done').length;
-  const totalScenes = scenes.filter(s=>s.description).length;
-
-  return (
-    <div>
-      <div className="pipeline-bar">
-        <div className={`pipeline-step ${currentStep==='A-2'?'active':'pending'}`}>A-2 콘티변환</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='A-3'?'active':'pending'}`}>A-3 이미지프롬프트</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='A-4'?'active':scenes.every(s=>s.imageUrl)?'done':'pending'}`}>A-4 이미지생성</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='B-2'?'active':'pending'}`}>B-2 모션콘티</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='B-3'?'active':'pending'}`}>B-3 모션프롬프트</div>
-        <span className="pipeline-arrow">→</span>
-        <div className={`pipeline-step ${currentStep==='B-5'?'active':scenes.every(s=>s.videoUrl)?'done':'pending'}`}>B-5 영상생성</div>
-      </div>
-
-      <div className="stats-bar">
-        <div className="stat-item">장면: <span className="stat-value">{totalScenes}</span></div>
-        <div className="stat-item">완료: <span className="stat-value">{completedScenes}/{totalScenes}</span></div>
-        <div className="stat-item">장르: <span className="stat-value">{GENRE_PRESETS[scenes[0]?.genre]?.icon} {GENRE_PRESETS[scenes[0]?.genre]?.name}</span></div>
-        {running && <div className="stat-item"><span className="spinner"/> 장면 #{currentScene+1} — {currentStep}</div>}
-      </div>
-
-      <div className="card">
-        <div className="card-title">🔄 통합 파이프라인: 글콘티 → 이미지 → 영상
-          <button className="btn btn-primary" onClick={runFullPipeline} disabled={running} style={{marginLeft:'auto'}}>
-            {running ? <><span className="spinner"/> 처리 중...</> : '🚀 전체 실행'}
-          </button>
-        </div>
-
-        {totalScenes > 0 && (
-          <div className="progress-bar" style={{height:6,marginBottom:16}}>
-            <div className="progress-fill" style={{width:`${(completedScenes/totalScenes)*100}%`}}/>
-          </div>
-        )}
-
-        <div className="wb-timeline">
-          <div className="wb-scene-row" style={{fontWeight:700,fontSize:11,color:'var(--text2)',background:'var(--surface2)',borderRadius:'8px 8px 0 0'}}>
-            <div style={{textAlign:'center'}}>#</div>
-            <div>글콘티 / 구조화 콘티</div>
-            <div>이미지 프롬프트 (EN)</div>
-            <div>영상 모션 프롬프트 (EN)</div>
-          </div>
-          {scenes.map((sc,i)=>{
-            if(!sc.description) return null;
-            const isCurrent = running && currentScene === i;
-            return (
-              <div key={i} className="wb-scene-row" style={{background: isCurrent ? 'rgba(108,92,231,.05)' : 'transparent'}}>
-                <div className="wb-scene-num">{i+1}</div>
-                <div className={`wb-cell ${sc.convertedConti?'has-result':isCurrent&&(currentStep==='A-2')?'processing':''}`}>
-                  <div className="cell-label">글콘티 → 구조화</div>
-                  <div className="cell-content" style={{fontSize:11}}>
-                    {sc.convertedConti ? sc.convertedConti.substring(0,150)+'...' : sc.description.substring(0,80)+'...'}
-                  </div>
-                </div>
-                <div className={`wb-cell ${sc.imagePrompt?'has-result':isCurrent&&currentStep==='A-3'?'processing':''}`}>
-                  <div className="cell-label">이미지 프롬프트</div>
-                  <div className="cell-content" style={{fontSize:11,fontFamily:'monospace'}}>
-                    {sc.imagePrompt ? sc.imagePrompt.substring(0,150)+'...' : '—'}
-                  </div>
-                </div>
-                <div className={`wb-cell ${sc.motionPrompt?'has-result':isCurrent&&(currentStep==='B-2'||currentStep==='B-3')?'processing':''}`}>
-                  <div className="cell-label">모션 프롬프트</div>
-                  <div className="cell-content" style={{fontSize:11,fontFamily:'monospace'}}>
-                    {sc.motionPrompt ? sc.motionPrompt.substring(0,150)+'...' : '—'}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Expanded results */}
-      {scenes.some(s=>s.motionPrompt) && (
-        <div className="card" style={{marginTop:16}}>
-          <div className="card-title">📋 전체 결과 상세</div>
-          {scenes.map((sc,i)=>{
-            if(!sc.motionPrompt) return null;
-            return (
-              <div key={i} style={{marginBottom:20,paddingBottom:16,borderBottom:'1px solid var(--border)'}}>
-                <h4 style={{fontSize:14,marginBottom:8}}>장면 #{i+1}: {sc.description?.substring(0,60)}</h4>
-                <div className="grid-3">
-                  <div className="result-panel">
-                    <div className="result-label">구조화 콘티 (KR)</div>
-                    <div className="result-text korean" style={{fontSize:11,maxHeight:120,overflow:'auto'}}>{sc.convertedConti}</div>
-                  </div>
-                  <div className="result-panel">
-                    <div className="result-label">이미지 프롬프트 (EN)</div>
-                    <div className="result-text english" style={{fontSize:10,maxHeight:120,overflow:'auto'}}>{sc.imagePrompt}</div>
-                  </div>
-                  <div className="result-panel">
-                    <div className="result-label">모션 프롬프트 (EN)</div>
-                    <div className="result-text english" style={{fontSize:10,maxHeight:120,overflow:'auto'}}>{sc.motionPrompt}</div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ============================================================
-// MAIN APP
-// ============================================================
-
-// API Key Modal Component
-
-
-// ═══════════════════════════════════════════════════════════════
-// LongForm Production Orchestrator - 5-Phase State Machine Pipeline
-// ═══════════════════════════════════════════════════════════════
 
 const PROJECT_PHASES = [
   'IDLE',
@@ -1763,33 +555,177 @@ const STATE_TRANSITIONS = {
 };
 
 const PHASE_LABELS = {
-  IDLE:'\uB300\uAE30',
-  PHASE_1_ANALYZING:'Phase 1: \uC2A4\uD1A0\uB9AC \uBD84\uC11D \uC911...',
-  PHASE_1_GENERATING_ASSETS:'Phase 1: \uC5D0\uC14B \uC774\uBBF8\uC9C0 \uC0DD\uC131 \uC911...',
-  PHASE_1_COMPLETE:'Phase 1 \uC644\uB8CC',
-  PHASE_2_SPLITTING:'Phase 2: \uC528 \uBD84\uD560 \uC911...',
-  PHASE_2_DIRECTING:'Phase 2: DP \uAD6C\uB3C4 \uBD84\uC11D \uC911...',
-  PHASE_2_COMPLETE:'Phase 2 \uC644\uB8CC',
-  PHASE_3_GENERATING:'Phase 3: \uC575\uCEE4 \uC774\uBBF8\uC9C0 \uC0DD\uC131 \uC911...',
-  PHASE_3_COMPLETE:'Phase 3 \uC644\uB8CC',
-  PHASE_4_GENERATING:'Phase 4: \uC601\uC0C1 \uC0DD\uC131 \uC911...',
-  PHASE_4_COMPLETE:'Phase 4 \uC644\uB8CC',
-  PHASE_5_EXPANDING:'Phase 5: \uC6F9\uD230 \uD655\uC7A5 \uC911...',
-  PHASE_5_COMPLETE:'Phase 5 \uC644\uB8CC',
-  COMPLETED:'\uC804\uCCB4 \uC644\uB8CC',
-  ERROR:'\uC624\uB958 \uBC1C\uC0DD'
+  IDLE:'대기',
+  PHASE_1_ANALYZING:'Phase 1: 스토리 분석 중...',
+  PHASE_1_GENERATING_ASSETS:'Phase 1: 에셋 이미지 생성 중...',
+  PHASE_1_COMPLETE:'Phase 1 완료',
+  PHASE_2_SPLITTING:'씬: 씬 분할 중...',
+  PHASE_2_DIRECTING:'씬: DP 구도 분석 중...',
+  PHASE_2_COMPLETE:'씬 완료',
+  PHASE_3_GENERATING:'Phase 3: 앵커 이미지 생성 중...',
+  PHASE_3_COMPLETE:'Phase 3 완료',
+  PHASE_4_GENERATING:'Phase 4: 영상 생성 중...',
+  PHASE_4_COMPLETE:'Phase 4 완료',
+  PHASE_5_EXPANDING:'Phase 5: 웹툰 확장 중...',
+  PHASE_5_COMPLETE:'Phase 5 완료',
+  COMPLETED:'전체 완료',
+  ERROR:'오류 발생'
 };
 
 const PROMPTS = {
   CHARACTER_EXTRACTION: 'You are a webtoon/manhwa character analyst. Analyze the given story text and extract ALL characters. For each character, provide a JSON array of objects with these fields: id (unique snake_case id), name (character name in Korean), role (protagonist/antagonist/supporting/extra), appearance ({age, gender, height, build, hair, eyes, skin, distinguishing:[]}), defaultOutfit (string description), expressionRange (array of typical expressions), referencePrompt (detailed English prompt for consistent image generation including all visual details). Return ONLY valid JSON array. No markdown, no explanation.',
   LOCATION_EXTRACTION: 'You are a webtoon background/location analyst. Analyze the given story text and extract ALL distinct locations. For each location, provide a JSON array of objects with fields: id (unique snake_case id), name (location name in Korean), locationType (interior/exterior/fantasy/abstract), timeOfDay (dawn/morning/afternoon/evening/night), mood (string), description (detailed Korean description), referencePrompt (detailed English prompt for image generation). Return ONLY valid JSON array. No markdown, no explanation.',
-  SCENE_SPLIT: 'You are a professional webtoon scene director. Split the given story text into individual scenes suitable for visual production. Each scene should be a natural narrative unit representable as a single image/video shot. Return a JSON array of objects: index (0-based), sourceText (original text segment), summary (1-2 sentence Korean summary), dialogues ([{character, text, emotion}]), keyCharacters (array of character IDs), primaryLocation (location ID), narrativeMood (tense/romantic/action/comedic/dramatic/peaceful/dark). Return ONLY valid JSON array.',
   DP_COMPOSITION: 'You are a cinematographer/DP for webtoon production. Given a scene description and available characters/locations, determine the optimal visual composition. Return a JSON object: cameraAngle (eye_level/low_angle/high_angle/dutch_angle/birds_eye/over_shoulder), shotSize (extreme_close_up/close_up/medium_close_up/medium_shot/medium_wide/wide_shot/extreme_wide), lighting (cinematic/dark_moody/bright_key/golden_hour/neon_cyberpunk/soft_diffused/dramatic_rim), characterPoses ([{characterId, pose, position, expression, outfit}]), backgroundOverride (optional), focalPoint (string), depthOfField (shallow/medium/deep), motionHint (string), narrativeMood (string). Return ONLY valid JSON object.',
   ANCHOR_PROMPT_ASSEMBLY: 'You are a professional image prompt engineer. Given a scene composition (camera, lighting, characters, background), assemble a detailed English image generation prompt. Structure: [Shot Size], [Camera Angle], [Character descriptions with poses], [Background/Environment], [Lighting], [Mood/Atmosphere], [Style: manhwa/webtoon style, detailed illustration]. Add negative prompt for: deformed, blurry, low quality, extra limbs, bad anatomy, watermark, text. Return JSON: { prompt: "...", negativePrompt: "..." }'
 };
 
-function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingScenes, log }) {
-  const { useState, useEffect, useRef, useCallback } = React;
+// ============================================================
+// COMPONENTS
+// ============================================================
+
+function LogPanel({logs}) {
+  const ref = useRef();
+  useEffect(()=>{if(ref.current) ref.current.scrollTop = ref.current.scrollHeight;},[logs]);
+  return (
+    <div className="log-panel" ref={ref}>
+      {logs.map((l,i)=>(
+        <div key={i} className={`log-entry ${l.type}`}>
+          {l.msg}
+        </div>
+      ))}
+      {logs.length===0 && <div className="log-entry">대기 중...</div>}
+    </div>
+  );
+}
+
+function ApiKeyModal({onClose, onSave}) {
+  const [vertexProjectId, setVertexProjectId] = useState(localStorage.getItem('VERTEX_PROJECT_ID') || '');
+  const [vertexLocation, setVertexLocation] = useState(localStorage.getItem('VERTEX_LOCATION') || 'us-central1');
+  const [vertexAccessToken, setVertexAccessToken] = useState(localStorage.getItem('VERTEX_ACCESS_TOKEN') || '');
+  const [xaiKey, setXaiKeyState] = useState(localStorage.getItem('XAI_API_KEY') || '');
+
+  const handleSave = () => {
+    if (vertexProjectId) localStorage.setItem('VERTEX_PROJECT_ID', vertexProjectId);
+    if (vertexLocation) localStorage.setItem('VERTEX_LOCATION', vertexLocation);
+    if (vertexAccessToken) localStorage.setItem('VERTEX_ACCESS_TOKEN', vertexAccessToken);
+    if (xaiKey) localStorage.setItem('XAI_API_KEY', xaiKey);
+    onSave && onSave();
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box" onClick={e => e.stopPropagation()}>
+        <div className="modal-title">API 설정</div>
+        <div className="modal-desc">Vertex AI 및 xAI (Grok) API 키를 설정합니다.</div>
+
+        <div className="form-group">
+          <label className="form-label">Vertex AI Project ID</label>
+          <input className="modal-input" value={vertexProjectId} onChange={e => setVertexProjectId(e.target.value)} />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Vertex AI Location</label>
+          <input className="modal-input" value={vertexLocation} onChange={e => setVertexLocation(e.target.value)} />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Vertex AI Access Token</label>
+          <input className="modal-input" type="password" value={vertexAccessToken} onChange={e => setVertexAccessToken(e.target.value)} />
+        </div>
+
+        <div className="key-status">
+          <div className={`dot ${hasGeminiKey() ? 'on' : ''}`}></div>
+          <span>Vertex AI {hasGeminiKey() ? '✅ 설정됨' : '❌ 미설정'}</span>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">xAI (Grok) API Key</label>
+          <input className="modal-input" type="password" value={xaiKey} onChange={e => setXaiKeyState(e.target.value)} />
+        </div>
+
+        <div className="key-status">
+          <div className={`dot ${hasXaiKey() ? 'on' : ''}`}></div>
+          <span>xAI {hasXaiKey() ? '✅ 설정됨' : '❌ 미설정'}</span>
+        </div>
+
+        <div className="modal-actions">
+          <button className="btn-cancel" onClick={onClose}>취소</button>
+          <button className="btn-save" onClick={handleSave}>저장</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN APP
+// ============================================================
+
+function App() {
+  const [activeTab, setActiveTab] = useState('source');
+  const [showApiModal, setShowApiModal] = useState(false);
+  const [logs, setLogs] = useState([]);
+
+  const log = useCallback((msg, type='info') => {
+    const timestamp = new Date().toLocaleTimeString('ko-KR');
+    setLogs(prev => [...prev, {msg: `[${timestamp}] ${msg}`, type}]);
+  }, []);
+
+  return (
+    <div style={{display: 'flex', flexDirection: 'column', height: '100vh'}}>
+      {/* Header */}
+      <div className="app-header">
+        <div className="app-logo">웹툰 프로덕션</div>
+        <div className="nav-tabs">
+          {[
+            {id: 'source', label: '소스입력'},
+            {id: 'phase1', label: 'P1 분석'},
+            {id: 'scenes', label: '씬'},
+            {id: 'images', label: '이미지'},
+            {id: 'videos', label: '영상'},
+            {id: 'webtoon', label: '웹툰'}
+          ].map(tab => (
+            <button
+              key={tab.id}
+              className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <button className={`api-key-btn ${hasGeminiKey() || hasXaiKey() ? 'connected' : ''}`} onClick={() => setShowApiModal(true)}>
+          ⚙️ API 설정
+        </button>
+      </div>
+
+      {/* Main Content */}
+      <div className="main-content">
+        <LongFormOrchestrator log={log} activeTab={activeTab} setActiveTab={setActiveTab} />
+
+        {/* Log Panel at Bottom */}
+        <div style={{marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--border)'}}>
+          <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 12, fontWeight: 600, color: 'var(--text2)'}}>
+            로그
+            <button onClick={() => setLogs([])} style={{padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'white', color: 'var(--text2)', cursor: 'pointer', fontSize: 11}}>
+              초기화
+            </button>
+          </div>
+          <LogPanel logs={logs} />
+        </div>
+      </div>
+
+      {showApiModal && <ApiKeyModal onClose={() => setShowApiModal(false)} onSave={() => {}} />}
+    </div>
+  );
+}
+
+// ============================================================
+// LONG FORM ORCHESTRATOR (MAIN PIPELINE LOGIC)
+// ============================================================
+
+function LongFormOrchestrator({log, activeTab, setActiveTab}) {
   const [phase, setPhase] = useState('IDLE');
   const [sourceText, setSourceText] = useState('');
   const [projectTitle, setProjectTitle] = useState('');
@@ -1800,304 +736,69 @@ function LongFormOrchestrator({ scenes: existingScenes, setScenes: setExistingSc
   const [errorMsg, setErrorMsg] = useState('');
   const [running, setRunning] = useState(false);
   const [currentSceneIdx, setCurrentSceneIdx] = useState(-1);
-  const [expandView, setExpandView] = useState(null);
   const abortRef = useRef(false);
   const [textProvider, setTextProvider] = useState('gemini');
   const [imageProvider, setImageProvider] = useState('imagen4');
   const [enableWebtoon, setEnableWebtoon] = useState(true);
+  const [editingPromptIdx, setEditingPromptIdx] = useState(-1);
+  const [editingPromptText, setEditingPromptText] = useState('');
 
-  // === Project Management States ===
   const [projectList, setProjectList] = useState([]);
   const [currentProjectId, setCurrentProjectId] = useState('');
   const [showProjectPanel, setShowProjectPanel] = useState(false);
-  const [showFirebaseConfig, setShowFirebaseConfig] = useState(false);
-  const [fbConfig, setFbConfig] = useState(getFirebaseConfig() || {apiKey:'',authDomain:'',projectId:'',storageBucket:'',messagingSenderId:'',appId:''});
+  const [fbConfig, setFbConfig] = useState(getFirebaseConfig() || {});
   const [fbStatus, setFbStatus] = useState(getDb() ? 'connected' : 'not configured');
   const [savingStatus, setSavingStatus] = useState('');
 
-  // Load project list on mount + re-check after server config auto-load
   useEffect(() => {
     const checkConfig = () => {
       if (getDb()) {
         fbListProjects().then(list => setProjectList(list)).catch(e => console.warn('FB list error:', e));
         setFbStatus('connected');
-        setFbConfig(getFirebaseConfig() || fbConfig);
       }
     };
     checkConfig();
-    // Re-check after server config might have loaded (async)
     const timer = setTimeout(checkConfig, 2000);
     return () => clearTimeout(timer);
   }, []);
 
-  // Generate project ID from title
-  const genProjectId = (title) => {
-    return title.trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, '_').substring(0, 40) + '_' + Date.now().toString(36);
-  };
-
-  // Save current project to Firebase
-  const saveProjectToFB = useCallback(async () => {
-    if (!getDb()) { setErrorMsg('Firebase 설정이 필요합니다'); setShowFirebaseConfig(true); return; }
-    const pid = currentProjectId || genProjectId(projectTitle || 'untitled');
-    if (!currentProjectId) setCurrentProjectId(pid);
-    setSavingStatus('저장 중...');
-    try {
-      // Save main project metadata
-      await fbSaveProject(pid, {
-        title: projectTitle || 'Untitled',
-        sourceText: sourceText.substring(0, 500), // preview only
-        phase: phase,
-        sceneCount: (lfScenesRef.current || []).length,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
-      // Save phase data based on current state
-      if (globalAsset) {
-        await fbSavePhase(pid, 'phase1_assets', {
-          globalAsset: globalAsset,
-          sourceTextFull: sourceText
-        });
-      }
-      if (lfScenesRef.current && lfScenesRef.current.length > 0) {
-        // Save scenes without large binary data
-        const scenesClean = lfScenesRef.current.map(sc => {
-          const clone = {...sc};
-          // Keep image URLs but limit size
-          if (clone.anchorImage && clone.anchorImage.url && clone.anchorImage.url.length > 1000) {
-            clone.anchorImage = {...clone.anchorImage, url: clone.anchorImage.url.substring(0, 200) + '...[truncated]'};
-          }
-          if (clone.video && clone.video.url && clone.video.url.length > 1000) {
-            clone.video = {...clone.video, url: '[video data truncated]'};
-          }
-          return clone;
-        });
-        await fbSavePhase(pid, 'phase2_scenes', {scenes: scenesClean});
-      }
-      setSavingStatus('저장 완료!');
-      // Refresh project list
-      const list = await fbListProjects();
-      setProjectList(list);
-      setTimeout(() => setSavingStatus(''), 2000);
-      log('[Firebase] Project saved: ' + pid);
-    } catch(e) {
-      setSavingStatus('저장 실패: ' + e.message);
-      log('[Firebase] Save error: ' + e.message, 'error');
-    }
-  }, [currentProjectId, projectTitle, sourceText, phase, globalAsset]);
-
-  // Load project from Firebase
-  const loadProjectFromFB = useCallback(async (pid) => {
-    if (!getDb()) return;
-    setSavingStatus('불러오는 중...');
-    try {
-      const proj = await fbLoadProject(pid);
-      setCurrentProjectId(pid);
-      setProjectTitle(proj.title || '');
-      // Load phase 1 data
-      const p1 = await fbLoadPhase(pid, 'phase1_assets');
-      if (p1) {
-        if (p1.sourceTextFull) setSourceText(p1.sourceTextFull);
-        if (p1.globalAsset) setGlobalAsset(p1.globalAsset);
-      }
-      // Load phase 2 data
-      const p2 = await fbLoadPhase(pid, 'phase2_scenes');
-      if (p2 && p2.scenes) {
-        lfScenesRef.current = p2.scenes;
-        setLfScenes([...p2.scenes]);
-      }
-      setPhase(proj.phase || 'IDLE');
-      setSavingStatus('불러오기 완료!');
-      setShowProjectPanel(false);
-      log('[Firebase] Project loaded: ' + pid);
-      setTimeout(() => setSavingStatus(''), 2000);
-    } catch(e) {
-      setSavingStatus('불러오기 실패: ' + e.message);
-      log('[Firebase] Load error: ' + e.message, 'error');
-    }
-  }, []);
-
-  // Delete project from Firebase
-  const deleteProjectFromFB = useCallback(async (pid) => {
-    if (!getDb()) return;
-    if (!confirm('프로젝트를 삭제하시겠습니까?')) return;
-    try {
-      await fbDeleteProject(pid);
-      if (currentProjectId === pid) { setCurrentProjectId(''); }
-      const list = await fbListProjects();
-      setProjectList(list);
-      log('[Firebase] Project deleted: ' + pid);
-    } catch(e) { log('[Firebase] Delete error: ' + e.message, 'error'); }
-  }, [currentProjectId]);
-
-  // Save Firebase config
-  const handleSaveFbConfig = useCallback(() => {
-    saveFirebaseConfig(fbConfig);
-    if (getDb()) {
-      setFbStatus('connected');
-      setShowFirebaseConfig(false);
-      fbListProjects().then(list => setProjectList(list)).catch(e => console.warn(e));
+  const callTextLF = useCallback(async (systemPrompt, userPrompt, opts={}) => {
+    if (textProvider === 'grok') {
+      return await callGrok(systemPrompt, userPrompt, opts);
     } else {
-      setFbStatus('connection failed');
+      return await callGemini(systemPrompt, userPrompt, opts);
     }
-  }, [fbConfig]);
-
-    const SAVE_KEY = 'LF_PIPELINE_STATE';
-    const savePipeline = useCallback((data) => {
-      try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch(e) { console.warn('Save failed', e); }
-    }, []);
-    const loadPipeline = useCallback(() => {
-      try { const s = localStorage.getItem(SAVE_KEY); return s ? JSON.parse(s) : null; } catch(e) { return null; }
-    }, []);
-    const clearPipeline = useCallback(() => { localStorage.removeItem(SAVE_KEY); }, []);
-    useEffect(() => {
-      const saved = loadPipeline();
-      if (saved) {
-        if (saved.projectTitle) setProjectTitle(saved.projectTitle);
-        if (saved.sourceText) setSourceText(saved.sourceText);
-        if (saved.globalAsset) setGlobalAsset(saved.globalAsset);
-        if (saved.lfScenes && saved.lfScenes.length > 0) {
-          lfScenesRef.current = saved.lfScenes;
-          setLfScenes(saved.lfScenes);
-        }
-        if (saved.phaseHistory) setPhaseHistory(saved.phaseHistory);
-        if (saved.phase && saved.phase !== 'IDLE') setPhase(saved.phase.includes('COMPLETE') || saved.phase === 'COMPLETED' ? saved.phase : 'IDLE');
-        log('[System] restored pipeline state');
-      }
-    }, []);
-    useEffect(() => {
-      if (lfScenesRef.current.length > 0 || globalAsset || projectTitle) {
-        savePipeline({ projectTitle, sourceText, globalAsset, lfScenes: lfScenesRef.current, phase, phaseHistory });
-      }
-    }, [phase, projectTitle, globalAsset, lfScenes]);
-
-
-  const phaseRef = useRef('IDLE');
-  useEffect(() => { phaseRef.current = phase; }, [phase]);
-  const transition = useCallback((next, err) => {
-    const cur = phaseRef.current;
-    const allowed = STATE_TRANSITIONS[cur];
-    if (!allowed || !allowed.includes(next)) { log('[FSM] Invalid: '+cur+' -> '+next, 'error'); return false; }
-    phaseRef.current = next;
-    setPhase(next);
-    setPhaseHistory(prev => [...prev, { phase: next, stamp: new Date().toISOString(), ...(err && { error: err }) }]);
-    if (next === 'ERROR') setErrorMsg(err || 'Unknown error');
-    log('[FSM] '+cur+' -> '+next, next === 'ERROR' ? 'error' : 'info');
-    return true;
-  }, [log])
-
-  const callTextLF = useCallback(async (sys, usr, opts) => {
-    return textProvider === 'grok' ? await callGrok(sys, usr) : await callGemini(sys, usr, opts || {});
   }, [textProvider]);
 
   const callImageLF = useCallback(async (prompt, opts) => {
     opts = opts || {};
-    return (imageProvider === 'nanoBananaPro' || imageProvider === 'nanoBanana') ? await callNanoBanana(prompt, {model: imageProvider === 'nanoBanana' ? 'gemini-2.0-flash-preview-image-generation' : 'gemini-2.0-pro-preview-image-generation'}) : await callImagen(prompt, Object.assign({aspectRatio:'9:16', model: imageProvider === 'imagen4ultra' ? 'imagen-4.0-ultra-generate-001' : 'imagen-4.0-generate-001'}, opts));
+    if (imageProvider === 'grok') {
+      return await callGrokImage(prompt);
+    } else if (imageProvider === 'nanoBananaPro') {
+      return await callNanoBanana(prompt, {model: 'gemini-2.0-pro-preview-image-generation'});
+    } else if (imageProvider === 'nanoBanana') {
+      return await callNanoBanana(prompt, {model: 'gemini-2.0-flash-preview-image-generation'});
+    } else {
+      const model = imageProvider === 'imagen4ultra' ? 'imagen-4.0-ultra-generate-001' : 'imagen-4.0-generate-001';
+      return await callImagen(prompt, Object.assign({aspectRatio:'9:16', model}, opts));
+    }
   }, [imageProvider]);
-  
-    // === Per-scene image generation ===
-    const generateSceneImage = useCallback(async (idx) => {
-      const scenes = lfScenesRef.current;
-      const sc = scenes[idx];
-      if (!sc) { setErrorMsg('Scene data not ready'); return; }
-      if (!sc.imagePrompt && !sc.compositionData) { setErrorMsg('Run Phase 2-3 first'); return; }
-      log('[GenImg] Generating image for scene ' + (idx+1));
-      sc.status = 'generating_image';
-      lfScenesRef.current = [...scenes];
-      setLfScenes([...scenes]);
-      try {
-        let prompt;
-        if (sc.imagePrompt && sc.imagePrompt.prompt) {
-          prompt = sc.imagePrompt.prompt;
-        } else {
-          prompt = 'manhwa webtoon style, ' + sc.summary;
-        }
-        // Always enrich prompt with character/background references from globalAsset
-        const comp = sc.compositionData || {};
-        const charRefs = ((comp.characterPoses||[]).map(cp => {
-          const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null;
-          return cr ? cr.referencePrompt : '';
-        })).filter(Boolean);
-        if (charRefs.length > 0) { prompt += '\nCharacter details: ' + charRefs.join('; '); }
-        // Also check keyCharacters from scene data
-        if ((!charRefs.length) && sc.keyCharacters && (globalAsset||{}).characters) {
-          const kcRefs = sc.keyCharacters.map(cid => {
-            const cr = globalAsset.characters.find(ch=>ch.id===cid);
-            return cr ? cr.referencePrompt : '';
-          }).filter(Boolean);
-          if (kcRefs.length > 0) { prompt += '\nCharacter details: ' + kcRefs.join('; '); }
-        }
-        const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
-        if (bgRef && bgRef.referencePrompt) { prompt += '\nBackground: ' + bgRef.referencePrompt; }
-        const imgResult = await callImageLF(prompt);
-        const imgUrl = Array.isArray(imgResult) ? imgResult[0] : imgResult;
-        sc.anchorImage = { url: imgUrl, prompt };
-        sc.status = sc.video ? 'complete' : 'image_done';
-        log('[GenImg] Scene ' + (idx+1) + ' image done');
-      } catch(e) {
-        log('[GenImg] Error: ' + e.message);
-        sc.status = 'error';
-        setErrorMsg('Image gen failed: ' + e.message);
-      }
-      lfScenesRef.current = [...scenes];
-      setLfScenes([...scenes]);
-    }, [callImageLF, globalAsset]);
 
-    const generateSceneVideo = useCallback(async (idx) => {
-      const scenes = lfScenesRef.current;
-      const sc = scenes[idx];
-      if (!sc) { setErrorMsg('Scene data not ready'); return; }
-      if (!sc.anchorImage) { setErrorMsg('Generate image first'); return; }
-      log('[GenVid] Generating video for scene ' + (idx+1));
-      sc.status = 'generating_video';
-      lfScenesRef.current = [...scenes];
-      setLfScenes([...scenes]);
-      try {
-        const motionPrompt = (sc.videoPrompt && sc.videoPrompt.motionPrompt) || (sc.compositionData && sc.compositionData.motionHint) || sc.summary;
-        let imageB64 = null;
-        if (sc.anchorImage && sc.anchorImage.url) {
-          const imgUrl = typeof sc.anchorImage.url === 'string' ? sc.anchorImage.url : (Array.isArray(sc.anchorImage.url) ? sc.anchorImage.url[0] : String(sc.anchorImage.url || ''));
-          if (imgUrl.startsWith('data:')) {
-            imageB64 = imgUrl.split(',')[1];
-          } else if (imgUrl) {
-            try {
-              const resp = await fetch(imgUrl);
-              const blob = await resp.blob();
-              imageB64 = await new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result.split(',')[1]);
-                reader.readAsDataURL(blob);
-              });
-            } catch(fe) { log('[GenVid] Image convert failed: ' + fe.message); }
-          }
-        }
-        const videoUrls = await callVeo(motionPrompt, imageB64, {aspectRatio:'9:16', duration:5});
-        if (videoUrls && videoUrls.length > 0) {
-          sc.video = { url: videoUrls[0], durationSec: 5, motionPrompt };
-          sc.status = 'complete';
-          log('[GenVid] Scene ' + (idx+1) + ' video done');
-        } else {
-          sc.status = sc.anchorImage ? 'image_done' : 'pending';
-          log('[GenVid] No video returned');
-        }
-      } catch(e) {
-        log('[GenVid] Error: ' + e.message);
-        sc.status = 'error';
-        setErrorMsg('Video gen failed: ' + e.message);
-      }
-      lfScenesRef.current = [...scenes];
-      setLfScenes([...scenes]);
-    }, []);
+  const phaseRef = useRef('IDLE');
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  const transition = useCallback((newPhase, errorMessage='') => {
+    const cur = phaseRef.current;
+    const allowed = STATE_TRANSITIONS[cur];
+    if (!allowed || !allowed.includes(newPhase)) { log('[FSM] Invalid: '+cur+' -> '+newPhase, 'error'); return false; }
+    phaseRef.current = newPhase;
+    setPhase(newPhase);
+    setPhaseHistory(prev => [...prev, { phase: newPhase, stamp: new Date().toISOString(), ...(errorMessage && { error: errorMessage }) }]);
+    if (newPhase === 'ERROR') setErrorMsg(errorMessage || 'Unknown error');
+    log('[FSM] '+cur+' -> '+newPhase, newPhase === 'ERROR' ? 'error' : 'info');
+    return true;
+  }, [log]);
 
-    // === Download/save media ===
-    const downloadMedia = useCallback((dataUrl, filename) => {
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }, []);
-
-const runPhase1 = useCallback(async () => {
+  const runPhase1 = useCallback(async () => {
     transition('PHASE_1_ANALYZING');
     log('[Phase 1-A] Extracting characters from story...');
     const charRaw = await callTextLF(PROMPTS.CHARACTER_EXTRACTION, sourceText);
@@ -2133,10 +834,10 @@ const runPhase1 = useCallback(async () => {
     const asset = { characters, backgrounds, styleGuide:{artStyle:'manhwa',colorPalette:[],moodBoard:''}, createdAt:new Date().toISOString(), version:1 };
     setGlobalAsset(asset);
     transition('PHASE_1_COMPLETE');
-    // Auto-save Phase 1
-    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase1_assets', {globalAsset: asset, sourceTextFull: sourceText}); await fbSaveProject(currentProjectId, {title: projectTitle, phase:'PHASE_1_COMPLETE',updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); log('[AutoSave] Phase 1 saved'); } catch(e){log('[AutoSave] Phase 1 error: '+e.message,'warn');} }
+    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase1_assets', {globalAsset: asset, sourceTextFull: sourceText}); log('[AutoSave] Phase 1 saved'); } catch(e){log('[AutoSave] Phase 1 error: '+e.message,'warn');} }
     log('[Phase 1] Complete: '+characters.length+' characters, '+backgrounds.length+' backgrounds');
-  }, [sourceText, callTextLF, callImageLF, transition, log]);
+  }, [sourceText, callTextLF, callImageLF, transition, log, currentProjectId]);
+
   const runPhase2 = useCallback(async () => {
     transition('PHASE_2_SPLITTING');
     log('[Phase 2-A] Splitting story into scenes...');
@@ -2172,13 +873,13 @@ const runPhase1 = useCallback(async () => {
     }
     lfScenesRef.current = scenes; setLfScenes(scenes);
     transition('PHASE_2_COMPLETE');
-    // Auto-save Phase 2
-    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase2_scenes', {scenes: scenes.map(s=>({sceneNumber:s.sceneNumber,summary:s.summary,dialogues:s.dialogues,narrativeMood:s.narrativeMood,keyCharacters:s.keyCharacters,primaryLocation:s.primaryLocation,compositionData:s.compositionData,status:s.status}))}); await fbSaveProject(currentProjectId, {phase:'PHASE_2_COMPLETE',sceneCount:scenes.length,updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); log('[AutoSave] Phase 2 saved'); } catch(e){log('[AutoSave] Phase 2 error: '+e.message,'warn');} }
+    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase2_scenes', {scenes}); log('[AutoSave] Phase 2 saved'); } catch(e){log('[AutoSave] Phase 2 error: '+e.message,'warn');} }
     log('[Phase 2] Complete: '+scenes.length+' scenes with composition data');
-  }, [sourceText, globalAsset, callTextLF, transition, log]);
+  }, [sourceText, globalAsset, callTextLF, transition, log, currentProjectId]);
+
   const runPhase3 = useCallback(async () => {
     transition('PHASE_3_GENERATING');
-    log('[Phase 3] Generating image prompts (no image generation)...');
+    log('[Phase 3] Generating image prompts...');
     const updated = [...lfScenesRef.current];
     for (let i=0; i<updated.length; i++) {
       if (abortRef.current) throw new Error('Aborted');
@@ -2190,25 +891,24 @@ const runPhase1 = useCallback(async () => {
         const comp = sc.compositionData;
         const charDescs = (comp.characterPoses||[]).map(cp => {
           const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null;
-          return (cr ? cr.referencePrompt : '') + ' ' + (cp.pose||'') + ' pose, ' + (cp.expression||'') + ' expression, positioned ' + (cp.position||'');
+          return (cr ? cr.referencePrompt : '') + ' ' + (cp.pose||'') + ' pose, ' + (cp.expression||'') + ' expression';
         }).filter(Boolean).join('; ');
         const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
         const bgDesc = bgRef ? bgRef.referencePrompt : 'detailed background';
         const userMsg = 'Scene: ' + sc.summary + '\nComposition: ' + JSON.stringify(comp) + '\nCharacter prompts: ' + charDescs + '\nBackground: ' + bgDesc;
-        const pRaw = await callTextLF(PIPELINE_A_SYSTEM.imagePrompt + '\n\n' + userMsg, {maxTokens:16384});
-        const pData = JSON.parse(pRaw.replace(/```json|\n|```/g,'').trim());
-        sc.imagePrompt = pData;
+        const pRaw = await callTextLF(PIPELINE_A_SYSTEM.imagePrompt, userMsg, {maxTokens:4096});
+        try { sc.imagePrompt = JSON.parse(pRaw.replace(/```json|\n|```/g,'')); } catch { sc.imagePrompt = {prompt: pRaw}; }
         sc.status = 'prompt_ready';
         log('[Phase 3] Scene ' + (i+1) + ' prompt generated');
-      } catch(e) { log('[Phase 3] Scene ' + (i+1) + ' prompt failed: ' + e.message); }
+      } catch(e) { log('[Phase 3] Scene ' + (i+1) + ' prompt failed: ' + e.message, 'warn'); }
     }
     lfScenesRef.current = updated;
     setLfScenes([...updated]);
     transition('PHASE_3_COMPLETE');
-    // Auto-save Phase 3
-    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase3_prompts', {scenes: updated.map(s=>({summary:s.summary,imagePrompt:s.imagePrompt,status:s.status}))}); await fbSaveProject(currentProjectId, {phase:'PHASE_3_COMPLETE',updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); log('[AutoSave] Phase 3 saved'); } catch(e){log('[AutoSave] Phase 3 error: '+e.message,'warn');} }
-    log('[Phase 3] Complete - ' + updated.filter(s=>s.imagePrompt).length + '/' + updated.length + ' prompts ready.');
-  }, [globalAsset, callTextLF, transition]);
+    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase3_prompts', {scenes: updated}); log('[AutoSave] Phase 3 saved'); } catch(e){log('[AutoSave] Phase 3 error: '+e.message,'warn');} }
+    log('[Phase 3] Complete - prompts ready');
+  }, [globalAsset, callTextLF, transition, log, currentProjectId]);
+
   const runPhase4 = useCallback(async () => {
     transition('PHASE_4_GENERATING');
     log('[Phase 4] Preparing video motion prompts...');
@@ -2220,21 +920,18 @@ const runPhase1 = useCallback(async () => {
       log('[Phase 4] Video prompt ' + (i+1) + '/' + updated.length);
       try {
         const sceneInfo = 'Scene: ' + sc.summary + '\nComposition: ' + JSON.stringify(sc.compositionData||{});
-        const motionRaw = await callTextLF(PIPELINE_B.motionPrompt + '\n\n' + sceneInfo, {maxTokens:4096});
-        let motionData;
-        try { motionData = JSON.parse(motionRaw.replace(/\`\`\`json|\n|\`\`\`/g,'').trim()); } catch(pe) { motionData = {motionPrompt: motionRaw.trim()}; }
-        sc.videoPrompt = { motionPrompt: motionData.motionPrompt || motionData.prompt || motionRaw.trim(), aspectRatio:'9:16', duration:5 };
-        if (!sc.status || sc.status === 'prompt_ready') sc.status = 'prompt_ready';
+        const motionRaw = await callTextLF(PIPELINE_B_SYSTEM.motionPrompt, sceneInfo, {maxTokens:2048});
+        sc.videoPrompt = { motionPrompt: motionRaw.trim(), aspectRatio:'9:16', duration:5 };
         log('[Phase 4] Scene ' + (i+1) + ' video prompt ready');
-      } catch(e) { log('[Phase 4] Scene ' + (i+1) + ' failed: ' + e.message); }
+      } catch(e) { log('[Phase 4] Scene ' + (i+1) + ' failed: ' + e.message, 'warn'); }
     }
     lfScenesRef.current = updated;
     setLfScenes([...updated]);
     transition('PHASE_4_COMPLETE');
-    // Auto-save Phase 4
-    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase4_video', {scenes: lfScenesRef.current.map(s=>({summary:s.summary,videoPrompt:s.videoPrompt,status:s.status}))}); await fbSaveProject(currentProjectId, {phase:'PHASE_4_COMPLETE',updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); log('[AutoSave] Phase 4 saved'); } catch(e){log('[AutoSave] Phase 4 error: '+e.message,'warn');} }
-    log('[Phase 4] Complete - video prompts ready.');
-  }, [transition]);
+    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase4_video', {scenes: updated}); log('[AutoSave] Phase 4 saved'); } catch(e){log('[AutoSave] Phase 4 error: '+e.message,'warn');} }
+    log('[Phase 4] Complete - video prompts ready');
+  }, [callTextLF, transition, log, currentProjectId]);
+
   const runPhase5 = useCallback(async () => {
     if (!enableWebtoon) { log('[Phase 5] Webtoon disabled, skipping'); transition('COMPLETED'); return; }
     transition('PHASE_5_EXPANDING');
@@ -2253,7 +950,7 @@ const runPhase1 = useCallback(async () => {
       ];
       sc.webtoonAssets = [];
       for (const v of variations) {
-        try { const urls = await callImageLF((sc.anchorImage.prompt||sc.summary)+v.suffix);
+        try { const urls = await callImageLF((sc.imagePrompt?.prompt||sc.summary)+v.suffix);
           sc.webtoonAssets.push({templateId:v.type, url:urls[0]}); }
         catch(e) { log('[Phase 5] Panel '+v.type+' failed: '+e.message, 'warn'); }
       }
@@ -2274,282 +971,407 @@ const runPhase1 = useCallback(async () => {
       await runPhase3(); if(abortRef.current)return;
       await runPhase4(); if(abortRef.current)return;
       await runPhase5();
-    } catch(e) { if(e.message!=='Aborted'){transition('ERROR',e.message);log('Pipeline error: '+e.message,'error');} }
+    } catch(e) { if(e.message!=='Aborted'){transition('ERROR',e.message);setErrorMsg(e.message);log('Pipeline error: '+e.message,'error');} }
     finally { setRunning(false); }
   }, [sourceText, runPhase1, runPhase2, runPhase3, runPhase4, runPhase5, transition, log]);
 
-  const resumePipeline = useCallback(async () => {
-    setRunning(true); abortRef.current=false; setErrorMsg('');
-    try {
-      const last = phaseHistory.filter(h=>h.phase.endsWith('_COMPLETE')).pop();
-      if(!last){await runFullPipeline();return;}
-      if(last.phase==='PHASE_1_COMPLETE'){await runPhase2();if(abortRef.current)return;await runPhase3();if(abortRef.current)return;await runPhase4();if(abortRef.current)return;await runPhase5();}
-      else if(last.phase==='PHASE_2_COMPLETE'){await runPhase3();if(abortRef.current)return;await runPhase4();if(abortRef.current)return;await runPhase5();}
-      else if(last.phase==='PHASE_3_COMPLETE'){await runPhase4();if(abortRef.current)return;await runPhase5();}
-      else if(last.phase==='PHASE_4_COMPLETE'){await runPhase5();}
-    } catch(e){if(e.message!=='Aborted')transition('ERROR',e.message);}
-    finally{setRunning(false);}
-  }, [phaseHistory, runFullPipeline, runPhase2, runPhase3, runPhase4, runPhase5, transition]);
-
   const stopPipeline = () => { abortRef.current=true; setRunning(false); };
-  const phaseNum = phase.startsWith('PHASE_') ? parseInt(phase.split('_')[1]) : phase==='COMPLETED' ? 6 : 0;
-  const progressPct = phase==='COMPLETED' ? 100 : phase==='IDLE' ? 0 : Math.round((phaseNum/5)*100);
-  return React.createElement('div', {style:{display:'flex',flexDirection:'column',gap:16,height:'100%'}},
-    // === Project Management Bar ===
-    React.createElement('div', {style:{display:'flex',gap:8,alignItems:'center',padding:'8px 12px',background:'#f0f0f8',borderRadius:8,flexWrap:'wrap',border:'1px solid #d0d0e0'}},
-      React.createElement('span',{style:{fontSize:13,fontWeight:600,color:'#6c5ce7'}},'📁 프로젝트'),
-      currentProjectId && React.createElement('span',{style:{fontSize:11,color:'#666688',background:'#e8e8f0',padding:'2px 8px',borderRadius:4}}, projectTitle || currentProjectId),
-      React.createElement('button',{onClick:()=>setShowProjectPanel(!showProjectPanel),style:{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid #d0d0e0',background:'white',color:'#333',cursor:'pointer'}},'프로젝트 목록'),
-      React.createElement('button',{onClick:saveProjectToFB,disabled:!projectTitle,style:{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid #6c5ce7',background:savingStatus==='저장 중...'?'#6c5ce7':'white',color:savingStatus==='저장 중...'?'white':'#6c5ce7',cursor:'pointer'}},'💾 저장'),
-      React.createElement('button',{onClick:()=>{ setCurrentProjectId(''); setProjectTitle(''); setSourceText(''); setGlobalAsset(null); setLfScenes([]); lfScenesRef.current=[]; setPhase('IDLE'); },style:{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid #d0d0e0',background:'white',color:'#666',cursor:'pointer'}},'+ 새 프로젝트'),
-      React.createElement('button',{onClick:()=>setShowFirebaseConfig(!showFirebaseConfig),style:{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid '+(fbStatus==='connected'?'#27ae60':'#e03030'),background:'white',color:fbStatus==='connected'?'#27ae60':'#e03030',cursor:'pointer'}}, fbStatus==='connected'?'🟢 Firebase':'🔴 Firebase 설정'),
-      savingStatus && React.createElement('span',{style:{fontSize:11,color:savingStatus.includes('실패')?'#e03030':'#27ae60',marginLeft:4}}, savingStatus)
-    ),
-    // === Firebase Config Panel ===
-    showFirebaseConfig && React.createElement('div',{style:{padding:12,background:'#fff',border:'1px solid #d0d0e0',borderRadius:8,display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}},
-      React.createElement('span',{style:{gridColumn:'1/-1',fontSize:13,fontWeight:600,color:'#333'}},'Firebase 설정'),
-      React.createElement('div',{style:{gridColumn:'1/-1',fontSize:11,color:'#6c5ce7',background:'#f0eeff',padding:'6px 10px',borderRadius:4}},
-        fbStatus==='connected' ? '✅ Vercel 환경변수에서 자동 연결됨' : '💡 Vercel Dashboard > Settings > Environment Variables에서 설정하면 자동 연결됩니다'),
-      ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId'].map(k =>
-        React.createElement('div',{key:k,style:{display:'flex',flexDirection:'column',gap:2}},
-          React.createElement('label',{style:{fontSize:10,color:'#666'}},k),
-          React.createElement('input',{value:fbConfig[k]||'',onChange:e=>{const v=e.target.value;setFbConfig(prev=>({...prev,[k]:v}))},style:{padding:'4px 8px',fontSize:11,border:'1px solid #d0d0e0',borderRadius:4,background:'#fafafa'}})
-        )
-      ),
-      React.createElement('div',{style:{gridColumn:'1/-1',display:'flex',gap:8}},
-        React.createElement('button',{onClick:handleSaveFbConfig,style:{padding:'6px 16px',fontSize:12,borderRadius:6,border:'none',background:'#6c5ce7',color:'white',cursor:'pointer'}},'저장 및 연결'),
-        React.createElement('button',{onClick:()=>setShowFirebaseConfig(false),style:{padding:'6px 16px',fontSize:12,borderRadius:6,border:'1px solid #d0d0e0',background:'white',color:'#666',cursor:'pointer'}},'닫기')
-      )
-    ),
-    // === Project List Panel ===
-    showProjectPanel && React.createElement('div',{style:{padding:12,background:'#fff',border:'1px solid #d0d0e0',borderRadius:8,maxHeight:250,overflow:'auto'}},
-      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}},
-        React.createElement('span',{style:{fontSize:13,fontWeight:600,color:'#333'}},'프로젝트 목록 ('+projectList.length+')'),
-        React.createElement('button',{onClick:()=>{if(getDb()) fbListProjects().then(l=>setProjectList(l))},style:{padding:'2px 8px',fontSize:10,borderRadius:4,border:'1px solid #d0d0e0',background:'white',cursor:'pointer'}},'새로고침')
-      ),
-      projectList.length===0 && React.createElement('div',{style:{textAlign:'center',padding:16,color:'#999',fontSize:12}}, fbStatus==='connected'?'저장된 프로젝트가 없습니다':'Firebase를 먼저 설정해주세요'),
-      ...projectList.map(p => React.createElement('div',{key:p.id,style:{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:6,background:p.id===currentProjectId?'#f0eeff':'#fafafa',border:'1px solid '+(p.id===currentProjectId?'#6c5ce7':'#eee'),marginBottom:4,cursor:'pointer'},onClick:()=>loadProjectFromFB(p.id)},
-        React.createElement('span',{style:{flex:1,fontSize:12,fontWeight:p.id===currentProjectId?600:400,color:'#333'}}, p.title||p.id),
-        React.createElement('span',{style:{fontSize:10,color:'#999'}}, p.phase||''),
-        p.sceneCount && React.createElement('span',{style:{fontSize:10,color:'#999'}}, p.sceneCount+'씬'),
-        React.createElement('button',{onClick:e=>{e.stopPropagation();deleteProjectFromFB(p.id)},style:{padding:'2px 6px',fontSize:10,borderRadius:4,border:'1px solid #e03030',background:'white',color:'#e03030',cursor:'pointer'}},'삭제')
-      ))
-    ),
-    React.createElement('div', {style:{display:'flex',gap:12,alignItems:'center',padding:'10px 14px',background:'linear-gradient(135deg,#e8e8f4,#dde0f0)',borderRadius:10,flexWrap:'wrap'}},
-      React.createElement('span', {style:{color:'#6c5ce7',fontWeight:700,fontSize:15}}, 'LongForm Pipeline'),
-      React.createElement('select', {value:textProvider,onChange:e=>setTextProvider(e.target.value),disabled:running,style:{background:'#ffffff',color:'#1a1a2e',border:'1px solid #d0d0e0',borderRadius:6,padding:'4px 8px',fontSize:12}},
-        React.createElement('option',{value:'gemini'},'Text: Gemini'), React.createElement('option',{value:'grok'},'Text: Grok')),
-      React.createElement('select', {value:imageProvider,onChange:e=>setImageProvider(e.target.value),disabled:running,style:{background:'#ffffff',color:'#1a1a2e',border:'1px solid #d0d0e0',borderRadius:6,padding:'4px 8px',fontSize:12}},
-        React.createElement('option',{value:'imagen'},'Image: Imagen 4'), React.createElement('option',{value:'grok'},'Image: Grok Aurora')),
-      React.createElement('label',{style:{display:'flex',alignItems:'center',gap:4,color:'#666688',fontSize:12,cursor:'pointer'}},
-        React.createElement('input',{type:'checkbox',checked:enableWebtoon,onChange:e=>setEnableWebtoon(e.target.checked),disabled:running}), 'Phase 5 \uC6F9\uD230\uD655\uC7A5'),
-      React.createElement('span',{style:{marginLeft:'auto',padding:'3px 10px',borderRadius:12,fontSize:11,fontWeight:600,background:phase==='COMPLETED'?'#238636':phase==='ERROR'?'#da3633':running?'#1f6feb':'#d0d0e0',color:'#fff'}}, PHASE_LABELS[phase]||phase)
-    ),
-    React.createElement('div',{style:{position:'relative',height:32,background:'#f5f5fa',borderRadius:8,overflow:'hidden'}},
-      React.createElement('div',{style:{height:'100%',width:progressPct+'%',transition:'width 0.5s ease',background:phase==='ERROR'?'linear-gradient(90deg,#da3633,#f85149)':'linear-gradient(90deg,#6c5ce7,#a29bfe)',borderRadius:8}}),
-      React.createElement('div',{style:{position:'absolute',top:0,left:0,right:0,bottom:0,display:'flex',alignItems:'center',justifyContent:'space-around',padding:'0 8px'}},
-        ...[1,2,3,4,5].map(n=>React.createElement('span',{key:n,style:{fontSize:10,fontWeight:600,color:phaseNum>=n?'#fff':'#999aab',textShadow:phaseNum>=n?'0 0 4px rgba(0,0,0,0.5)':'none'}},['P1 \uBD84\uC11D','P2 \uC528','P3 \uC575\uCEE4','P4 \uC601\uC0C1','P5 \uC6F9\uD230'][n-1])))
-    ),
-    React.createElement('div',{style:{flex:1,display:'flex',gap:12,minHeight:0,overflow:'hidden'}},
-      React.createElement('div',{style:{width:340,display:'flex',flexDirection:'column',gap:10,flexShrink:0}},
-        React.createElement('input',{placeholder:'Project Title',value:projectTitle,onChange:e=>setProjectTitle(e.target.value),disabled:running,style:{background:'#ffffff',color:'#1a1a2e',border:'1px solid #d0d0e0',borderRadius:8,padding:'8px 12px',fontSize:13}}),
-        React.createElement('textarea',{placeholder:'Enter full story/web novel text here...\n\nPaste the complete text for the AI to analyze.',value:sourceText,onChange:e=>setSourceText(e.target.value),disabled:running,style:{flex:1,background:'#ffffff',color:'#1a1a2e',border:'1px solid #d0d0e0',borderRadius:8,padding:12,fontSize:12,lineHeight:1.6,resize:'none',fontFamily:'inherit'}}),
-        React.createElement('div',{style:{fontSize:11,color:'#999aab',textAlign:'right'}}, sourceText.length.toLocaleString()+' chars | '+lfScenes.length+' scenes'),
-          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:4}},
-            React.createElement('span',{style:{fontSize:12,color:'var(--text2)'}},'이미지 모델:'),
-            React.createElement('select',{value:imageProvider,onChange:e=>setImageProvider(e.target.value),disabled:running,style:{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,cursor:'pointer'}},
-              React.createElement('option',{value:'imagen4'},'Imagen 4'),
-              React.createElement('option',{value:'imagen4ultra'},'Imagen 4 Ultra'),
-              React.createElement('option',{value:'nanoBananaPro'},'Nano Banana Pro'),
-              React.createElement('option',{value:'nanoBanana'},'Nano Banana')
-            )
-          ),
-          
-        React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-          !running && phase==='IDLE' && React.createElement('button',{onClick:runFullPipeline,disabled:!sourceText.trim(),style:{flex:1,padding:'10px 16px',background:'linear-gradient(135deg,#6c5ce7,#a29bfe)',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer',opacity:sourceText.trim()?1:0.4}},'Full Pipeline Start'),
-          !running && phase==='ERROR' && React.createElement('button',{onClick:resumePipeline,style:{flex:1,padding:'10px 16px',background:'linear-gradient(135deg,#f0883e,#f9826c)',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}},'Resume from Error'),
-          !running && phase==='COMPLETED' && React.createElement('button',{onClick:()=>{setPhase('IDLE');setPhaseHistory([]);setGlobalAsset(null);lfScenesRef.current = []; setLfScenes([]);clearPipeline();},style:{flex:1,padding:'10px 16px',background:'#238636',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}},'New Project'),
-          running && React.createElement('button',{onClick:stopPipeline,style:{flex:1,padding:'10px 16px',background:'#da3633',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}},'Stop Pipeline'),
-          !running && phase!=='IDLE' && phase!=='ERROR' && phase!=='COMPLETED' && React.createElement('button',{onClick:async()=>{setRunning(true);try{if(phase==='PHASE_1_COMPLETE')await runPhase2();else if(phase==='PHASE_2_COMPLETE')await runPhase3();else if(phase==='PHASE_3_COMPLETE')await runPhase4();else if(phase==='PHASE_4_COMPLETE')await runPhase5();}catch(e){transition('ERROR',e.message);}finally{setRunning(false);}},style:{flex:1,padding:'10px 16px',background:'#1f6feb',color:'#fff',border:'none',borderRadius:8,fontWeight:700,fontSize:13,cursor:'pointer'}},'Next Phase')
-        ),
-        errorMsg && React.createElement('div',{style:{padding:'8px 12px',background:'#3d1f1f',border:'1px solid #da3633',borderRadius:8,color:'#f85149',fontSize:12,wordBreak:'break-all'}}, errorMsg)
-      ),
-      React.createElement('div',{style:{flex:1,display:'flex',flexDirection:'column',gap:10,overflow:'hidden'}},
-        React.createElement('div',{style:{display:'flex',gap:6}},
-          ...['characters','backgrounds','scenes'].map(v=>React.createElement('button',{key:v,onClick:()=>setExpandView(expandView===v?null:v),style:{padding:'6px 14px',borderRadius:8,border:'none',fontSize:12,fontWeight:600,cursor:'pointer',background:expandView===v?'#6c5ce7':'#d0d0e0',color:expandView===v?'#fff':'#666688'}},
-            v==='characters'?'Characters '+(globalAsset?.characters?.length||0):v==='backgrounds'?'Backgrounds '+(globalAsset?.backgrounds?.length||0):'Scenes '+lfScenes.length))
-        ),
-        React.createElement('div',{style:{flex:1,overflow:'auto',borderRadius:10,background:'#ffffff',border:'1px solid #d0d0e0',padding:12}},
-          expandView==='characters' && globalAsset?.characters && React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}},
-            ...globalAsset.characters.map((ch,i)=>React.createElement('div',{key:i,style:{background:'#f5f5fa',borderRadius:10,overflow:'hidden',border:'1px solid #d0d0e0'}},
-              ch.referenceImageUrl && React.createElement('img',{src:ch.referenceImageUrl,style:{width:'100%',height:200,objectFit:'cover'}}),
-              React.createElement('div',{style:{padding:'8px 10px'}},
-                React.createElement('div',{style:{fontWeight:700,color:'#1a1a2e',fontSize:13}},ch.name),
-                React.createElement('div',{style:{color:'#6c5ce7',fontSize:11,marginTop:2}},ch.role),
-                React.createElement('div',{style:{color:'#666688',fontSize:11,marginTop:4}},(ch.appearance?.hair||'')+' | '+(ch.appearance?.build||''))
-              )))
-          ),
-          expandView==='backgrounds' && globalAsset?.backgrounds && React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:12}},
-            ...globalAsset.backgrounds.map((bg,i)=>React.createElement('div',{key:i,style:{background:'#f5f5fa',borderRadius:10,overflow:'hidden',border:'1px solid #d0d0e0'}},
-              bg.referenceImageUrl && React.createElement('img',{src:bg.referenceImageUrl,style:{width:'100%',height:160,objectFit:'cover'}}),
-              React.createElement('div',{style:{padding:'8px 10px'}},
-                React.createElement('div',{style:{fontWeight:700,color:'#1a1a2e',fontSize:13}},bg.name),
-                React.createElement('div',{style:{color:'#666688',fontSize:11,marginTop:2}},bg.locationType+' | '+bg.timeOfDay+' | '+(bg.mood||''))
-              )))
-          ),
-          expandView==='scenes' && lfScenes.length>0 && React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10}},
-            ...lfScenes.map((sc,i)=>React.createElement('div',{key:i,style:{display:'flex',gap:10,background:'#f5f5fa',borderRadius:10,border:currentSceneIdx===i&&running?'2px solid #6c5ce7':'1px solid #d0d0e0',padding:10,alignItems:'flex-start'}},
-              React.createElement('div',{style:{width:32,height:32,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:sc.status==='complete'?'#238636':sc.status==='video_ready'?'#1f6feb':sc.status==='anchor_ready'?'#6c5ce7':'#d0d0e0',color:'#fff',fontSize:12,fontWeight:700,flexShrink:0}},i+1),
-              React.createElement('div',{style:{flex:1,minWidth:0}},
-                React.createElement('div',{style:{color:'#1a1a2e',fontSize:12,fontWeight:600,marginBottom:4}},sc.summary||('Scene '+(i+1))),
-                sc.compositionData && React.createElement('div',{style:{color:'#666688',fontSize:11}},sc.compositionData.shotSize+' | '+sc.compositionData.cameraAngle+' | '+sc.compositionData.lighting),
-                React.createElement('div',{style:{display:'flex',gap:4,marginTop:6}},
-                  React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:sc.status==='complete'?'#238636':sc.status==='prompt_ready'?'#6c5ce7':sc.status==='image_done'?'#2ea043':'#d0d0e0',color:'#fff'}},sc.status||'pending'),
-                  sc.narrativeMood && React.createElement('span',{style:{padding:'2px 6px',borderRadius:4,fontSize:10,background:'#f0f0f8',color:'#f0883e'}},sc.narrativeMood))
-              ),
-              React.createElement('div',{style:{display:'flex',gap:4,marginTop:4,flexWrap:'wrap'}},
-                React.createElement('button',{onClick:(e)=>{e.stopPropagation();generateSceneImage(i)},disabled:sc.status==='generating_image',style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #6c5ce7',background:sc.status==='generating_image'?'#6c5ce7':'transparent',color:'#fff',cursor:'pointer',whiteSpace:'nowrap'}},(sc.status==='generating_image'?'•••':sc.imagePrompt?'🖼️ 이미지 생성 (✓)':'🖼️ 이미지 생성')),
-                React.createElement('button',{onClick:(e)=>{e.stopPropagation();generateSceneVideo(i)},disabled:sc.status==='generating_video'||!sc.anchorImage,style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #e0457b',background:sc.status==='generating_video'?'#e0457b':'transparent',color:'#fff',cursor:'pointer',whiteSpace:'nowrap'}},(sc.status==='generating_video'?'•••':'🎬 영상 생성')),
-                sc.anchorImage&&React.createElement('button',{onClick:(e)=>{e.stopPropagation();downloadMedia(sc.anchorImage.url,'scene_'+(i+1)+'_image.png')},style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #238636',background:'transparent',color:'#238636',cursor:'pointer',whiteSpace:'nowrap'}},'⬇ 이미지 저장'),
-                sc.video&&sc.video.url&&React.createElement('button',{onClick:(e)=>{e.stopPropagation();downloadMedia(sc.video.url,'scene_'+(i+1)+'_video.mp4')},style:{padding:'3px 8px',fontSize:10,borderRadius:4,border:'1px solid #238636',background:'transparent',color:'#238636',cursor:'pointer',whiteSpace:'nowrap'}},'⬇ 영상 저장')
-              ),
-              sc.anchorImage?.url && React.createElement('img',{src:sc.anchorImage.url,style:{width:60,height:80,objectFit:'cover',borderRadius:6,flexShrink:0}}),
-              sc.video?.url && React.createElement('video',{src:sc.video.url,muted:true,style:{width:60,height:80,objectFit:'cover',borderRadius:6,flexShrink:0},onMouseEnter:e=>e.target.play(),onMouseLeave:e=>{e.target.pause();e.target.currentTime=0;}})
-            ))
-          ),
-          !expandView && React.createElement('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',color:'#999aab',gap:12}},
-            React.createElement('div',{style:{fontSize:48}},'\uD83C\uDFAC'),
-            React.createElement('div',{style:{fontSize:14,fontWeight:600}},'Long-Form Production Pipeline'),
-            React.createElement('div',{style:{fontSize:12,textAlign:'center',lineHeight:1.8,maxWidth:400}},'Phase 1: Story Analysis & Global Asset\nPhase 2: Scene Splitting & DP Composition\nPhase 3: Anchor Image Generation\nPhase 4: Video Generation (Veo 2)\nPhase 5: Webtoon Panel Expansion'),
-            React.createElement('div',{style:{fontSize:11,color:'#d0d0e0',marginTop:8}},'Paste your story text on the left and start the pipeline')
-          ),
-          expandView==='characters' && !globalAsset?.characters && React.createElement('div',{style:{color:'#999aab',textAlign:'center',padding:40,fontSize:13}},'Phase 1\uC744 \uC2E4\uD589\uD558\uBA74 \uCE90\uB9AD\uD130\uAC00 \uCD94\uCD9C\uB429\uB2C8\uB2E4'),
-          expandView==='backgrounds' && !globalAsset?.backgrounds && React.createElement('div',{style:{color:'#999aab',textAlign:'center',padding:40,fontSize:13}},'Phase 1\uC744 \uC2E4\uD589\uD558\uBA74 \uBC30\uACBD\uC774 \uCD94\uCD9C\uB429\uB2C8\uB2E4'),
-          expandView==='scenes' && lfScenes.length===0 && React.createElement('div',{style:{color:'#999aab',textAlign:'center',padding:40,fontSize:13}},'Phase 2\uB97C \uC2E4\uD589\uD558\uBA74 \uC528\uC774 \uBD84\uD560\uB429\uB2C8\uB2E4')
-        )
-      )
-    ),
-    phaseHistory.length>0 && React.createElement('div',{style:{display:'flex',gap:4,padding:'6px 10px',background:'#f5f5fa',borderRadius:8,overflowX:'auto',flexShrink:0}},
-      ...phaseHistory.map((h,i)=>React.createElement('span',{key:i,style:{padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:600,whiteSpace:'nowrap',background:h.error?'#3d1f1f':h.phase.endsWith('_COMPLETE')||h.phase==='COMPLETED'?'#0e3a1f':'#1c2333',color:h.error?'#f85149':h.phase.endsWith('_COMPLETE')||h.phase==='COMPLETED'?'#3fb950':'#6c5ce7'}},PHASE_LABELS[h.phase]||h.phase))
-    )
-  );
-}
 
+  // === Per-scene image generation ===
+  const generateSceneImage = useCallback(async (idx) => {
+    const scenes = lfScenesRef.current;
+    const sc = scenes[idx];
+    if (!sc) { setErrorMsg('Scene data not ready'); return; }
+    if (!sc.imagePrompt && !sc.compositionData) { setErrorMsg('씬 분할과 P3을 먼저 실행하세요'); return; }
+    log('[GenImg] Generating image for scene ' + (idx+1));
+    sc.status = 'generating_image';
+    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
+    try {
+      let prompt;
+      if (sc.imagePrompt && typeof sc.imagePrompt === 'object' && sc.imagePrompt.prompt) { prompt = sc.imagePrompt.prompt; }
+      else if (typeof sc.imagePrompt === 'string') { prompt = sc.imagePrompt; }
+      else { prompt = 'manhwa webtoon style, ' + sc.summary; }
+      const comp = sc.compositionData || {};
+      const charRefs = ((comp.characterPoses||[]).map(cp => { const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null; return cr ? cr.referencePrompt : ''; })).filter(Boolean);
+      if (charRefs.length > 0) { prompt += '\nCharacter details: ' + charRefs.join('; '); }
+      if (!charRefs.length && sc.keyCharacters && (globalAsset||{}).characters) {
+        const kcRefs = sc.keyCharacters.map(cid => { const cr = globalAsset.characters.find(ch=>ch.id===cid); return cr ? cr.referencePrompt : ''; }).filter(Boolean);
+        if (kcRefs.length > 0) { prompt += '\nCharacter details: ' + kcRefs.join('; '); }
+      }
+      const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
+      if (bgRef && bgRef.referencePrompt) { prompt += '\nBackground: ' + bgRef.referencePrompt; }
+      const imgResult = await callImageLF(prompt);
+      const imgUrl = Array.isArray(imgResult) ? imgResult[0] : imgResult;
+      sc.anchorImage = { url: imgUrl, prompt };
+      sc.status = sc.video ? 'complete' : 'image_done';
+      log('[GenImg] Scene ' + (idx+1) + ' image done');
+    } catch(e) { log('[GenImg] Error: ' + e.message); sc.status = 'error'; setErrorMsg('Image gen failed: ' + e.message); }
+    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
+  }, [callImageLF, globalAsset, log]);
 
-function ApiKeyModal({onClose, onSave}) {
-  const [projectId, setProjectId] = React.useState(localStorage.getItem('VERTEX_PROJECT_ID')||'');
-  const [location, setLocation] = React.useState(localStorage.getItem('VERTEX_LOCATION')||'us-central1');
-  const [accessToken, setAccessToken] = React.useState(localStorage.getItem('VERTEX_ACCESS_TOKEN')||'');
-  const [xaiVal, setXaiVal] = React.useState(localStorage.getItem('XAI_API_KEY')||'');
-  const handleSave = () => {
-    if(projectId) localStorage.setItem('VERTEX_PROJECT_ID', projectId.trim());
-    if(location) localStorage.setItem('VERTEX_LOCATION', location.trim());
-    if(accessToken) localStorage.setItem('VERTEX_ACCESS_TOKEN', accessToken.trim());
-    if(xaiVal) localStorage.setItem('XAI_API_KEY', xaiVal.trim());
-    onSave && onSave();
-    onClose();
-  };
-  return React.createElement('div', {style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}},
-    React.createElement('div', {style:{background:'var(--surface)',borderRadius:12,padding:24,width:480,maxHeight:'80vh',overflow:'auto'}},
-      React.createElement('h3', {style:{margin:'0 0 16px',color:'var(--text)'}}, 'Vertex AI Settings'),
-        React.createElement('div', {style:{fontSize:11,color:'#6c5ce7',background:'#f0eeff',padding:'6px 10px',borderRadius:4,marginBottom:8}}, 
-          localStorage.getItem('VERTEX_PROJECT_ID') ? '✅ Vercel 환경변수에서 자동 설정됨 (수동 변경 가능)' : '💡 Vercel 환경변수로 설정하면 매번 입력할 필요 없습니다'),
-      React.createElement('label', {style:{color:'var(--text2)',fontSize:12}}, 'Project ID'),
-      React.createElement('input', {type:'text', value:projectId, onChange:e=>setProjectId(e.target.value), placeholder:'my-gcp-project-id', style:{width:'100%',padding:8,marginBottom:12,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)'}}),
-      React.createElement('label', {style:{color:'var(--text2)',fontSize:12}}, 'Location'),
-      React.createElement('input', {type:'text', value:location, onChange:e=>setLocation(e.target.value), placeholder:'us-central1', style:{width:'100%',padding:8,marginBottom:12,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)'}}),
-      React.createElement('label', {style:{color:'var(--text2)',fontSize:12}}, 'Access Token (gcloud auth print-access-token)'),
-      React.createElement('textarea', {value:accessToken, onChange:e=>setAccessToken(e.target.value), placeholder:'ya29.a0AfH6SM...', rows:3, style:{width:'100%',padding:8,marginBottom:12,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontFamily:'monospace',fontSize:11}}),
-      React.createElement('label', {style:{color:'var(--text2)',fontSize:12}}, 'xAI (Grok) API Key (optional)'),
-      React.createElement('input', {type:'password', value:xaiVal, onChange:e=>setXaiVal(e.target.value), placeholder:'xai-...', style:{width:'100%',padding:8,marginBottom:16,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)'}}),
-      React.createElement('div', {style:{display:'flex',gap:8,justifyContent:'flex-end'}},
-        React.createElement('button', {className:'btn btn-secondary',onClick:onClose}, 'Cancel'),
-        React.createElement('button', {className:'btn btn-primary',onClick:handleSave}, 'Save')
-      )
-    )
-  );
-}
+  // === Regenerate image with edited prompt ===
+  const regenerateSceneImageWithPrompt = useCallback(async (idx, newPrompt) => {
+    const scenes = lfScenesRef.current;
+    const sc = scenes[idx];
+    if (!sc) { setErrorMsg('Scene data not ready'); return; }
+    log('[RegenImg] Regenerating image for scene ' + (idx+1));
+    sc.status = 'generating_image';
+    if (sc.imagePrompt && typeof sc.imagePrompt === 'object') { sc.imagePrompt.prompt = newPrompt; }
+    else { sc.imagePrompt = { prompt: newPrompt }; }
+    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
+    try {
+      let prompt = newPrompt;
+      const comp = sc.compositionData || {};
+      const charRefs = ((comp.characterPoses||[]).map(cp => { const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null; return cr ? cr.referencePrompt : ''; })).filter(Boolean);
+      if (charRefs.length > 0) { prompt += '\nCharacter details: ' + charRefs.join('; '); }
+      if (!charRefs.length && sc.keyCharacters && (globalAsset||{}).characters) {
+        const kcRefs = sc.keyCharacters.map(cid => { const cr = globalAsset.characters.find(ch=>ch.id===cid); return cr ? cr.referencePrompt : ''; }).filter(Boolean);
+        if (kcRefs.length > 0) { prompt += '\nCharacter details: ' + kcRefs.join('; '); }
+      }
+      const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
+      if (bgRef && bgRef.referencePrompt) { prompt += '\nBackground: ' + bgRef.referencePrompt; }
+      const imgResult = await callImageLF(prompt);
+      const imgUrl = Array.isArray(imgResult) ? imgResult[0] : imgResult;
+      sc.anchorImage = { url: imgUrl, prompt: newPrompt };
+      sc.status = sc.video ? 'complete' : 'image_done';
+      log('[RegenImg] Scene ' + (idx+1) + ' image regenerated');
+    } catch(e) { log('[RegenImg] Error: ' + e.message); sc.status = 'error'; setErrorMsg('Image regen failed: ' + e.message); }
+    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
+    setEditingPromptIdx(-1);
+  }, [callImageLF, globalAsset, log]);
 
-function App() {
-  const [activeTab, setActiveTab] = useState('conti');
-  const [showKeyModal, setShowKeyModal] = useState(!hasGeminiKey());
-  const [keySet, setKeySet] = useState(hasGeminiKey());
-  const [xaiKS, setXaiKS] = React.useState(hasXaiKey());
-  const [scenes, setScenes] = useState([{
-    id:'scene_1', description:'', dialogues:[{type:'speech',character:'',text:''}],
-    sfx:[], sfxText:'', emotionStart:'smiling', emotionEnd:'smiling',
-    cameraHint:'static', genre:'romance',
-    convertedConti:'', imagePrompt:'', imageNegative:'', imagePromptFull:'',
-    motionConti:'', motionPrompt:'', imageUrl:'', videoUrl:'',
-    status:{conti:'idle',image:'idle',video:'idle'}
-  }]);
-  const [activeSceneIdx, setActiveSceneIdx] = useState(0);
-  const [logs, setLogs] = useState([]);
+  // === Per-scene video generation ===
+  const generateSceneVideo = useCallback(async (idx) => {
+    const scenes = lfScenesRef.current;
+    const sc = scenes[idx];
+    if (!sc) { setErrorMsg('Scene data not ready'); return; }
+    if (!sc.anchorImage) { setErrorMsg('이미지를 먼저 생성하세요'); return; }
+    log('[GenVid] Generating video for scene ' + (idx+1));
+    sc.status = 'generating_video';
+    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
+    try {
+      const motionPrompt = (sc.videoPrompt && sc.videoPrompt.motionPrompt) || (sc.compositionData && sc.compositionData.motionHint) || sc.summary;
+      let imageB64 = null;
+      if (sc.anchorImage && sc.anchorImage.url) {
+        const imgUrl = typeof sc.anchorImage.url === 'string' ? sc.anchorImage.url : String(sc.anchorImage.url || '');
+        if (imgUrl.startsWith('data:')) { imageB64 = imgUrl.split(',')[1]; }
+        else if (imgUrl) { try { const resp = await fetch(imgUrl); const blob = await resp.blob(); imageB64 = await new Promise(resolve => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result.split(',')[1]); reader.readAsDataURL(blob); }); } catch(fe) { log('[GenVid] Image convert failed: ' + fe.message); } }
+      }
+      const videoUrls = await callVeo(motionPrompt, imageB64, {aspectRatio:'9:16', duration:5});
+      if (videoUrls && videoUrls.length > 0) { sc.video = { url: videoUrls[0], durationSec: 5, motionPrompt }; sc.status = 'complete'; log('[GenVid] Scene ' + (idx+1) + ' video done'); }
+      else { sc.status = sc.anchorImage ? 'image_done' : 'pending'; log('[GenVid] No video returned'); }
+    } catch(e) { log('[GenVid] Error: ' + e.message); sc.status = 'error'; setErrorMsg('Video gen failed: ' + e.message); }
+    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
+  }, [log]);
 
-  const addLog = useCallback((type, msg) => {
-    const now = new Date();
-    const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
-    setLogs(prev => [...prev.slice(-100), {type, msg, time}]);
+  // === Download media ===
+  const downloadMedia = useCallback((dataUrl, filename) => {
+    const a = document.createElement('a'); a.href = dataUrl; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }, []);
 
-  const tabs = [
-    {id:'conti', label:'글콘티 에디터', icon:'📋'},
-    {id:'imageGen', label:'이미지 생성', icon:'🖼️'},
-    {id:'videoGen', label:'영상 생성', icon:'🎬'},
-    {id:'workbench', label:'웹툰제작 워크벤치', icon:'🔄'}
-,
-    {id:'longform', label:'롱폼 프로덕션', icon:'🎬'}  ];
+  // === localStorage save/load ===
+  const SAVE_KEY = 'LF_PIPELINE_STATE';
+  useEffect(() => {
+    try { const s = localStorage.getItem(SAVE_KEY); if (s) { const saved = JSON.parse(s);
+      if (saved.projectTitle) setProjectTitle(saved.projectTitle);
+      if (saved.sourceText) setSourceText(saved.sourceText);
+      if (saved.globalAsset) setGlobalAsset(saved.globalAsset);
+      if (saved.lfScenes && saved.lfScenes.length > 0) { lfScenesRef.current = saved.lfScenes; setLfScenes(saved.lfScenes); }
+      if (saved.phaseHistory) setPhaseHistory(saved.phaseHistory);
+      if (saved.phase && saved.phase !== 'IDLE') setPhase(saved.phase.includes('COMPLETE') || saved.phase === 'COMPLETED' ? saved.phase : 'IDLE');
+      log('[System] restored pipeline state');
+    }} catch(e) {}
+  }, []);
+  useEffect(() => {
+    if (lfScenesRef.current.length > 0 || globalAsset || projectTitle) {
+      try { localStorage.setItem(SAVE_KEY, JSON.stringify({ projectTitle, sourceText, globalAsset, lfScenes: lfScenesRef.current, phase, phaseHistory })); } catch(e) {}
+    }
+  }, [phase, projectTitle, globalAsset, lfScenes]);
+
+  const phaseNum = phase.startsWith('PHASE_') ? parseInt(phase.split('_')[1]) : phase==='COMPLETED' ? 6 : 0;
+  const progressPct = phase==='COMPLETED' ? 100 : phase==='IDLE' ? 0 : Math.round((phaseNum/5)*100);
 
   return (
-    <div>
-      <div className="app-header">
-        <div className="app-logo">웹툰 생성기</div>
-        <div className="nav-tabs">
-          {tabs.map(t=>(
-            <button key={t.id} className={`nav-tab ${activeTab===t.id?'active':''}`} onClick={()=>setActiveTab(t.id)}>
-              <span className="tab-icon">{t.icon}</span>{t.label}
-            </button>
-          ))}
-        </div>
-        <button className="api-key-btn" onClick={()=>setShowKeyModal(true)} style={{display:'flex',gap:6,alignItems:'center'}}>
-              {keySet && <span style={{color:'#00c853'}}>● Gemini</span>}
-              {!keySet && <span style={{color:'#ff5252'}}>○ Gemini</span>}
-              {xaiKS && <span style={{color:'#00c853'}}>● Grok</span>}
-              {!xaiKS && <span style={{color:'#ff5252'}}>○ Grok</span>}
-              🔑
-            </button>
-      </div>
-      {showKeyModal && <ApiKeyModal onClose={()=>setShowKeyModal(false)} onSave={()=>{setKeySet(hasGeminiKey());setShowKeyModal(false);}}/>}
+    <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden'}}>
+      {/* Tab Content */}
+      <div style={{flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
+        {activeTab === 'source' && (
+          <div style={{display: 'flex', flexDirection: 'column', gap: 12, flex: 1, overflow: 'hidden'}}>
+            {/* Project Bar */}
+            <div style={{display: 'flex', gap: 8, flexWrap: 'wrap', padding: 12, background: '#f0f0f8', borderRadius: 8, alignItems: 'center'}}>
+              <span style={{fontSize: 11, fontWeight: 600, color: 'var(--text2)'}}>📁 프로젝트</span>
+              {currentProjectId && <span style={{fontSize: 11, color: 'var(--text2)', background: 'white', padding: '2px 8px', borderRadius: 4}}>{projectTitle || currentProjectId}</span>}
+              <button onClick={()=>setShowProjectPanel(!showProjectPanel)} className="btn btn-secondary btn-sm">프로젝트 목록</button>
+              <button onClick={async()=>{if(currentProjectId && projectTitle) {setSavingStatus('저장 중...'); try {await fbSaveProject(currentProjectId, {title: projectTitle, phase, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}); setSavingStatus('✅ 저장됨'); setTimeout(()=>setSavingStatus(''), 2000);} catch(e){setSavingStatus('❌ 저장 실패');}}} disabled={!projectTitle} className="btn btn-primary btn-sm">💾 저장</button>
+              <button onClick={()=>{setCurrentProjectId('');setProjectTitle('');setSourceText('');}} className="btn btn-secondary btn-sm">+ 새 프로젝트</button>
+              {savingStatus && <span style={{fontSize: 11, color: savingStatus.includes('실패')?'var(--err)':'var(--success)'}}>  {savingStatus}</span>}
+              {showProjectPanel && projectList.length > 0 && (
+                <div style={{position: 'absolute', top: 200, left: 20, background: 'white', border: '1px solid var(--border)', borderRadius: 8, maxWidth: 300, maxHeight: 250, overflow: 'auto', zIndex: 10}}>
+                  {projectList.map(p => (
+                    <div key={p.id} style={{padding: '8px 12px', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontSize: 12}} onClick={()=>{setCurrentProjectId(p.id);setProjectTitle(p.title||p.id);setShowProjectPanel(false);}}>
+                      <div style={{fontWeight: 600}}>{p.title||p.id}</div>
+                      <div style={{fontSize: 10, color: 'var(--text2)'}}>{p.phase} · {p.sceneCount||0} scenes</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-      <div className="main-content">
-        {activeTab === 'conti' && (
-          <GlContiEditor scenes={scenes} setScenes={setScenes} activeSceneIdx={activeSceneIdx} setActiveSceneIdx={setActiveSceneIdx}/>
-        )}
-        {activeTab === 'imageGen' && (
-          <ImageGenerator scenes={scenes} setScenes={setScenes} activeSceneIdx={activeSceneIdx} setActiveSceneIdx={setActiveSceneIdx} addLog={addLog}/>
-        )}
-        {activeTab === 'videoGen' && (
-          <VideoGenerator scenes={scenes} setScenes={setScenes} activeSceneIdx={activeSceneIdx} setActiveSceneIdx={setActiveSceneIdx} addLog={addLog}/>
-        )}
-        {activeTab === 'workbench' && (
-          <Workbench scenes={scenes} setScenes={setScenes} addLog={addLog}/>
-        )}
+            {/* Pipeline Controls */}
+            <div style={{display: 'flex', gap: 12, alignItems: 'center', padding: 12, background: 'linear-gradient(135deg,#e8e8f4,#dde0f0)', borderRadius: 10, flexWrap: 'wrap'}}>
+              <span style={{color: 'var(--accent)', fontWeight: 700, fontSize: 14}}>LongForm Pipeline</span>
+              <select value={textProvider} onChange={e=>setTextProvider(e.target.value)} disabled={running} style={{padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12}}>
+                <option value="gemini">Text: Gemini</option>
+                <option value="grok">Text: Grok</option>
+              </select>
+              <select value={imageProvider} onChange={e=>setImageProvider(e.target.value)} disabled={running} style={{padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12}}>
+                <option value="imagen4">Image: Imagen 4</option>
+                <option value="imagen4ultra">Image: Imagen 4 Ultra</option>
+                <option value="nanoBananaPro">Image: Nano Banana Pro</option>
+                <option value="grok">Image: Grok Aurora</option>
+              </select>
+              <label style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer'}}>
+                <input type="checkbox" checked={enableWebtoon} onChange={e=>setEnableWebtoon(e.target.checked)} disabled={running} />
+                P5 웹툰확장
+              </label>
+              <span style={{marginLeft: 'auto', padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: phase==='COMPLETED'?'#238636':phase==='ERROR'?'#da3633':running?'#1f6feb':'#d0d0e0', color: '#fff'}}>
+                {PHASE_LABELS[phase]||phase}
+              </span>
+            </div>
 
-                {activeTab === 'longform' && <LongFormOrchestrator scenes={scenes} setScenes={setScenes} log={(msg,lvl)=>addLog(lvl||'info',msg)}/>}
-{/* Log Panel */}
-        <div className="card" style={{marginTop:16}}>
-          <div className="card-title">🖥️ 시스템 로그
-            <button className="btn btn-sm btn-secondary" onClick={()=>setLogs([])} style={{marginLeft:'auto'}}>지우기</button>
+            {/* Progress Bar */}
+            <div style={{height: 32, background: 'var(--surface2)', borderRadius: 8, overflow: 'hidden', position: 'relative'}}>
+              <div style={{height: '100%', width: progressPct+'%', transition: 'width 0.5s ease', background: phase==='ERROR'?'linear-gradient(90deg,#da3633,#f85149)':'linear-gradient(90deg,var(--accent),var(--success))', borderRadius: 8}}></div>
+              <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 8px', fontSize: 10, fontWeight: 600}}>
+                {['P1 분석','씬','P3 앵커','P4 영상','P5 웹툰'].map((label, i) => (
+                  <span key={i} style={{color: phaseNum > i ? '#fff' : '#999', textShadow: phaseNum > i ? '0 0 4px rgba(0,0,0,0.5)' : 'none'}}>
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Source Input Section */}
+            <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden'}}>
+              <input placeholder="Project Title" value={projectTitle} onChange={e=>setProjectTitle(e.target.value)} disabled={running} style={{padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13}} />
+              <textarea placeholder="Enter full story/web novel text here..." value={sourceText} onChange={e=>setSourceText(e.target.value)} disabled={running} style={{flex: 1, padding: 12, border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, lineHeight: 1.6, resize: 'none', fontFamily: 'inherit'}} />
+              <div style={{fontSize: 11, color: 'var(--text2)', textAlign: 'right'}}>{sourceText.length.toLocaleString()} chars</div>
+
+              {/* Action Buttons */}
+              <div style={{display: 'flex', gap: 8, flexWrap: 'wrap'}}>
+                {!running && phase==='IDLE' && <button onClick={runFullPipeline} disabled={!sourceText.trim()} className="btn btn-primary btn-block">🚀 Full Pipeline Start</button>}
+                {!running && phase==='ERROR' && <button onClick={runFullPipeline} className="btn btn-primary btn-block">Retry Pipeline</button>}
+                {!running && phase==='COMPLETED' && <button onClick={()=>{setPhase('IDLE');setPhaseHistory([]);setGlobalAsset(null);lfScenesRef.current=[];setLfScenes([]);}} className="btn btn-success btn-block">New Project</button>}
+                {running && <button onClick={stopPipeline} className="btn btn-danger btn-block">⏹ Stop Pipeline</button>}
+              </div>
+
+              {errorMsg && <div style={{padding: 12, background: '#3d1f1f', border: '1px solid var(--err)', borderRadius: 8, color: '#f85149', fontSize: 12, wordBreak: 'break-all'}}>{errorMsg}</div>}
+            </div>
           </div>
-          <LogPanel logs={logs}/>
-        </div>
+        )}
+
+        {activeTab === 'phase1' && (
+          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12}}>
+            <div style={{display: 'flex', gap: 8}}>
+              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase1();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={!sourceText.trim() || running} className="btn btn-primary btn-sm">P1 스토리분석 재실행</button>
+            </div>
+            {!globalAsset && <div className="placeholder">Phase 1을 실행하면 캐릭터와 배경이 추출됩니다</div>}
+            {globalAsset && (
+              <>
+                <div>
+                  <h3 style={{fontSize: 13, fontWeight: 700, marginBottom: 12}}>캐릭터 ({globalAsset.characters?.length||0})</h3>
+                  <div className="scene-grid">
+                    {(globalAsset.characters||[]).map((ch, i) => (
+                      <div key={i} className="char-card">
+                        {ch.referenceImageUrl && <img src={ch.referenceImageUrl} alt={ch.name} />}
+                        <div className="card-content">
+                          <div className="char-name">{ch.name}</div>
+                          <div className="char-role">{ch.role}</div>
+                          <div className="char-desc">{ch.appearance?.hair} | {ch.appearance?.build}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h3 style={{fontSize: 13, fontWeight: 700, marginBottom: 12}}>배경 ({globalAsset.backgrounds?.length||0})</h3>
+                  <div className="scene-grid">
+                    {(globalAsset.backgrounds||[]).map((bg, i) => (
+                      <div key={i} className="bg-card">
+                        {bg.referenceImageUrl && <img src={bg.referenceImageUrl} alt={bg.name} />}
+                        <div className="card-content">
+                          <div className="bg-name">{bg.name}</div>
+                          <div className="bg-type">{bg.locationType}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'scenes' && (
+          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12}}>
+            <div style={{display: 'flex', gap: 8}}>
+              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase2();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={!sourceText.trim() || running} className="btn btn-primary btn-sm">씬 분할 재실행</button>
+            </div>
+            {lfScenes.length === 0 && <div className="placeholder">Phase 2를 실행하면 씬이 생성됩니다</div>}
+            {lfScenes.length > 0 && (
+              <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: 12}}>
+                {lfScenes.map((scene, i) => (
+                  <div key={i} className="scene-card">
+                    <h3>씬 #{scene.sceneNumber}</h3>
+                    <div className="scene-summary">{scene.summary}</div>
+                    <div style={{fontSize: 11, color: 'var(--text2)', marginBottom: 8}}>
+                      분위기: {scene.narrativeMood} | 소요시간: {scene.duration}초
+                    </div>
+                    {scene.compositionData && (
+                      <div className="scene-prompt">
+                        <strong>구도:</strong> {scene.compositionData.shotSize}<br/>
+                        <strong>조명:</strong> {scene.compositionData.lighting}<br/>
+                        <strong>카메라:</strong> {scene.compositionData.cameraAngle}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'images' && (
+          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12}}>
+            <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase3();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={lfScenes.length === 0 || running} className="btn btn-primary btn-sm">P3 이미지프롬프트 재실행</button>
+              {running && <span className="spinner" />}
+            </div>
+            {lfScenes.length === 0 && <div style={{textAlign:'center',padding:40,color:'var(--text2)'}}>Phase 3을 실행하면 이미지 프롬프트가 생성됩니다</div>}
+            {lfScenes.length > 0 && (
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:12}}>
+                {lfScenes.map((scene, i) => {
+                  const promptText = scene.imagePrompt ? (typeof scene.imagePrompt === 'object' ? scene.imagePrompt.prompt : scene.imagePrompt) : (scene.anchorImage?.prompt || '');
+                  return (
+                  <div key={i} className="card" style={{marginBottom:0}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                      <span style={{width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:scene.anchorImage?'#238636':scene.imagePrompt?'var(--accent)':'var(--border)',color:'#fff',fontSize:12,fontWeight:700,flexShrink:0}}>{i+1}</span>
+                      <span style={{fontSize:13,fontWeight:600,flex:1}}>{scene.summary?.substring(0,60)}</span>
+                      <span style={{padding:'2px 8px',borderRadius:4,fontSize:10,background:scene.status==='generating_image'?'var(--warn)':scene.anchorImage?'#238636':'var(--border)',color:'#fff'}}>{scene.status||'pending'}</span>
+                    </div>
+                    {/* Image Prompt Section */}
+                    {promptText && (
+                      <div style={{background:'#fafaff',borderRadius:6,border:'1px solid #e0e0f0',padding:8,marginBottom:8}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                          <span style={{fontSize:11,fontWeight:600,color:'var(--accent)'}}>🎨 이미지 프롬프트</span>
+                          {editingPromptIdx !== i && <button onClick={()=>{setEditingPromptIdx(i);setEditingPromptText(promptText);}} style={{padding:'2px 8px',fontSize:10,borderRadius:4,border:'1px solid var(--accent)',background:'transparent',color:'var(--accent)',cursor:'pointer'}}>✏️ 수정</button>}
+                        </div>
+                        {editingPromptIdx === i ? (
+                          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                            <textarea value={editingPromptText} onChange={e=>setEditingPromptText(e.target.value)} style={{width:'100%',minHeight:80,padding:8,fontSize:11,border:'1px solid var(--accent)',borderRadius:6,resize:'vertical',fontFamily:'monospace',lineHeight:1.5,boxSizing:'border-box'}} />
+                            <div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
+                              <button onClick={()=>setEditingPromptIdx(-1)} className="btn btn-secondary btn-sm">취소</button>
+                              <button onClick={()=>{const scenes=lfScenesRef.current;const s=scenes[i];if(s.imagePrompt&&typeof s.imagePrompt==='object'){s.imagePrompt.prompt=editingPromptText;}else{s.imagePrompt={prompt:editingPromptText};}lfScenesRef.current=[...scenes];setLfScenes([...scenes]);setEditingPromptIdx(-1);}} style={{padding:'4px 12px',fontSize:11,borderRadius:4,border:'1px solid #f0883e',background:'transparent',color:'#f0883e',cursor:'pointer',fontWeight:600}}>💾 저장만</button>
+                              <button onClick={()=>regenerateSceneImageWithPrompt(i,editingPromptText)} disabled={running} className="btn btn-primary btn-sm">🔄 저장 & 재생성</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{fontSize:10,color:'var(--text2)',lineHeight:1.5,maxHeight:60,overflow:'auto',fontFamily:'monospace',wordBreak:'break-all'}}>{promptText}</div>
+                        )}
+                      </div>
+                    )}
+                    {/* Anchor Image */}
+                    {scene.anchorImage?.url && <div style={{borderRadius:8,overflow:'hidden',border:'1px solid var(--border)',marginBottom:8}}><img src={scene.anchorImage.url} style={{width:'100%',display:'block'}} /></div>}
+                    {/* Action Buttons */}
+                    <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                      <button onClick={()=>generateSceneImage(i)} disabled={scene.status==='generating_image'||running} style={{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid var(--accent)',background:scene.status==='generating_image'?'var(--accent)':'transparent',color:scene.status==='generating_image'?'#fff':'var(--accent)',cursor:'pointer',fontWeight:600}}>{scene.status==='generating_image'?'생성 중...':'🖼️ 이미지 생성'}</button>
+                      {scene.anchorImage && <button onClick={()=>downloadMedia(scene.anchorImage.url,'scene_'+(i+1)+'_image.png')} style={{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid #238636',background:'transparent',color:'#238636',cursor:'pointer'}}>⬇ 저장</button>}
+                    </div>
+                  </div>
+                );})}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'videos' && (
+          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12}}>
+            <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase4();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={lfScenes.length === 0 || running} className="btn btn-primary btn-sm">P4 영상프롬프트 재실행</button>
+              {running && <span className="spinner" />}
+            </div>
+            {lfScenes.length === 0 && <div style={{textAlign:'center',padding:40,color:'var(--text2)'}}>Phase 4를 실행하면 영상 프롬프트가 생성됩니다</div>}
+            {lfScenes.length > 0 && (
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:12}}>
+                {lfScenes.map((scene, i) => (
+                  <div key={i} className="card" style={{marginBottom:0}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                      <span style={{width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:scene.video?'#238636':scene.videoPrompt?'var(--accent)':'var(--border)',color:'#fff',fontSize:12,fontWeight:700,flexShrink:0}}>{i+1}</span>
+                      <span style={{fontSize:13,fontWeight:600,flex:1}}>{scene.summary?.substring(0,60)}</span>
+                      <span style={{padding:'2px 8px',borderRadius:4,fontSize:10,background:scene.status==='generating_video'?'var(--warn)':scene.video?'#238636':'var(--border)',color:'#fff'}}>{scene.status||'pending'}</span>
+                    </div>
+                    {scene.videoPrompt && (
+                      <div style={{background:'#fafaff',borderRadius:6,border:'1px solid #e0e0f0',padding:8,marginBottom:8}}>
+                        <span style={{fontSize:11,fontWeight:600,color:'var(--romance)'}}>🎬 모션 프롬프트</span>
+                        <div style={{fontSize:10,color:'var(--text2)',lineHeight:1.5,marginTop:4,fontFamily:'monospace',wordBreak:'break-all'}}>{scene.videoPrompt.motionPrompt}</div>
+                      </div>
+                    )}
+                    {scene.anchorImage?.url && <div style={{borderRadius:8,overflow:'hidden',border:'1px solid var(--border)',marginBottom:8}}><img src={scene.anchorImage.url} style={{width:'100%',height:120,objectFit:'cover',display:'block'}} /></div>}
+                    {scene.video?.url && (
+                      <div style={{borderRadius:8,overflow:'hidden',border:'1px solid var(--border)',marginBottom:8}}>
+                        <video src={scene.video.url} controls muted style={{width:'100%',display:'block'}} />
+                      </div>
+                    )}
+                    <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                      <button onClick={()=>generateSceneVideo(i)} disabled={scene.status==='generating_video'||!scene.anchorImage||running} style={{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid var(--romance)',background:scene.status==='generating_video'?'var(--romance)':'transparent',color:scene.status==='generating_video'?'#fff':'var(--romance)',cursor:'pointer',fontWeight:600}}>{scene.status==='generating_video'?'생성 중...':'🎬 영상 생성'}</button>
+                      {scene.video?.url && <button onClick={()=>downloadMedia(scene.video.url,'scene_'+(i+1)+'_video.mp4')} style={{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid #238636',background:'transparent',color:'#238636',cursor:'pointer'}}>⬇ 저장</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'webtoon' && (
+          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12}}>
+            <div style={{display: 'flex', gap: 8}}>
+              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase5();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={lfScenes.length === 0 || !enableWebtoon || running} className="btn btn-primary btn-sm">P5 웹툰확장 재실행</button>
+            </div>
+            {!enableWebtoon && <div className="placeholder">Phase 5 웹툰확장을 활성화해주세요</div>}
+            {lfScenes.length === 0 && <div className="placeholder">Phase 5를 실행하면 웹툰 패널이 생성됩니다</div>}
+            {lfScenes.length > 0 && (
+              <div className="scene-grid">
+                {lfScenes.map((scene, i) => (
+                  <div key={i} className="scene-card">
+                    <h3>씬 #{scene.sceneNumber}</h3>
+                    <div className="scene-summary">{scene.summary}</div>
+                    {scene.webtoonAssets && scene.webtoonAssets.length > 0 && (
+                      <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginTop: 8}}>
+                        {scene.webtoonAssets.map((asset, j) => (
+                          <div key={j} style={{borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)'}}>
+                            {asset.url && <img src={asset.url} alt={asset.templateId} style={{width: '100%', height: 80, objectFit: 'cover'}} />}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+// ============================================================
+// RENDER APP
+// ============================================================
+
+ReactDOM.render(<App />, document.getElementById('root'));
 </script>
 </body>
 </html>
-
