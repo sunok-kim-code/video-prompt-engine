@@ -189,15 +189,18 @@ async function fbDeleteProject(projectId) {
   await batch.commit();
 }
 
-function stripBase64(obj) {
+// Strip base64 for metadata docs, but collect images separately
+function stripBase64(obj, collectedImages) {
   if (!obj || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(stripBase64);
+  if (Array.isArray(obj)) return obj.map(item => stripBase64(item, collectedImages));
   const out = {};
   for (const [k, v] of Object.entries(obj)) {
     if (typeof v === 'string' && v.startsWith('data:') && v.length > 500) {
-      out[k] = '[base64_stripped]';
+      const imgId = 'img_' + Math.random().toString(36).substring(2, 10);
+      out[k] = '[img:' + imgId + ']';
+      if (collectedImages) collectedImages.push({id: imgId, data: v, key: k});
     } else if (typeof v === 'object' && v !== null) {
-      out[k] = stripBase64(v);
+      out[k] = stripBase64(v, collectedImages);
     } else if (typeof v === 'string' && v.length > 900000) {
       out[k] = v.substring(0, 900000) + '...[truncated]';
     } else {
@@ -207,23 +210,103 @@ function stripBase64(obj) {
   return out;
 }
 
+// Restore base64 images from collected image docs back into data
+function restoreBase64(obj, imageMap) {
+  if (!obj || typeof obj !== 'object') {
+    if (typeof obj === 'string' && obj.startsWith('[img:') && obj.endsWith(']')) {
+      const imgId = obj.slice(5, -1);
+      return imageMap[imgId] || obj;
+    }
+    return obj;
+  }
+  if (Array.isArray(obj)) return obj.map(item => restoreBase64(item, imageMap));
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    out[k] = restoreBase64(v, imageMap);
+  }
+  return out;
+}
+
 async function fbSavePhase(projectId, phaseName, phaseData) {
   const db = getDb();
   if (!db) throw new Error('Firebase not configured');
-  const ref = db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName);
-  const safeData = stripBase64(phaseData);
-  await ref.set({
+  const phaseRef = db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName);
+  const collectedImages = [];
+  const safeData = stripBase64(phaseData, collectedImages);
+  // Save metadata (without base64)
+  await phaseRef.set({
     ...safeData,
+    imageCount: collectedImages.length,
     savedAt: firebase.firestore.FieldValue.serverTimestamp()
   });
+  // Save images as separate documents in subcollection (each < 1MB)
+  const imgColl = phaseRef.collection('images');
+  // Delete old images first
+  const oldImgs = await imgColl.get();
+  const delBatch = db.batch();
+  oldImgs.docs.forEach(d => delBatch.delete(d.ref));
+  if (oldImgs.docs.length > 0) await delBatch.commit();
+  // Save new images in batches of 5
+  for (let i = 0; i < collectedImages.length; i += 5) {
+    const batch = db.batch();
+    for (let j = i; j < Math.min(i + 5, collectedImages.length); j++) {
+      const img = collectedImages[j];
+      // Split large images into chunks if needed (Firestore 1MB limit)
+      const data = img.data;
+      if (data.length > 900000) {
+        // Store in multiple chunks
+        const chunkSize = 800000;
+        const chunks = Math.ceil(data.length / chunkSize);
+        batch.set(imgColl.doc(img.id), {key: img.key, chunks, totalLength: data.length});
+        for (let c = 0; c < chunks; c++) {
+          batch.set(imgColl.doc(img.id + '_chunk_' + c), {data: data.substring(c * chunkSize, (c + 1) * chunkSize), idx: c});
+        }
+      } else {
+        batch.set(imgColl.doc(img.id), {key: img.key, data});
+      }
+    }
+    await batch.commit();
+  }
 }
 
 async function fbLoadPhase(projectId, phaseName) {
   const db = getDb();
   if (!db) throw new Error('Firebase not configured');
-  const doc = await db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName).get();
+  const phaseRef = db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName);
+  const doc = await phaseRef.get();
   if (!doc.exists) return null;
-  return doc.data();
+  const phaseData = doc.data();
+  // Load images from subcollection
+  const imgSnap = await phaseRef.collection('images').get();
+  const imageMap = {};
+  const chunkMeta = {};
+  const chunkData = {};
+  imgSnap.docs.forEach(d => {
+    const dData = d.data();
+    if (d.id.includes('_chunk_')) {
+      // This is a chunk
+      const parentId = d.id.split('_chunk_')[0];
+      if (!chunkData[parentId]) chunkData[parentId] = {};
+      chunkData[parentId][dData.idx] = dData.data;
+    } else if (dData.chunks) {
+      // This is chunk metadata
+      chunkMeta[d.id] = dData;
+    } else if (dData.data) {
+      // Regular image doc
+      imageMap[d.id] = dData.data;
+    }
+  });
+  // Reassemble chunked images
+  for (const [imgId, meta] of Object.entries(chunkMeta)) {
+    const chunks = chunkData[imgId] || {};
+    let assembled = '';
+    for (let i = 0; i < meta.chunks; i++) {
+      assembled += (chunks[i] || '');
+    }
+    if (assembled.length > 0) imageMap[imgId] = assembled;
+  }
+  // Restore base64 into phase data
+  return restoreBase64(phaseData, imageMap);
 }
 
 async function fbListPhases(projectId) {
@@ -231,6 +314,68 @@ async function fbListPhases(projectId) {
   if (!db) throw new Error('Firebase not configured');
   const snap = await db.collection('webtoon_projects').doc(projectId).collection('phases').orderBy('savedAt','desc').get();
   return snap.docs.map(d => ({id: d.id, ...d.data()}));
+}
+
+// Load all phase data for a project and return reconstructed state
+async function fbLoadAllPhases(projectId) {
+  const result = {globalAsset: null, scenes: [], sourceText: '', phase: 'IDLE'};
+  try {
+    const p1 = await fbLoadPhase(projectId, 'phase1_assets');
+    if (p1) {
+      result.globalAsset = p1.globalAsset || null;
+      result.sourceText = p1.sourceTextFull || '';
+      result.phase = 'PHASE_1_COMPLETE';
+    }
+    const p2 = await fbLoadPhase(projectId, 'phase2_scenes');
+    if (p2 && p2.scenes) {
+      result.scenes = p2.scenes;
+      result.phase = 'PHASE_2_COMPLETE';
+    }
+    const p3 = await fbLoadPhase(projectId, 'phase3_prompts');
+    if (p3 && p3.scenes) {
+      // Merge P3 data (prompts) into scenes
+      for (const s3 of p3.scenes) {
+        const existing = result.scenes.find(s => s.sceneNumber === s3.sceneNumber);
+        if (existing) {
+          existing.imagePrompt = s3.imagePrompt || existing.imagePrompt;
+          existing.status = s3.status || existing.status;
+        }
+      }
+      result.phase = 'PHASE_3_COMPLETE';
+    }
+    const p3img = await fbLoadPhase(projectId, 'phase3_images');
+    if (p3img && p3img.scenes) {
+      for (const si of p3img.scenes) {
+        const existing = result.scenes.find(s => s.sceneNumber === si.sceneNumber);
+        if (existing) {
+          existing.anchorImage = si.anchorImage || existing.anchorImage;
+          existing.status = si.status || existing.status;
+        }
+      }
+    }
+    const p4 = await fbLoadPhase(projectId, 'phase4_video');
+    if (p4 && p4.scenes) {
+      for (const s4 of p4.scenes) {
+        const existing = result.scenes.find(s => s.sceneNumber === s4.sceneNumber);
+        if (existing) {
+          existing.video = s4.video || existing.video;
+          existing.status = s4.status || existing.status;
+        }
+      }
+      result.phase = 'PHASE_4_COMPLETE';
+    }
+    const p5 = await fbLoadPhase(projectId, 'phase5_webtoon');
+    if (p5 && p5.scenes) {
+      for (const s5 of p5.scenes) {
+        const existing = result.scenes.find(s => s.sceneNumber === s5.sceneNumber);
+        if (existing) {
+          existing.webtoonAssets = s5.webtoonAssets || existing.webtoonAssets;
+        }
+      }
+      result.phase = 'PHASE_5_COMPLETE';
+    }
+  } catch(e) { console.warn('[fbLoadAllPhases] Error:', e); }
+  return result;
 }
 
 async function autoLoadServerConfig() {
@@ -1118,6 +1263,14 @@ function LongFormOrchestrator({log, activeTab, setActiveTab}) {
 
   const runFullPipeline = useCallback(async () => {
     if (!sourceText.trim()) { log('Source text empty', 'error'); return; }
+    // Auto-create project if none exists
+    if (!currentProjectId && getDb()) {
+      const newId = 'proj_' + Date.now();
+      setCurrentProjectId(newId);
+      const title = projectTitle || sourceText.trim().substring(0, 30);
+      setProjectTitle(title);
+      try { await fbSaveProject(newId, {title, phase: 'IDLE', createdAt: firebase.firestore.FieldValue.serverTimestamp()}); log('[Project] Auto-created: '+newId); } catch(e){}
+    }
     setRunning(true); abortRef.current = false; setErrorMsg('');
     try {
       await runPhase1(); if(abortRef.current)return;
@@ -1169,9 +1322,11 @@ function LongFormOrchestrator({log, activeTab, setActiveTab}) {
       sc.anchorImage = { url: imgUrl, prompt };
       sc.status = sc.video ? 'complete' : 'image_done';
       log('[GenImg] Scene ' + (idx+1) + ' image done');
+      // Auto-save scene images
+      if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase3_images', {scenes: scenes.filter(s=>s.anchorImage).map(s=>({sceneNumber:s.sceneNumber, anchorImage:s.anchorImage, status:s.status}))}); log('[AutoSave] Scene images saved'); } catch(e){log('[AutoSave] Image save error: '+e.message,'warn');} }
     } catch(e) { log('[GenImg] Error: ' + e.message); sc.status = 'error'; setErrorMsg('Image gen failed: ' + e.message); }
     lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
-  }, [callImageLF, globalAsset, log]);
+  }, [callImageLF, globalAsset, log, currentProjectId]);
 
   // === Regenerate image with edited prompt ===
   const regenerateSceneImageWithPrompt = useCallback(async (idx, newPrompt) => {
@@ -1276,13 +1431,37 @@ function LongFormOrchestrator({log, activeTab, setActiveTab}) {
               <span style={{fontSize: 11, fontWeight: 600, color: 'var(--text2)'}}>📁 프로젝트</span>
               {currentProjectId && <span style={{fontSize: 11, color: 'var(--text2)', background: 'white', padding: '2px 8px', borderRadius: 4}}>{projectTitle || currentProjectId}</span>}
               <button onClick={()=>setShowProjectPanel(!showProjectPanel)} className="btn btn-secondary btn-sm">프로젝트 목록</button>
-              <button onClick={async()=>{if(currentProjectId && projectTitle) {setSavingStatus('저장 중...'); try {await fbSaveProject(currentProjectId, {title: projectTitle, phase, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}); setSavingStatus('✅ 저장됨'); setTimeout(()=>setSavingStatus(''), 2000);} catch(e){setSavingStatus('❌ 저장 실패');}}}} disabled={!projectTitle} className="btn btn-primary btn-sm">💾 저장</button>
-              <button onClick={()=>{setCurrentProjectId('');setProjectTitle('');setSourceText('');}} className="btn btn-secondary btn-sm">+ 새 프로젝트</button>
+              <button onClick={async()=>{if(currentProjectId && projectTitle) {setSavingStatus('전체 저장 중...'); try {
+                await fbSaveProject(currentProjectId, {title: projectTitle, phase, sceneCount: lfScenes.length, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+                if (globalAsset) { await fbSavePhase(currentProjectId, 'phase1_assets', {globalAsset, sourceTextFull: sourceText}); }
+                if (lfScenes.length > 0) {
+                  await fbSavePhase(currentProjectId, 'phase2_scenes', {scenes: lfScenes});
+                  await fbSavePhase(currentProjectId, 'phase3_prompts', {scenes: lfScenes});
+                  const imgScenes = lfScenes.filter(s=>s.anchorImage);
+                  if (imgScenes.length > 0) { await fbSavePhase(currentProjectId, 'phase3_images', {scenes: imgScenes.map(s=>({sceneNumber:s.sceneNumber, anchorImage:s.anchorImage, status:s.status}))}); }
+                }
+                setSavingStatus('✅ 전체 저장됨'); setTimeout(()=>setSavingStatus(''), 3000);
+              } catch(e){setSavingStatus('❌ 저장 실패: '+e.message); log('[Save] Error: '+e.message,'error');}
+              }}} disabled={!projectTitle} className="btn btn-primary btn-sm">💾 저장</button>
+              <button onClick={()=>{setCurrentProjectId('proj_'+Date.now());setProjectTitle('');setSourceText('');setGlobalAsset(null);setLfScenes([]);lfScenesRef.current=[];phaseRef.current='IDLE';setPhase('IDLE');setErrorMsg('');}} className="btn btn-secondary btn-sm">+ 새 프로젝트</button>
               {savingStatus && <span style={{fontSize: 11, color: savingStatus.includes('실패')?'var(--err)':'var(--success)'}}>  {savingStatus}</span>}
               {showProjectPanel && projectList.length > 0 && (
                 <div style={{position: 'absolute', top: 200, left: 20, background: 'white', border: '1px solid var(--border)', borderRadius: 8, maxWidth: 300, maxHeight: 250, overflow: 'auto', zIndex: 10}}>
                   {projectList.map(p => (
-                    <div key={p.id} style={{padding: '8px 12px', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontSize: 12}} onClick={()=>{setCurrentProjectId(p.id);setProjectTitle(p.title||p.id);setShowProjectPanel(false);}}>
+                    <div key={p.id} style={{padding: '8px 12px', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontSize: 12}} onClick={async()=>{
+                      setCurrentProjectId(p.id);setProjectTitle(p.title||p.id);setShowProjectPanel(false);
+                      setSavingStatus('불러오는 중...');
+                      try {
+                        const allData = await fbLoadAllPhases(p.id);
+                        if (allData.sourceText) setSourceText(allData.sourceText);
+                        if (allData.globalAsset) setGlobalAsset(allData.globalAsset);
+                        if (allData.scenes && allData.scenes.length > 0) { lfScenesRef.current = allData.scenes; setLfScenes(allData.scenes); }
+                        if (allData.phase && allData.phase !== 'IDLE') { phaseRef.current = allData.phase; setPhase(allData.phase); }
+                        setSavingStatus('✅ 불러옴 (P1:'+(allData.globalAsset?'✓':'✗')+' 씬:'+allData.scenes.length+')');
+                        setTimeout(()=>setSavingStatus(''), 4000);
+                        log('[Load] Project loaded: '+p.title+' phase='+allData.phase+' scenes='+allData.scenes.length);
+                      } catch(e) { setSavingStatus('❌ 불러오기 실패'); log('[Load] Error: '+e.message,'error'); }
+                    }}>
                       <div style={{fontWeight: 600}}>{p.title||p.id}</div>
                       <div style={{fontSize: 10, color: 'var(--text2)'}}>{p.phase} · {p.sceneCount||0} scenes</div>
                     </div>
