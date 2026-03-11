@@ -988,35 +988,133 @@ function LongFormOrchestrator({log, activeTab, setActiveTab}) {
     log('[Phase 4] Complete - video prompts ready');
   }, [callTextLF, transition, log, currentProjectId]);
 
+  // === Scene-type panel configurations ===
+  const PANEL_CONFIGS = {
+    dialogue: {label:'대화', panels:[
+      {type:'medium_two_shot', prompt:'medium two-shot of characters talking face to face, eye-level angle, warm lighting, manhwa style, speech bubble composition'},
+      {type:'close_up_speaker', prompt:'close-up portrait of the speaking character, expressive face, detailed eyes, manhwa style panel'},
+      {type:'over_shoulder', prompt:'over-the-shoulder shot, listener POV, depth of field background blur, manhwa style'},
+      {type:'reaction_close', prompt:'extreme close-up reaction shot, dramatic expression, speed lines, manhwa emotion panel'},
+      {type:'environment_context', prompt:'wide establishing shot showing the conversation setting, atmospheric lighting, manhwa background art'}
+    ]},
+    action: {label:'액션', panels:[
+      {type:'dynamic_wide', prompt:'dynamic wide-angle action shot, dramatic perspective, speed lines, impact effects, manhwa action panel'},
+      {type:'impact_close', prompt:'extreme close-up of impact moment, motion blur, debris particles, intense manhwa style'},
+      {type:'sequence_motion', prompt:'multi-frame motion sequence, character in dynamic pose mid-action, manga speed lines'},
+      {type:'aerial_establishing', prompt:'dramatic aerial/bird-eye view of the action scene, epic scale, manhwa cinematic composition'},
+      {type:'aftermath_detail', prompt:'detail shot of aftermath, broken objects or settling dust, tense atmosphere, manhwa style'},
+      {type:'character_power', prompt:'dramatic character power-up or attack pose, glowing effects, energy lines, manhwa style'}
+    ]},
+    emotion: {label:'감정', panels:[
+      {type:'extreme_close_eyes', prompt:'extreme close-up of eyes showing emotion, detailed iris, tears or sparkle, manhwa emotional art'},
+      {type:'symbolic_atmosphere', prompt:'symbolic atmospheric panel, visual metaphor for the emotion, abstract background, manhwa style'},
+      {type:'full_body_posture', prompt:'full body shot showing emotional posture, body language expressing feelings, soft lighting, manhwa'},
+      {type:'memory_flashback', prompt:'soft-focus flashback or memory panel, dreamy vignette effect, faded colors, manhwa style'},
+      {type:'close_up_hands', prompt:'detail close-up of hands showing emotion (clenching, trembling, reaching), manhwa style'},
+      {type:'silent_wide', prompt:'wide silent panel, character alone in environment, atmospheric mood, cinematic manhwa composition'},
+      {type:'face_shadow', prompt:'half-shadow face portrait, dramatic chiaroscuro lighting, intense gaze, manhwa emotional panel'}
+    ]},
+    establishing: {label:'배경전환', panels:[
+      {type:'panoramic_wide', prompt:'panoramic ultra-wide establishing shot, detailed environment, atmospheric perspective, manhwa background art'},
+      {type:'detail_texture', prompt:'architectural or nature detail close-up, texture and material focus, ambient lighting, manhwa style'},
+      {type:'time_indicator', prompt:'sky/weather establishing shot indicating time of day, clouds, sun/moon position, atmospheric manhwa'},
+      {type:'transition_path', prompt:'path or corridor leading to the next location, perspective depth, guiding composition, manhwa style'},
+      {type:'character_arrival', prompt:'small character figure entering the new environment, sense of scale, wide composition, manhwa'}
+    ]},
+    calm: {label:'일상', panels:[
+      {type:'slice_of_life_wide', prompt:'slice-of-life wide shot, everyday activity, warm natural lighting, cozy manhwa style'},
+      {type:'object_detail', prompt:'still-life detail of meaningful object in scene, shallow depth of field, soft lighting, manhwa'},
+      {type:'character_candid', prompt:'candid character moment, natural relaxed pose, gentle expression, soft manhwa art style'},
+      {type:'environment_mood', prompt:'environment establishing shot with mood lighting, peaceful atmosphere, manhwa background'},
+      {type:'interaction_medium', prompt:'medium shot of characters interacting casually, comfortable body language, warm tones, manhwa style'}
+    ]},
+    tense: {label:'긴장', panels:[
+      {type:'dutch_angle', prompt:'dutch angle tilted shot creating unease, dramatic shadows, suspenseful composition, manhwa thriller style'},
+      {type:'extreme_close_detail', prompt:'extreme close-up of tension-revealing detail (sweating, gripping, eye twitch), manhwa suspense'},
+      {type:'silhouette_shadow', prompt:'silhouette or heavy shadow composition, mysterious figure, backlit dramatic, noir manhwa style'},
+      {type:'split_panel', prompt:'split composition showing two opposing forces or perspectives, tension between subjects, manhwa style'},
+      {type:'low_angle_threat', prompt:'low-angle menacing shot, looming presence, exaggerated perspective, dark atmosphere, manhwa thriller'},
+      {type:'clock_urgency', prompt:'time pressure composition, visual urgency cues, ticking countdown feel, intense manhwa panel'}
+    ]}
+  };
+
+  function getMoodPanelConfig(mood) {
+    const m = (mood || 'calm').toLowerCase();
+    if (m.includes('action') || m.includes('fight') || m.includes('battle') || m.includes('chase')) return PANEL_CONFIGS.action;
+    if (m.includes('tense') || m.includes('suspense') || m.includes('thriller') || m.includes('horror') || m.includes('dark')) return PANEL_CONFIGS.tense;
+    if (m.includes('emotion') || m.includes('sad') || m.includes('romantic') || m.includes('love') || m.includes('heartbreak') || m.includes('grief')) return PANEL_CONFIGS.emotion;
+    if (m.includes('establishing') || m.includes('transition') || m.includes('travel') || m.includes('arrival')) return PANEL_CONFIGS.establishing;
+    if (m.includes('dialogue') || m.includes('conversation') || m.includes('talk') || m.includes('meeting') || m.includes('warm')) return PANEL_CONFIGS.dialogue;
+    return PANEL_CONFIGS.calm;
+  }
+
   const runPhase5 = useCallback(async () => {
     if (!enableWebtoon) { log('[Phase 5] Webtoon disabled, skipping'); transition('COMPLETED'); return; }
     transition('PHASE_5_EXPANDING');
-    log('[Phase 5] Expanding to webtoon panels...');
+    log('[Phase 5] Expanding to webtoon multi-panels...');
     const updated = [...lfScenesRef.current];
     for (let i=0; i<updated.length; i++) {
       if (abortRef.current) throw new Error('Aborted');
       setCurrentSceneIdx(i);
       const sc = updated[i];
       if (!sc.anchorImage) continue;
-      log('[Phase 5] Panels for scene '+(i+1)+'/'+updated.length);
-      const variations = [
-        {type:'close_up', suffix:', extreme close up, face detail, manhwa style'},
-        {type:'reaction', suffix:', reaction shot, dramatic expression, manhwa panel style'},
-        {type:'wide_establishing', suffix:', wide establishing shot, environment detail, manhwa style'}
-      ];
+      const mood = sc.narrativeMood || 'calm';
+      const config = getMoodPanelConfig(mood);
+      const hasDialogue = sc.dialogues && sc.dialogues.length > 0;
+      let panels = [...config.panels];
+      // If scene has dialogue but isn't dialogue-typed, inject a dialogue close-up
+      if (hasDialogue && config !== PANEL_CONFIGS.dialogue) {
+        panels.splice(1, 0, PANEL_CONFIGS.dialogue.panels[3]); // reaction_close
+      }
+      // Cap at 7 panels max
+      panels = panels.slice(0, 7);
+      log('[Phase 5] Scene '+(i+1)+'/'+updated.length+' mood="'+mood+'" type="'+config.label+'" panels='+panels.length);
+      // Collect character reference images
+      const refImages = [];
+      const comp = sc.compositionData || {};
+      if ((globalAsset||{}).characters) {
+        const charIds = sc.keyCharacters || (comp.characterPoses||[]).map(cp=>cp.characterId);
+        for (const cid of charIds) {
+          const ch = globalAsset.characters.find(c=>c.id===cid);
+          if (ch && ch.referenceImageUrl) { refImages.push({image: ch.referenceImageUrl, description: ch.name+': '+ch.referencePrompt}); }
+        }
+      }
+      const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
+      if (bgRef && bgRef.referenceImageUrl) { refImages.push({image: bgRef.referenceImageUrl, description: 'Background: '+bgRef.referencePrompt}); }
+      // Build base scene prompt
+      const basePrompt = sc.imagePrompt?.prompt || sc.summary;
+      const charRefs = [];
+      if ((globalAsset||{}).characters) {
+        const charIds = sc.keyCharacters || (comp.characterPoses||[]).map(cp=>cp.characterId);
+        for (const cid of charIds) {
+          const ch = globalAsset.characters.find(c=>c.id===cid);
+          if (ch && ch.referencePrompt) charRefs.push(ch.name+': '+ch.referencePrompt);
+        }
+      }
+      const charCtx = charRefs.length > 0 ? '\nCharacter details: '+charRefs.join('; ') : '';
+      const bgCtx = bgRef && bgRef.referencePrompt ? '\nBackground: '+bgRef.referencePrompt : '';
       sc.webtoonAssets = [];
-      for (const v of variations) {
-        try { const urls = await callImageLF((sc.imagePrompt?.prompt||sc.summary)+v.suffix);
-          sc.webtoonAssets.push({templateId:v.type, url:urls[0]}); }
-        catch(e) { log('[Phase 5] Panel '+v.type+' failed: '+e.message, 'warn'); }
+      // Include anchor image as first panel
+      sc.webtoonAssets.push({templateId:'anchor', panelLabel:'메인 앵커', url: sc.anchorImage.url});
+      for (const panel of panels) {
+        if (abortRef.current) throw new Error('Aborted');
+        try {
+          const fullPrompt = basePrompt + ', ' + panel.prompt + charCtx + bgCtx;
+          const urls = await callImageLF(fullPrompt, {referenceImages: refImages, aspectRatio: '9:16'});
+          sc.webtoonAssets.push({templateId: panel.type, panelLabel: panel.prompt.split(',')[0], url: urls[0]});
+          log('[Phase 5] Panel '+panel.type+' done for scene '+(i+1));
+        } catch(e) { log('[Phase 5] Panel '+panel.type+' failed: '+e.message, 'warn'); }
+        // Update UI progressively
+        lfScenesRef.current = [...updated]; setLfScenes([...updated]);
       }
       sc.status = 'complete';
     }
-    lfScenesRef.current = updated; setLfScenes(updated);
+    lfScenesRef.current = updated; setLfScenes([...updated]);
+    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase5_webtoon', {scenes: updated.map(s=>({sceneNumber:s.sceneNumber, webtoonAssets:(s.webtoonAssets||[]).map(a=>({templateId:a.templateId,panelLabel:a.panelLabel}))}))}); log('[AutoSave] Phase 5 saved'); } catch(e){log('[AutoSave] Phase 5 error: '+e.message,'warn');} }
     transition('PHASE_5_COMPLETE');
     transition('COMPLETED');
-    log('[Phase 5] Complete');
-  }, [enableWebtoon, callImageLF, transition, log]);
+    log('[Phase 5] Complete - '+updated.reduce((n,s)=>(n+(s.webtoonAssets||[]).length),0)+' total panels generated');
+  }, [enableWebtoon, callImageLF, globalAsset, transition, log, currentProjectId]);
 
   const runFullPipeline = useCallback(async () => {
     if (!sourceText.trim()) { log('Source text empty', 'error'); return; }
@@ -1410,29 +1508,51 @@ function LongFormOrchestrator({log, activeTab, setActiveTab}) {
         )}
 
         {activeTab === 'webtoon' && (
-          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12}}>
-            <div style={{display: 'flex', gap: 8}}>
-              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase5();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={lfScenes.length === 0 || !enableWebtoon || running} className="btn btn-primary btn-sm">P5 웹툰확장 재실행</button>
+          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 16}}>
+            <div style={{display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap'}}>
+              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase5();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={lfScenes.length === 0 || !enableWebtoon || running} className="btn btn-primary btn-sm">P5 웹툰 멀티패널 생성</button>
+              {running && pipelineState === 'PHASE_5_EXPANDING' && <span className="status-badge running">패널 생성 중... 씬 {currentSceneIdx+1}/{lfScenes.length}</span>}
+              <span style={{fontSize:11,color:'var(--text2)'}}>씬 유형별 5~7장 자동 생성 + 캐릭터 레퍼런스 적용</span>
             </div>
             {!enableWebtoon && <div className="placeholder">Phase 5 웹툰확장을 활성화해주세요</div>}
-            {lfScenes.length === 0 && <div className="placeholder">Phase 5를 실행하면 웹툰 패널이 생성됩니다</div>}
+            {lfScenes.length === 0 && <div className="placeholder">전체 파이프라인을 실행하면 씬별 웹툰 패널이 자동 생성됩니다</div>}
             {lfScenes.length > 0 && (
-              <div className="scene-grid">
-                {lfScenes.map((scene, i) => (
-                  <div key={i} className="scene-card">
-                    <h3>씬 #{scene.sceneNumber}</h3>
-                    <div className="scene-summary">{scene.summary}</div>
-                    {scene.webtoonAssets && scene.webtoonAssets.length > 0 && (
-                      <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginTop: 8}}>
+              <div style={{display: 'flex', flexDirection: 'column', gap: 20}}>
+                {lfScenes.map((scene, i) => {
+                  const mood = scene.narrativeMood || 'calm';
+                  const config = getMoodPanelConfig(mood);
+                  const totalPanels = (scene.webtoonAssets||[]).length;
+                  return (
+                  <div key={i} className="card" style={{padding: 16}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                      <div>
+                        <h3 style={{fontSize:15,fontWeight:700,margin:0}}>씬 #{scene.sceneNumber} <span style={{fontSize:12,fontWeight:400,color:'var(--text2)',marginLeft:8}}>{scene.summary}</span></h3>
+                        <div style={{display:'flex',gap:6,marginTop:4}}>
+                          <span className="status-badge" style={{background:'var(--accent)',color:'#fff',fontSize:10}}>{config.label}</span>
+                          <span className="status-badge" style={{fontSize:10}}>{mood}</span>
+                          {totalPanels > 0 && <span className="status-badge done" style={{fontSize:10}}>{totalPanels}장</span>}
+                        </div>
+                      </div>
+                    </div>
+                    {totalPanels > 0 ? (
+                      <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:8}}>
                         {scene.webtoonAssets.map((asset, j) => (
-                          <div key={j} style={{borderRadius: 4, overflow: 'hidden', border: '1px solid var(--border)'}}>
-                            {asset.url && <img src={asset.url} alt={asset.templateId} style={{width: '100%', height: 80, objectFit: 'cover'}} />}
+                          <div key={j} style={{minWidth:140,maxWidth:180,flex:'0 0 auto',borderRadius:8,overflow:'hidden',border:j===0?'2px solid var(--accent)':'1px solid var(--border)',background:'var(--surface2)',position:'relative'}}>
+                            {asset.url ? <img src={asset.url} alt={asset.templateId} style={{width:'100%',height:220,objectFit:'cover',display:'block'}} /> : <div style={{width:'100%',height:220,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text2)',fontSize:11}}>생성 중...</div>}
+                            <div style={{padding:'6px 8px',fontSize:10,color:'var(--text2)',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                              <span style={{fontWeight:600}}>{j===0?'앵커':('P'+(j))}</span>
+                              <span style={{maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{asset.panelLabel||asset.templateId}</span>
+                            </div>
                           </div>
                         ))}
                       </div>
+                    ) : (
+                      <div style={{padding:20,textAlign:'center',color:'var(--text2)',fontSize:13,background:'var(--surface2)',borderRadius:8}}>
+                        {scene.anchorImage ? '웹툰 패널 대기 중' : '앵커 이미지가 필요합니다 (P3/P4 먼저 실행)'}
+                      </div>
                     )}
                   </div>
-                ))}
+                );})}
               </div>
             )}
           </div>
