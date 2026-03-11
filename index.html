@@ -377,18 +377,44 @@ const {useState,useCallback,useRef,useEffect,useMemo} = React;
 // ============================================================
 
 // API key stored in browser localStorage (never hardcoded)
-function getVertexConfig() {
+        // Token cache: avoid fetching a new token for every call
+    let _cachedToken = null;
+    let _tokenExpiry = 0;
+
+    async function fetchFreshToken() {
+      const now = Date.now();
+      if (_cachedToken && _tokenExpiry > now + 300000) {
+        return _cachedToken;
+      }
+      try {
+        const res = await fetch('/api/vertex-token');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access_token) {
+            _cachedToken = data.access_token;
+            _tokenExpiry = now + (data.expires_in || 3600) * 1000;
+            localStorage.setItem('VERTEX_ACCESS_TOKEN', data.access_token);
+            console.log('[Token] Fresh token obtained from server (expires in ' + data.expires_in + 's)');
+            return _cachedToken;
+          }
+        }
+      } catch(e) {
+        console.warn('[Token] Server token fetch failed, falling back to localStorage:', e.message);
+      }
+      return localStorage.getItem('VERTEX_ACCESS_TOKEN');
+    }
+async function getVertexConfig() {
   const projectId = localStorage.getItem('VERTEX_PROJECT_ID');
   const location = localStorage.getItem('VERTEX_LOCATION') || 'us-central1';
-  const accessToken = localStorage.getItem('VERTEX_ACCESS_TOKEN');
+  const accessToken = await fetchFreshToken();
   if (!projectId || !accessToken) throw new Error('Vertex AI config not set. Set Project ID and Access Token.');
   return {projectId, location, accessToken};
 }
-function getGeminiKey() {
-  return getVertexConfig().accessToken;
+async function getGeminiKey() {
+  return (await getVertexConfig()).accessToken;
 }
 function setGeminiKey(k) { localStorage.setItem('GEMINI_API_KEY', k); }
-function hasGeminiKey() { return !!localStorage.getItem('GEMINI_API_KEY'); }
+function hasGeminiKey() { return !!(localStorage.getItem('VERTEX_PROJECT_ID') || localStorage.getItem('GEMINI_API_KEY')); }
 
 // xAI (Grok) API Key Management
 function getXaiKey() {
@@ -514,7 +540,7 @@ const VIDEO_MODES = [
 async function callGemini(systemPrompt, userPrompt, opts={}) {
   const model = opts.model || 'gemini-2.5-flash';
   const thinkBudget = opts.thinkBudget ?? 0;
-  const {projectId, location, accessToken} = getVertexConfig();
+  const {projectId, location, accessToken} = await getVertexConfig();
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
   const body = {
     systemInstruction: {parts:[{text:systemPrompt}]},
@@ -542,7 +568,7 @@ async function callGemini(systemPrompt, userPrompt, opts={}) {
 // ============================================================
 
 async function callImagen(prompt, opts = {}) {
-    const {projectId, location, accessToken} = getVertexConfig();
+    const {projectId, location, accessToken} = await getVertexConfig();
     const model = opts.model || 'imagen-4.0-ultra-generate-001';
     console.log('[Imagen] Using model via Vertex AI: ' + model);
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
@@ -560,7 +586,7 @@ async function callImagen(prompt, opts = {}) {
   }
 
   async function callNanoBanana(prompt, opts = {}) {
-    const {projectId, location, accessToken} = getVertexConfig();
+    const {projectId, location, accessToken} = await getVertexConfig();
     const model = opts.model || 'gemini-2.0-flash-preview-image-generation';
     console.log('[NanoBanana] Generating image via Vertex AI: ' + model);
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
@@ -650,7 +676,7 @@ async function callGrok(systemPrompt, userPrompt, opts={}) {
 // ============================================================
 
 async function callVeo(prompt, imageBase64, opts={}) {
-  const {projectId, location, accessToken} = getVertexConfig();
+  const {projectId, location, accessToken} = await getVertexConfig();
   const model = opts.model || 'veo-2.0-generate-001';
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predictLongRunning`;
   const instances = [{prompt: prompt}];
