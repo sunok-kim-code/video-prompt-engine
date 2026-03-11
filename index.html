@@ -409,8 +409,8 @@ async function callNanoBanana(prompt, opts = {}) {
     throw new Error('NanoBanana API ' + res.status + ': ' + errText.substring(0, 200));
   }
   const data = await res.json();
-  const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
-  const imgParts = parts.filter(p => p.inlineData && p.inlineData.mimeType && p.inlineData.mimeType.startsWith('image/'));
+  const resParts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+  const imgParts = resParts.filter(p => p.inlineData && p.inlineData.mimeType && p.inlineData.mimeType.startsWith('image/'));
   if (imgParts.length === 0) throw new Error('No image generated');
   return imgParts.map(p => `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`);
 }
