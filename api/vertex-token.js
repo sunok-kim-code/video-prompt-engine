@@ -2,7 +2,7 @@
 // Mints a fresh Google OAuth2 access token using a service account key
 // Env vars needed: GOOGLE_CLIENT_EMAIL, GOOGLE_PRIVATE_KEY
 
-import crypto from 'crypto';
+const crypto = require('crypto');
 
 function createJWT(clientEmail, privateKey) {
     const now = Math.floor(Date.now() / 1000);
