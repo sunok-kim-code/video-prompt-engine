@@ -1103,7 +1103,7 @@ function LongFormOrchestrator({log, activeTab, setActiveTab}) {
               <span style={{fontSize: 11, fontWeight: 600, color: 'var(--text2)'}}>📁 프로젝트</span>
               {currentProjectId && <span style={{fontSize: 11, color: 'var(--text2)', background: 'white', padding: '2px 8px', borderRadius: 4}}>{projectTitle || currentProjectId}</span>}
               <button onClick={()=>setShowProjectPanel(!showProjectPanel)} className="btn btn-secondary btn-sm">프로젝트 목록</button>
-              <button onClick={async()=>{if(currentProjectId && projectTitle) {setSavingStatus('저장 중...'); try {await fbSaveProject(currentProjectId, {title: projectTitle, phase, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}); setSavingStatus('✅ 저장됨'); setTimeout(()=>setSavingStatus(''), 2000);} catch(e){setSavingStatus('❌ 저장 실패');}}} disabled={!projectTitle} className="btn btn-primary btn-sm">💾 저장</button>
+              <button onClick={async()=>{if(currentProjectId && projectTitle) {setSavingStatus('저장 중...'); try {await fbSaveProject(currentProjectId, {title: projectTitle, phase, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}); setSavingStatus('✅ 저장됨'); setTimeout(()=>setSavingStatus(''), 2000);} catch(e){setSavingStatus('❌ 저장 실패');}}}} disabled={!projectTitle} className="btn btn-primary btn-sm">💾 저장</button>
               <button onClick={()=>{setCurrentProjectId('');setProjectTitle('');setSourceText('');}} className="btn btn-secondary btn-sm">+ 새 프로젝트</button>
               {savingStatus && <span style={{fontSize: 11, color: savingStatus.includes('실패')?'var(--err)':'var(--success)'}}>  {savingStatus}</span>}
               {showProjectPanel && projectList.length > 0 && (
