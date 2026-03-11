@@ -194,7 +194,7 @@ async function fbSavePhase(projectId, phaseName, phaseData) {
   if (!db) throw new Error('Firebase not configured');
   const ref = db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName);
   await ref.set({
-    ...phaseData,
+    ...JSON.parse(JSON.stringify(phaseData,(_,v)=>typeof v==='string'&&v.length>5000&&v.startsWith('data:')?'[img]':v)),
     savedAt: firebase.firestore.FieldValue.serverTimestamp()
   });
 }
