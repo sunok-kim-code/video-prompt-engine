@@ -189,12 +189,31 @@ async function fbDeleteProject(projectId) {
   await batch.commit();
 }
 
+function stripBase64(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(stripBase64);
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (typeof v === 'string' && v.startsWith('data:') && v.length > 500) {
+      out[k] = '[base64_stripped]';
+    } else if (typeof v === 'object' && v !== null) {
+      out[k] = stripBase64(v);
+    } else if (typeof v === 'string' && v.length > 900000) {
+      out[k] = v.substring(0, 900000) + '...[truncated]';
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 async function fbSavePhase(projectId, phaseName, phaseData) {
   const db = getDb();
   if (!db) throw new Error('Firebase not configured');
   const ref = db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName);
+  const safeData = stripBase64(phaseData);
   await ref.set({
-    ...JSON.parse(JSON.stringify(phaseData,(_,v)=>typeof v==='string'&&v.length>5000&&v.startsWith('data:')?'[img]':v)),
+    ...safeData,
     savedAt: firebase.firestore.FieldValue.serverTimestamp()
   });
 }
@@ -324,14 +343,38 @@ async function callGemini(systemPrompt, userPrompt, opts={}) {
   return textParts.map(p => p.text).join('');
 }
 
+function extractBase64(dataUrl) {
+  if (!dataUrl || typeof dataUrl !== 'string') return null;
+  const m = dataUrl.match(/^data:image\/\w+;base64,(.+)$/);
+  return m ? m[1] : null;
+}
+
 async function callImagen(prompt, opts = {}) {
   const {projectId, location, accessToken} = await getVertexConfig();
   const model = opts.model || 'imagen-4.0-ultra-generate-001';
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
-  const body = {instances:[{prompt}], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
+  const instance = {prompt};
+  if (opts.referenceImages && opts.referenceImages.length > 0) {
+    instance.referenceImages = opts.referenceImages.slice(0, 3).map(ref => ({
+      referenceImage: {bytesBase64Encoded: extractBase64(ref.image) || ''},
+      referenceType: 'REFERENCE_TYPE_SUBJECT',
+      subjectDescription: ref.description || ''
+    })).filter(r => r.referenceImage.bytesBase64Encoded);
+  }
+  const body = {instances:[instance], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
   const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
   if (!res.ok) {
     const errText = await res.text();
+    if (errText.includes('referenceImages') || errText.includes('REFERENCE_TYPE')) {
+      console.warn('[Imagen] Reference image not supported, retrying without...');
+      delete instance.referenceImages;
+      const retryBody = {instances:[instance], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
+      const res2 = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(retryBody)});
+      if (!res2.ok) throw new Error('Imagen API ' + res2.status + ': ' + (await res2.text()).substring(0,200));
+      const data2 = await res2.json();
+      if (!data2.predictions || !data2.predictions.length) throw new Error('No predictions returned');
+      return data2.predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
+    }
     throw new Error('Imagen API ' + res.status + ': ' + errText.substring(0, 200));
   }
   const data = await res.json();
@@ -344,8 +387,20 @@ async function callNanoBanana(prompt, opts = {}) {
   const {projectId, location, accessToken} = await getVertexConfig();
   const model = opts.model || 'gemini-2.0-flash-preview-image-generation';
   const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+  const parts = [];
+  if (opts.referenceImages && opts.referenceImages.length > 0) {
+    parts.push({text: 'Reference character/background images for visual consistency. Generate new image matching these characters exactly:'});
+    for (const ref of opts.referenceImages.slice(0, 3)) {
+      const b64 = extractBase64(ref.image);
+      if (b64) {
+        parts.push({inlineData: {mimeType: 'image/png', data: b64}});
+        if (ref.description) parts.push({text: '[Ref: ' + ref.description.substring(0, 200) + ']'});
+      }
+    }
+  }
+  parts.push({text: prompt});
   const body = {
-    contents: [{role:'user', parts:[{text: prompt}]}],
+    contents: [{role:'user', parts}],
     generationConfig: {responseModalities: ['TEXT','IMAGE'], temperature: 1.0}
   };
   const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
@@ -772,15 +827,16 @@ function LongFormOrchestrator({log, activeTab, setActiveTab}) {
 
   const callImageLF = useCallback(async (prompt, opts) => {
     opts = opts || {};
+    const refs = opts.referenceImages || [];
     if (imageProvider === 'grok') {
       return await callGrokImage(prompt);
     } else if (imageProvider === 'nanoBananaPro') {
-      return await callNanoBanana(prompt, {model: 'gemini-2.0-pro-preview-image-generation'});
+      return await callNanoBanana(prompt, {model: 'gemini-2.0-pro-preview-image-generation', referenceImages: refs});
     } else if (imageProvider === 'nanoBanana') {
-      return await callNanoBanana(prompt, {model: 'gemini-2.0-flash-preview-image-generation'});
+      return await callNanoBanana(prompt, {model: 'gemini-2.0-flash-preview-image-generation', referenceImages: refs});
     } else {
       const model = imageProvider === 'imagen4ultra' ? 'imagen-4.0-ultra-generate-001' : 'imagen-4.0-generate-001';
-      return await callImagen(prompt, Object.assign({aspectRatio:'9:16', model}, opts));
+      return await callImagen(prompt, Object.assign({aspectRatio:'9:16', model, referenceImages: refs}, opts));
     }
   }, [imageProvider]);
 
@@ -1000,7 +1056,17 @@ function LongFormOrchestrator({log, activeTab, setActiveTab}) {
       }
       const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
       if (bgRef && bgRef.referencePrompt) { prompt += '\nBackground: ' + bgRef.referencePrompt; }
-      const imgResult = await callImageLF(prompt);
+      const refImages = [];
+      if ((globalAsset||{}).characters) {
+        const charIds = sc.keyCharacters || (comp.characterPoses||[]).map(cp=>cp.characterId);
+        for (const cid of charIds) {
+          const ch = globalAsset.characters.find(c=>c.id===cid);
+          if (ch && ch.referenceImageUrl) { refImages.push({image: ch.referenceImageUrl, description: ch.name+': '+ch.referencePrompt}); }
+        }
+      }
+      if (bgRef && bgRef.referenceImageUrl) { refImages.push({image: bgRef.referenceImageUrl, description: 'Background: '+bgRef.referencePrompt}); }
+      log('[GenImg] Using '+refImages.length+' reference images for consistency');
+      const imgResult = await callImageLF(prompt, {referenceImages: refImages});
       const imgUrl = Array.isArray(imgResult) ? imgResult[0] : imgResult;
       sc.anchorImage = { url: imgUrl, prompt };
       sc.status = sc.video ? 'complete' : 'image_done';
@@ -1030,7 +1096,16 @@ function LongFormOrchestrator({log, activeTab, setActiveTab}) {
       }
       const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
       if (bgRef && bgRef.referencePrompt) { prompt += '\nBackground: ' + bgRef.referencePrompt; }
-      const imgResult = await callImageLF(prompt);
+      const refImages = [];
+      if ((globalAsset||{}).characters) {
+        const charIds = sc.keyCharacters || (comp.characterPoses||[]).map(cp=>cp.characterId);
+        for (const cid of charIds) {
+          const ch = globalAsset.characters.find(c=>c.id===cid);
+          if (ch && ch.referenceImageUrl) { refImages.push({image: ch.referenceImageUrl, description: ch.name+': '+ch.referencePrompt}); }
+        }
+      }
+      if (bgRef && bgRef.referenceImageUrl) { refImages.push({image: bgRef.referenceImageUrl, description: 'Background: '+bgRef.referencePrompt}); }
+      const imgResult = await callImageLF(prompt, {referenceImages: refImages});
       const imgUrl = Array.isArray(imgResult) ? imgResult[0] : imgResult;
       sc.anchorImage = { url: imgUrl, prompt: newPrompt };
       sc.status = sc.video ? 'complete' : 'image_done';
