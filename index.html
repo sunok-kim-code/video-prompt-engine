@@ -888,7 +888,9 @@ function App() {
     }
     if (imageProvider === 'falAI') {
       // fal.ai FLUX: LoRA + ControlNet(OpenPose) + IP-Adapter pipeline
-      let styledPrompt = stylePrefix + prompt; // stylePrefix already from getStylePrefix()
+      const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name;
+      let styledPrompt = stylePrefix + prompt;
+      log(`fal.ai FLUX: "${curStyleName}" 스타일 프롬프트 적용됨`, 'info');
       const falOpts = {
         imageSize: opts.aspectRatio === '16:9' ? {width:1024,height:576} : opts.aspectRatio === '1:1' ? {width:768,height:768} : {width:768,height:1024}
       };
@@ -900,7 +902,6 @@ function App() {
           const lora = loraModels[cid];
           if (lora?.status === 'ready' && lora.url) {
             activeLoras.push({path: lora.url, scale: 0.8});
-            // Inject trigger word into prompt
             if (lora.triggerWord && !styledPrompt.includes(lora.triggerWord)) {
               styledPrompt = styledPrompt + ', ' + lora.triggerWord;
             }
@@ -928,25 +929,26 @@ function App() {
           falOpts.ipAdapterImages = ipImages;
           const refDescs = opts.referenceImages.map(r => r.description).filter(Boolean).join('; ');
           const loraInfo = activeLoras.length > 0 ? ` + LoRA ${activeLoras.length}개` : '';
-          log(`fal.ai FLUX 사용 (IP-Adapter ${ipImages.length}개${loraInfo} + 만화스타일)`, 'info');
+          log(`fal.ai FLUX 사용 (IP-Adapter ${ipImages.length}개${loraInfo} + ${curStyleName} 스타일)`, 'info');
           const finalPrompt = refDescs ? styledPrompt + '\n\nCharacter/scene details: ' + refDescs : styledPrompt;
           return await callFalAI(finalPrompt, falOpts);
         }
       }
       const loraInfo = activeLoras.length > 0 ? ` (LoRA ${activeLoras.length}개 적용)` : '';
-      log(`fal.ai FLUX 사용 (만화 스타일 적용${loraInfo})`, 'info');
+      log(`fal.ai FLUX 사용 (${curStyleName} 스타일${loraInfo})`, 'info');
       return await callFalAI(styledPrompt, falOpts);
     }
     if (imageProvider === 'stableDiffusion') {
       // SD can't process reference images — fall back to Gemini when refs exist
+      const sdStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name;
       if (opts.referenceImages?.length > 0) {
         const styledPrompt = stylePrefix + prompt;
-        log('레퍼런스 이미지 감지 → Gemini로 전환 (SD는 이미지 입력 불가, 스타일 적용)', 'info');
+        log(`레퍼런스 이미지 감지 → Gemini로 전환 (SD는 이미지 입력 불가, ${sdStyleName} 스타일 적용)`, 'info');
         return await callNanoBanana(styledPrompt, opts);
       }
       const styledPrompt = stylePrefix + prompt;
-      const styleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name;
-      log(`Stable Diffusion 사용 (${styleName} 스타일)`, 'info');
+      log(`Stable Diffusion 사용 (${sdStyleName} 스타일 적용)`, 'info');
+      log(`SD 프롬프트 (앞 100자): ${styledPrompt.substring(0,100)}...`, 'info');
       return await callStableDiffusion(styledPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
     // Imagen 4 (default): apply style prefix + enrich prompt with reference descriptions
