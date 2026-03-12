@@ -839,6 +839,7 @@ function App() {
 
   // Art style selection
   const [artStyle, setArtStyle] = useState('ridiWebtoon');
+  const [customStylePrompt, setCustomStylePrompt] = useState('');
 
   // Project management
   const [projectId, setProjectId] = useState(null);
@@ -872,12 +873,22 @@ function App() {
     return await callGemini(system, user, {maxTokens: 16384, thinkBudget: 1024});
   }, []);
 
+  // Helper: get style prefix for current art style selection
+  const getStylePrefix = useCallback(() => {
+    if (artStyle === 'custom') return customStylePrompt ? customStylePrompt.trim() + '. ' : '';
+    return (ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).prefix;
+  }, [artStyle, customStylePrompt]);
+
   const callImage = useCallback(async (prompt, opts={}) => {
-    if (imageProvider === 'nanoBanana') return await callNanoBanana(prompt, opts);
+    const stylePrefix = getStylePrefix();
+    if (imageProvider === 'nanoBanana') {
+      const styledPrompt = stylePrefix + prompt;
+      log(`Gemini 사용 (${artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name} 스타일 적용)`, 'info');
+      return await callNanoBanana(styledPrompt, opts);
+    }
     if (imageProvider === 'falAI') {
       // fal.ai FLUX: LoRA + ControlNet(OpenPose) + IP-Adapter pipeline
-      const stylePrefix = (ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).prefix;
-      let styledPrompt = stylePrefix + prompt;
+      let styledPrompt = stylePrefix + prompt; // stylePrefix already from getStylePrefix()
       const falOpts = {
         imageSize: opts.aspectRatio === '16:9' ? {width:1024,height:576} : opts.aspectRatio === '1:1' ? {width:768,height:768} : {width:768,height:1024}
       };
@@ -929,24 +940,27 @@ function App() {
     if (imageProvider === 'stableDiffusion') {
       // SD can't process reference images — fall back to Gemini when refs exist
       if (opts.referenceImages?.length > 0) {
-        log('레퍼런스 이미지 감지 → Gemini로 전환 (SD는 이미지 입력 불가)', 'info');
-        return await callNanoBanana(prompt, opts);
+        const styledPrompt = stylePrefix + prompt;
+        log('레퍼런스 이미지 감지 → Gemini로 전환 (SD는 이미지 입력 불가, 스타일 적용)', 'info');
+        return await callNanoBanana(styledPrompt, opts);
       }
-      // Add art style to SD prompts
-      const sdStylePrefix = (ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).prefix;
-      const styledPrompt = sdStylePrefix + prompt;
-      log(`Stable Diffusion 사용 (${(ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).name} 스타일)`, 'info');
+      const styledPrompt = stylePrefix + prompt;
+      const styleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name;
+      log(`Stable Diffusion 사용 (${styleName} 스타일)`, 'info');
       return await callStableDiffusion(styledPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
-    // Imagen 4 (default): enrich prompt with reference descriptions
+    // Imagen 4 (default): apply style prefix + enrich prompt with reference descriptions
+    const styledPrompt = stylePrefix + prompt;
+    const styleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name;
     if (opts.referenceImages?.length > 0) {
       const refDescs = opts.referenceImages.map(r => r.description).filter(Boolean).join('; ');
-      const enrichedPrompt = refDescs ? prompt + '\n\nIMPORTANT visual references for consistency: ' + refDescs : prompt;
-      log('Imagen 4 사용 (레퍼런스 설명 포함)', 'info');
+      const enrichedPrompt = refDescs ? styledPrompt + '\n\nIMPORTANT visual references for consistency: ' + refDescs : styledPrompt;
+      log(`Imagen 4 사용 (${styleName} 스타일 + 레퍼런스 설명 포함)`, 'info');
       return await callImagen(enrichedPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
-    return await callImagen(prompt, {...opts, aspectRatio: opts.aspectRatio || '3:4'});
-  }, [imageProvider, artStyle, log, loraModels]);
+    log(`Imagen 4 사용 (${styleName} 스타일 적용)`, 'info');
+    return await callImagen(styledPrompt, {...opts, aspectRatio: opts.aspectRatio || '3:4'});
+  }, [imageProvider, artStyle, customStylePrompt, getStylePrefix, log, loraModels]);
 
   // LoRA Training: train a character LoRA from reference images
   const trainCharacterLora = async (charId, charName, images) => {
@@ -1714,9 +1728,9 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   const showPreview = (src, title) => { setPreviewImage(src); setPreviewTitle(title || ''); };
 
   // Helper: get full prompt for asset type (uses current art style)
-  const getCharSuffix = () => ', character reference sheet, full body, front view, clean background' + ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).charSuffix || '');
-  const getBgSuffix = () => ', no characters, detailed environment, wide shot' + ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).bgSuffix || '');
-  const getPropSuffix = () => ', single object, centered, clean white background, detailed illustration' + ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).charSuffix || '');
+  const getCharSuffix = () => ', character reference sheet, full body, front view, clean background' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).charSuffix || ''));
+  const getBgSuffix = () => ', no characters, detailed environment, wide shot' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).bgSuffix || ''));
+  const getPropSuffix = () => ', single object, centered, clean white background, detailed illustration' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).charSuffix || ''));
 
   const getAssetFullPrompt = (assetType, refPrompt) => {
     if (assetType === 'characters') return refPrompt + getCharSuffix();
@@ -1774,6 +1788,12 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
               <option key={key} value={key}>{style.name}</option>
             ))}
           </select>
+          {artStyle === 'custom' && (
+            <div style={{position:'relative',display:'inline-flex',alignItems:'center'}}>
+              <input className="form-input" value={customStylePrompt} onChange={e=>setCustomStylePrompt(e.target.value)} placeholder="스타일 프롬프트 입력 (예: watercolor painting, soft pastel colors...)" style={{width:360,padding:'6px 10px',fontSize:12,borderColor:'#f8a879',background:'#fff8f0'}} />
+              {customStylePrompt && <span style={{position:'absolute',right:8,fontSize:10,color:'var(--success)',fontWeight:600}}>적용됨</span>}
+            </div>
+          )}
         </div>
         {projectId && <button className="api-key-btn" onClick={()=>setShowAssetLibrary(true)} style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',borderColor:'transparent'}}>에셋 라이브러리 ({Object.keys(sharedAssets.characters).length + Object.keys(sharedAssets.backgrounds).length + Object.keys(sharedAssets.props).length})</button>}
         <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API 설정</button>
