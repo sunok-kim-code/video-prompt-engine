@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+h<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebashejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -1735,7 +1735,7 @@ function LongFormOrchestrator({log, activeTab, setActiveTab}) {
           <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 16}}>
             <div style={{display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap'}}>
               <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase5();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={lfScenes.length === 0 || !enableWebtoon || running} className="btn btn-primary btn-sm">P5 웹툰 멀티패널 생성</button>
-              {running && pipelineState === 'PHASE_5_EXPANDING' && <span className="status-badge running">패널 생성 중... 씬 {currentSceneIdx+1}/{lfScenes.length}</span>}
+              {running && phase === 'PHASE_5_EXPANDING' && <span className="status-badge running">패널 생성 중... 씬 {currentSceneIdx+1}/{lfScenes.length}</span>}
               <span style={{fontSize:11,color:'var(--text2)'}}>씬 유형별 5~7장 자동 생성 + 캐릭터 레퍼런스 적용</span>
             </div>
             {!enableWebtoon && <div className="placeholder">Phase 5 웹툰확장을 활성화해주세요</div>}
