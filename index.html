@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ì¹í° íë¡ëì</title>
+<title>웹툰 프로덕션</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
@@ -212,14 +212,14 @@ async function callNanoBanana(prompt, opts={}) {
 // ============================================================
 // NEW PIPELINE: WEBTOON EPISODE PRODUCTION (5 Steps)
 // ============================================================
-// Step 1: Analyze story â extract characters, backgrounds, plot flow
+// Step 1: Analyze story → extract characters, backgrounds, plot flow
 // Step 2: Generate character/background reference images
 // Step 3: Create storyboard (panel-by-panel breakdown)
 // Step 4: Generate panel images sequentially with character refs
 // Step 5: Assemble into webtoon preview
 
-const STEPS = ['ë¶ì','ë í¼ë°ì¤','ì¤í ë¦¬ë³´ë','í¨ëìì±','ë¯¸ë¦¬ë³´ê¸°'];
-const STEP_LABELS = ['1. ì¤í ë¦¬ ë¶ì','2. ìºë¦­í°/ë°°ê²½ ë í¼ë°ì¤','3. ì¤í ë¦¬ë³´ë','4. í¨ë ì´ë¯¸ì§ ìì±','5. ì¹í° ë¯¸ë¦¬ë³´ê¸°'];
+const STEPS = ['분석','레퍼런스','스토리보드','패널생성','미리보기'];
+const STEP_LABELS = ['1. 스토리 분석','2. 캐릭터/배경 레퍼런스','3. 스토리보드','4. 패널 이미지 생성','5. 웹툰 미리보기'];
 
 const PROMPTS = {
   ANALYZE_STORY: `You are a webtoon story analyst. Analyze this Korean story/novel text and extract structured data for webtoon production.
@@ -271,8 +271,8 @@ Return ONLY a valid JSON array (no markdown):
     "cameraAngle": "eye_level|low_angle|high_angle|birds_eye|dutch_angle|over_shoulder",
     "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"center"}],
     "background": "bg_1",
-    "dialogue": [{"speaker":"char_1","text":"ëì¬ ë´ì©"}],
-    "narration": "ëë ì´ìì´ ìì¼ë©´ ì¬ê¸°ì",
+    "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
+    "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens in this panel",
     "imagePrompt": "Detailed English prompt for image generation: [shot size], [camera angle], [character descriptions with poses and expressions], [background/environment], [lighting and atmosphere], manhwa/webtoon style, detailed illustration, vibrant colors"
@@ -296,7 +296,7 @@ Rules:
 function LogPanel({logs}) {
   const ref = useRef();
   useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[logs]);
-  return (<div className="log-panel" ref={ref}>{logs.map((l,i)=>(<div key={i} className={`log-entry ${l.type||''}`}>{l.msg}</div>))}{logs.length===0&&<div className="log-entry">ëê¸° ì¤...</div>}</div>);
+  return (<div className="log-panel" ref={ref}>{logs.map((l,i)=>(<div key={i} className={`log-entry ${l.type||''}`}>{l.msg}</div>))}{logs.length===0&&<div className="log-entry">대기 중...</div>}</div>);
 }
 
 function ApiKeyModal({onClose}) {
@@ -307,15 +307,15 @@ function ApiKeyModal({onClose}) {
   const save=()=>{if(vp)localStorage.setItem('VERTEX_PROJECT_ID',vp);if(vl)localStorage.setItem('VERTEX_LOCATION',vl);if(vt)localStorage.setItem('VERTEX_ACCESS_TOKEN',vt);if(xk)localStorage.setItem('XAI_API_KEY',xk);onClose();};
   return (
     <div className="modal-overlay" onClick={onClose}><div className="modal-box" onClick={e=>e.stopPropagation()}>
-      <div className="modal-title">API ì¤ì </div>
-      <div className="modal-desc">Vertex AI API ì¤ì </div>
+      <div className="modal-title">API 설정</div>
+      <div className="modal-desc">Vertex AI API 설정</div>
       <div style={{marginBottom:12}}><label className="form-label">Project ID</label><input className="modal-input" value={vp} onChange={e=>setVp(e.target.value)}/></div>
       <div style={{marginBottom:12}}><label className="form-label">Location</label><input className="modal-input" value={vl} onChange={e=>setVl(e.target.value)}/></div>
       <div style={{marginBottom:12}}><label className="form-label">Access Token</label><input className="modal-input" type="password" value={vt} onChange={e=>setVt(e.target.value)}/></div>
-      <div className="key-status"><div className={`dot ${hasGeminiKey()?'on':''}`}/><span>Vertex AI {hasGeminiKey()?'ì¤ì ë¨':'ë¯¸ì¤ì '}</span></div>
+      <div className="key-status"><div className={`dot ${hasGeminiKey()?'on':''}`}/><span>Vertex AI {hasGeminiKey()?'설정됨':'미설정'}</span></div>
       <div style={{marginBottom:12}}><label className="form-label">xAI (Grok) Key</label><input className="modal-input" type="password" value={xk} onChange={e=>setXk(e.target.value)}/></div>
-      <div className="key-status"><div className={`dot ${hasXaiKey()?'on':''}`}/><span>xAI {hasXaiKey()?'ì¤ì ë¨':'ë¯¸ì¤ì '}</span></div>
-      <div className="modal-actions"><button className="btn-cancel" onClick={onClose}>ì·¨ì</button><button className="btn-save" onClick={save}>ì ì¥</button></div>
+      <div className="key-status"><div className={`dot ${hasXaiKey()?'on':''}`}/><span>xAI {hasXaiKey()?'설정됨':'미설정'}</span></div>
+      <div className="modal-actions"><button className="btn-cancel" onClick={onClose}>취소</button><button className="btn-save" onClick={save}>저장</button></div>
     </div></div>
   );
 }
@@ -382,11 +382,11 @@ function App() {
 
   // ======== STEP 1: Analyze Story ========
   const runStep1 = async () => {
-    log('Step 1: ì¤í ë¦¬ ë¶ì ìì...', 'info');
+    log('Step 1: 스토리 분석 시작...', 'info');
     setStep(0);
     const result = await callText(PROMPTS.ANALYZE_STORY, sourceText);
     const parsed = parseJSON(result);
-    log(`ë¶ì ìë£: ìºë¦­í° ${parsed.characters?.length || 0}ëª, ë°°ê²½ ${parsed.backgrounds?.length || 0}ê°, íë¡¯ ${parsed.plotBeats?.length || 0}ê°`, 'success');
+    log(`분석 완료: 캐릭터 ${parsed.characters?.length || 0}명, 배경 ${parsed.backgrounds?.length || 0}개, 플롯 ${parsed.plotBeats?.length || 0}개`, 'success');
     setAnalysis(parsed);
     setProjectTitle(parsed.title || sourceText.substring(0, 20));
     setCompletedSteps(prev => new Set([...prev, 0]));
@@ -397,37 +397,37 @@ function App() {
   // ======== STEP 2: Generate Reference Images ========
   const runStep2 = async (analysisData) => {
     const data = analysisData || analysis;
-    if (!data) throw new Error('ë¶ì ë°ì´í° ìì');
-    log('Step 2: ë í¼ë°ì¤ ì´ë¯¸ì§ ìì± ìì...', 'info');
+    if (!data) throw new Error('분석 데이터 없음');
+    log('Step 2: 레퍼런스 이미지 생성 시작...', 'info');
     setStep(1);
     const refs = {characters:{}, backgrounds:{}};
 
     // Generate character references
     for (let i = 0; i < data.characters.length; i++) {
-      if (abortRef.current) throw new Error('ì¤ë¨ë¨');
+      if (abortRef.current) throw new Error('중단됨');
       const char = data.characters[i];
-      log(`ìºë¦­í° ë í¼ë°ì¤ ìì± (${i+1}/${data.characters.length}): ${char.name}`);
+      log(`캐릭터 레퍼런스 생섳 (${i+1}/${data.characters.length}): ${char.name}`);
       try {
         const images = await callImage(char.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality, detailed');
         refs.characters[char.id] = images[0];
-        log(`${char.name} ë í¼ë°ì¤ ìë£`, 'success');
+        log(`${char.name} 레퍼런스 완료`, 'success');
       } catch(e) {
-        log(`${char.name} ë í¼ë°ì¤ ì¤í¨: ${e.message}`, 'error');
+        log(`${char.name} 레퍼런스 실패: ${e.message}`, 'error');
       }
       setReferences({...refs});
     }
 
     // Generate background references
     for (let i = 0; i < data.backgrounds.length; i++) {
-      if (abortRef.current) throw new Error('ì¤ë¨ë¨');
+      if (abortRef.current) throw new Error('중단됨');
       const bg = data.backgrounds[i];
-      log(`ë°°ê²½ ë í¼ë°ì¤ ìì± (${i+1}/${data.backgrounds.length}): ${bg.name}`);
+      log(`배경 레퍼런스 생성 (${i+1}/${data.backgrounds.length}): ${bg.name}`);
       try {
         const images = await callImage(bg.refPrompt + ', no characters, manhwa background art, detailed environment, wide shot', {aspectRatio: '16:9'});
         refs.backgrounds[bg.id] = images[0];
-        log(`${bg.name} ë°°ê²½ ìë£`, 'success');
+        log(`${bg.name} 배경 완료`, 'success');
       } catch(e) {
-        log(`${bg.name} ë°°ê²½ ì¤í¨: ${e.message}`, 'error');
+        log(`${bg.name} 배경 실패: ${e.message}`, 'error');
       }
       setReferences({...refs});
     }
@@ -440,8 +440,8 @@ function App() {
   // ======== STEP 3: Create Storyboard ========
   const runStep3 = async (analysisData) => {
     const data = analysisData || analysis;
-    if (!data) throw new Error('ë¶ì ë°ì´í° ìì');
-    log('Step 3: ì¤í ë¦¬ë³´ë ìì± ìì...', 'info');
+    if (!data) throw new Error('분석 데이터 없음');
+    log('Step 3: 스토리보드 생성 시작...', 'info');
     setStep(2);
 
     // Build context with character and background details
@@ -468,7 +468,7 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
 
     const result = await callText(PROMPTS.CREATE_STORYBOARD, userPrompt);
     const parsed = parseJSON(result);
-    log(`ì¤í ë¦¬ë³´ë ìë£: ${parsed.length}ê° í¨ë`, 'success');
+    log(`스토리보드 완료: ${parsed.length}개 패널`, 'success');
     setStoryboard(parsed);
     setPanels(new Array(parsed.length).fill(null));
     setCompletedSteps(prev => new Set([...prev, 2]));
@@ -480,18 +480,18 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
   const runStep4 = async (storyboardData, refsData) => {
     const sb = storyboardData || storyboard;
     const refs = refsData || references;
-    if (!sb.length) throw new Error('ì¤í ë¦¬ë³´ë ìì');
-    log('Step 4: í¨ë ì´ë¯¸ì§ ìì± ìì...', 'info');
+    if (!sb.length) throw new Error('스토리보드 없음');
+    log('Step 4: 패널 이미지 생성 시작...', 'info');
     setStep(3);
 
     const newPanels = [...(panels.length === sb.length ? panels : new Array(sb.length).fill(null))];
 
     for (let i = 0; i < sb.length; i++) {
-      if (abortRef.current) throw new Error('ì¤ë¨ë¨');
-      if (newPanels[i]) { log(`í¨ë ${i+1} ì´ë¯¸ ìì±ë¨, ê±´ëë`); continue; }
+      if (abortRef.current) throw new Error('중단됨');
+      if (newPanels[i]) { log(`패널 ${i+1} 이미 생성됨, 건너뜀`); continue; }
 
       const panel = sb[i];
-      log(`í¨ë ${i+1}/${sb.length} ìì± ì¤... (${panel.type}, ${panel.shotSize})`);
+      log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
 
       // Build reference images for this panel's characters
       const refImages = [];
@@ -512,16 +512,16 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
       try {
         const images = await callImage(panel.imagePrompt, {referenceImages: refImages, aspectRatio: '3:4'});
         newPanels[i] = images[0];
-        log(`í¨ë ${i+1} ìë£`, 'success');
+        log(`패널 ${i+1} 완료`, 'success');
       } catch(e) {
-        log(`í¨ë ${i+1} ì¤í¨: ${e.message}`, 'error');
+        log(`패널 ${i+1} 실패: ${e.message}`, 'error');
         // Retry without reference
         try {
           const images = await callImage(panel.imagePrompt, {aspectRatio: '3:4'});
           newPanels[i] = images[0];
-          log(`í¨ë ${i+1} ë í¼ë°ì¤ ìì´ ì¬ìì± ìë£`, 'success');
+          log(`패널 ${i+1} 레퍼런스 없이 재생성 완료`, 'success');
         } catch(e2) {
-          log(`í¨ë ${i+1} ìµì¢ ì¤í¨: ${e2.message}`, 'error');
+          log(`패널 ${i+1} 최종 실패: ${e2.message}`, 'error');
         }
       }
       setPanels([...newPanels]);
@@ -544,10 +544,10 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
       if (abortRef.current) return;
       await runStep4(s, r);
       setCompletedSteps(prev => new Set([...prev, 4]));
-      log('ì¹í° 1í ìì± ìë£!', 'success');
+      log('웹툰 1화 생성 완료!', 'success');
     } catch(e) {
       setErrorMsg(e.message);
-      log('ì¤ë¥: ' + e.message, 'error');
+      log('오류: ' + e.message, 'error');
     } finally { setRunning(false); }
   };
 
@@ -562,7 +562,7 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
       else if (stepIdx === 4) { setStep(4); setCompletedSteps(prev => new Set([...prev, 4])); }
     } catch(e) {
       setErrorMsg(e.message);
-      log('ì¤ë¥: ' + e.message, 'error');
+      log('오류: ' + e.message, 'error');
     } finally { setRunning(false); }
   };
 
@@ -582,13 +582,13 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
           }
         }
       }
-      log(`í¨ë ${idx+1} ì¬ìì± ì¤...`);
+      log(`패널 ${idx+1} 재생성 중...`);
       const images = await callImage(panel.imagePrompt, {referenceImages: refImages, aspectRatio: '3:4'});
       const newPanels = [...panels];
       newPanels[idx] = images[0];
       setPanels(newPanels);
-      log(`í¨ë ${idx+1} ì¬ìì± ìë£`, 'success');
-    } catch(e) { log(`ì¬ìì± ì¤í¨: ${e.message}`, 'error'); }
+      log(`패널 ${idx+1} 재생성 완료`, 'success');
+    } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
     finally { setRunning(false); }
   };
 
@@ -599,11 +599,11 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
     if (!char) return;
     setRunning(true);
     try {
-      log(`${char.name} ë í¼ë°ì¤ ì¬ìì± ì¤...`);
+      log(`${char.name} 레m��런스 재생성 중...`);
       const images = await callImage(char.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality');
       setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
-      log(`${char.name} ë í¼ë°ì¤ ì¬ìì± ìë£`, 'success');
-    } catch(e) { log(`ì¬ìì± ì¤í¨: ${e.message}`, 'error'); }
+      log(`${char.name} 레퍼런스 재생성 완료`, 'success');
+    } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
     finally { setRunning(false); }
   };
 
@@ -612,18 +612,18 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
     try {
       const id = projectId || 'proj_' + Date.now();
       if (!projectId) setProjectId(id);
-      await fbSaveProject(id, {title: projectTitle || 'ë¬´ì ', step, completedSteps: [...completedSteps]});
+      await fbSaveProject(id, {title: projectTitle || '무제', step, completedSteps: [...completedSteps]});
       if (analysis) await fbSavePhase(id, 'step1_analysis', {analysis, sourceText});
       if (Object.keys(references.characters).length > 0) await fbSavePhase(id, 'step2_references', references);
       if (storyboard.length > 0) await fbSavePhase(id, 'step3_storyboard', {storyboard});
       if (panels.some(p => p)) await fbSavePhase(id, 'step4_panels', {panels});
-      log('íë¡ì í¸ ì ì¥ ìë£', 'success');
-    } catch(e) { log('ì ì¥ ì¤í¨: ' + e.message, 'error'); }
+      log('프로젝트 저장 완료', 'success');
+    } catch(e) { log('저장 실패: ' + e.message, 'error'); }
   };
 
   const loadProject = async (pid) => {
     try {
-      log('íë¡ì í¸ ë¡ë ì¤...');
+      log('프로젝트 로드 중...');
       const proj = await fbLoadProject(pid);
       setProjectId(pid);
       setProjectTitle(proj.title || '');
@@ -638,12 +638,12 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
       if (proj.completedSteps) setCompletedSteps(new Set(proj.completedSteps));
       if (proj.step !== undefined) setStep(proj.step);
       setShowProjects(false);
-      log('íë¡ì í¸ ë¡ë ìë£', 'success');
-    } catch(e) { log('ë¡ë ì¤í¨: ' + e.message, 'error'); }
+      log('프로젝트 로드 완료', 'success');
+    } catch(e) { log('로드 실패: ' + e.message, 'error'); }
   };
 
   const loadProjectList = async () => {
-    try { setProjectList(await fbListProjects()); } catch(e) { log('ëª©ë¡ ë¡ë ì¤í¨: ' + e.message, 'error'); }
+    try { setProjectList(await fbListProjects()); } catch(e) { log('목록 로드 실패: ' + e.message, 'error'); }
   };
 
   // ======== RENDER ========
@@ -651,14 +651,14 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
     <div>
       {/* Header */}
       <div className="app-header">
-        <div className="app-logo">ì¹í° íë¡ëì</div>
+        <div className="app-logo">웹툰 프로덕션</div>
         <div className="nav-tabs">
           <select className="form-select" style={{width:140,padding:'6px 10px',fontSize:12}} value={imageProvider} onChange={e=>setImageProvider(e.target.value)}>
             <option value="imagen4">Imagen 4</option>
             <option value="nanoBanana">Gemini Image</option>
           </select>
         </div>
-        <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API ì¤ì </button>
+        <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API 설정</button>
       </div>
 
       {showApiModal && <ApiKeyModal onClose={()=>setShowApiModal(false)} />}
@@ -672,7 +672,7 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
               onClick={() => !running && setStep(i)}
             >
               {STEP_LABELS[i]}
-              {completedSteps.has(i) && ' â'}
+              {completedSteps.has(i) && ' ✓'}
             </div>
           ))}
         </div>
@@ -689,30 +689,30 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
               <div className="card">
                 <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
                   <button className="btn btn-primary" onClick={runFullPipeline} disabled={!sourceText.trim() || running}>
-                    {running ? 'ìì± ì¤...' : 'ì ì²´ ìë ìì±'}
+                    {running ? '생성 중...' : '전체 자동 생성'}
                   </button>
-                  <button className="btn btn-outline btn-sm" onClick={()=>runSingleStep(0)} disabled={!sourceText.trim() || running}>Step 1ë§ ì¤í</button>
-                  {running && <button className="btn btn-danger btn-sm" onClick={()=>{abortRef.current=true;}}>ì¤ì§</button>}
+                  <button className="btn btn-outline btn-sm" onClick={()=>runSingleStep(0)} disabled={!sourceText.trim() || running}>Step 1만 실행</button>
+                  {running && <button className="btn btn-danger btn-sm" onClick={()=>{abortRef.current=true;}}>중지</button>}
                   <div style={{marginLeft:'auto',display:'flex',gap:6}}>
-                    <button className="btn btn-outline btn-sm" onClick={()=>{setShowProjects(!showProjects);if(!showProjects)loadProjectList();}}>íë¡ì í¸</button>
-                    <button className="btn btn-outline btn-sm" onClick={saveProject} disabled={running}>ì ì¥</button>
+                    <button className="btn btn-outline btn-sm" onClick={()=>{setShowProjects(!showProjects);if(!showProjects)loadProjectList();}}>프로젝트</button>
+                    <button className="btn btn-outline btn-sm" onClick={saveProject} disabled={running}>저장</button>
                   </div>
                 </div>
 
                 {showProjects && (
                   <div style={{marginBottom:12,padding:12,background:'var(--surface2)',borderRadius:8}}>
-                    <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>ì ì¥ë íë¡ì í¸</div>
+                    <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>저장된 프로젝트</div>
                     {projectList.map(p => (
                       <div key={p.id} style={{padding:'6px 0',borderBottom:'1px solid var(--border)',cursor:'pointer',fontSize:13}} onClick={()=>loadProject(p.id)}>
                         {p.title || p.id}
                       </div>
                     ))}
-                    {projectList.length === 0 && <div style={{fontSize:12,color:'var(--text2)'}}>ì ì¥ë íë¡ì í¸ ìì</div>}
+                    {projectList.length === 0 && <div style={{fontSize:12,color:'var(--text2)'}}>저장된 프로젝트 없음</div>}
                   </div>
                 )}
 
                 <textarea className="form-textarea" value={sourceText} onChange={e=>setSourceText(e.target.value)}
-                  placeholder="ì¹í°ì¼ë¡ ë§ë¤ ìì¤/ì¤í ë¦¬ íì¤í¸ë¥¼ ìë ¥íì¸ì. ì´ íì¤í¸ê° ì¹í° 1íë¡ ë³íë©ëë¤."
+                  placeholder="웹툰으로 만들 소설/스토리 텍스트를 입력하세요. 이 텍스트가 웹툰 1화로 변환됩니다."
                   style={{minHeight:250}} disabled={running} />
                 <div style={{textAlign:'right',fontSize:11,color:'var(--text2)',marginTop:4}}>{sourceText.length} chars</div>
               </div>
@@ -720,23 +720,23 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
               {/* Analysis result preview */}
               {analysis && (
                 <div className="card">
-                  <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>ë¶ì ê²°ê³¼: {analysis.title}</div>
+                  <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>분석 결과: {analysis.title}</div>
                   <div style={{fontSize:13,color:'var(--text2)',marginBottom:12}}>{analysis.synopsis}</div>
                   <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
                     <div>
-                      <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>ìºë¦­í° ({analysis.characters?.length})</div>
+                      <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>캐릭터 ({analysis.characters?.length})</div>
                       {analysis.characters?.map(c => (
-                        <div key={c.id} style={{marginBottom:4}}><span className="tag tag-char">{c.role}</span> <strong>{c.name}</strong> â {c.personality}</div>
+                        <div key={c.id} style={{marginBottom:4}}><span className="tag tag-char">{c.role}</span> <strong>{c.name}</strong> — {c.personality}</div>
                       ))}
                     </div>
                     <div>
-                      <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>ë°°ê²½ ({analysis.backgrounds?.length})</div>
+                      <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>배경 ({analysis.backgrounds?.length})</div>
                       {analysis.backgrounds?.map(b => (
                         <div key={b.id} style={{marginBottom:4}}><span className="tag tag-loc">{b.type}</span> {b.name}</div>
                       ))}
                     </div>
                     <div>
-                      <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>íë¡¯ ({analysis.plotBeats?.length})</div>
+                      <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>플롯 ({analysis.plotBeats?.length})</div>
                       {analysis.plotBeats?.map(p => (
                         <div key={p.beat} style={{marginBottom:4,fontSize:12}}><span className="tag tag-mood">{p.mood}</span> {p.summary}</div>
                       ))}
@@ -751,41 +751,41 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
           {step === 1 && (
             <div style={{display:'flex',flexDirection:'column',gap:16}}>
               <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(1)} disabled={!analysis || running}>ë í¼ë°ì¤ ìì±</button>
-                {running && <span className="status-badge running">ìì± ì¤...</span>}
+                <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(1)} disabled={!analysis || running}>레퍼런스 생성</button>
+                {running && <span className="status-badge running">생성 중...</span>}
               </div>
 
-              {!analysis && <div className="placeholder">ë¨¼ì  Step 1 (ì¤í ë¦¬ ë¶ì)ì ì¤ííì¸ì</div>}
+              {!analysis && <div className="placeholder">먼저 Step 1 (스토리 분석)을 실행하세요</div>}
 
               {analysis && (
                 <div>
-                  <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>ìºë¦­í° ë í¼ë°ì¤</div>
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>캐릭터 레퍼런스</div>
                   <div className="ref-grid">
                     {analysis.characters?.map(c => (
                       <div key={c.id} className="ref-card">
                         {references.characters[c.id] ? (
                           <img src={references.characters[c.id]} alt={c.name} />
                         ) : (
-                          <div className="panel-placeholder">ë¯¸ìì±</div>
+                          <div className="panel-placeholder">미생성</div>
                         )}
                         <div className="ref-card-info">
                           <div className="ref-card-name">{c.name} <span className="tag tag-char" style={{fontSize:10}}>{c.role}</span></div>
                           <div className="ref-card-desc">{c.appearance}</div>
                           <button className="btn btn-outline btn-sm" style={{marginTop:6,width:'100%',justifyContent:'center'}}
-                            onClick={()=>regenerateCharRef(c.id)} disabled={running}>ì¬ìì±</button>
+                            onClick={()=>regenerateCharRef(c.id)} disabled={running}>재생성</button>
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  <div style={{fontWeight:700,fontSize:14,marginTop:20,marginBottom:12}}>ë°°ê²½ ë í¼ë°ì¤</div>
+                  <div style={{fontWeight:700,fontSize:14,marginTop:20,marginBottom:12}}>배경 레m��런스</div>
                   <div className="ref-grid" style={{gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))'}}>
                     {analysis.backgrounds?.map(b => (
                       <div key={b.id} className="ref-card">
                         {references.backgrounds[b.id] ? (
                           <img src={references.backgrounds[b.id]} alt={b.name} style={{aspectRatio:'16/9'}} />
                         ) : (
-                          <div className="panel-placeholder" style={{aspectRatio:'16/9'}}>ë¯¸ìì±</div>
+                          <div className="panel-placeholder" style={{aspectRatio:'16/9'}}>미생성</div>
                         )}
                         <div className="ref-card-info">
                           <div className="ref-card-name">{b.name}</div>
@@ -803,12 +803,12 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
           {step === 2 && (
             <div style={{display:'flex',flexDirection:'column',gap:16}}>
               <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(2)} disabled={!analysis || running}>ì¤í ë¦¬ë³´ë ìì±</button>
-                {storyboard.length > 0 && <span style={{fontSize:12,color:'var(--text2)'}}>{storyboard.length}ê° í¨ë</span>}
-                {running && <span className="status-badge running">ìì± ì¤...</span>}
+                <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(2)} disabled={!analysis || running}>스토리보드 생성</button>
+                {storyboard.length > 0 && <span style={{fontSize:12,color:'var(--text2)'}}>{storyboard.length}개 패널</span>}
+                {running && <span className="status-badge running">생성 중...</span>}
               </div>
 
-              {storyboard.length === 0 && <div className="placeholder">ì¤í ë¦¬ë³´ëë¥¼ ìì±íë©´ í¨ëë³ êµ¬ì±ì´ íìë©ëë¤</div>}
+              {storyboard.length === 0 && <div className="placeholder">스토리보드를 생성하면 패널별 구성이 표시됩니다</div>}
 
               {storyboard.length > 0 && (
                 <div style={{display:'flex',flexDirection:'column',gap:8}}>
@@ -826,11 +826,11 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
                         </div>
                         <div style={{fontSize:13,marginBottom:4}}>{panel.description}</div>
                         {panel.dialogue?.map((d, di) => (
-                          <div key={di} style={{fontSize:12,color:'var(--accent)',marginLeft:8}}>ð¬ {d.speaker}: "{d.text}"</div>
+                          <div key={di} style={{fontSize:12,color:'var(--accent)',marginLeft:8}}>💬 {d.speaker}: "{d.text}"</div>
                         ))}
-                        {panel.narration && <div style={{fontSize:12,color:'var(--text2)',fontStyle:'italic',marginLeft:8}}>ð {panel.narration}</div>}
+                        {panel.narration && <div style={{fontSize:12,color:'var(--text2)',fontStyle:'italic',marginLeft:8}}>📝 {panel.narration}</div>}
                         <details style={{marginTop:6}}>
-                          <summary style={{fontSize:11,color:'var(--text2)',cursor:'pointer'}}>ì´ë¯¸ì§ íë¡¬íí¸</summary>
+                          <summary style={{fontSize:11,color:'var(--text2)',cursor:'pointer'}}>이미지 프롬프트</summary>
                           <div style={{fontSize:11,color:'var(--text2)',padding:'4px 0',lineHeight:1.5}}>{panel.imagePrompt}</div>
                         </details>
                       </div>
@@ -845,12 +845,12 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
           {step === 3 && (
             <div style={{display:'flex',flexDirection:'column',gap:16}}>
               <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(3)} disabled={storyboard.length===0 || running}>í¨ë ì´ë¯¸ì§ ìì±</button>
-                {panels.filter(Boolean).length > 0 && <span style={{fontSize:12,color:'var(--text2)'}}>{panels.filter(Boolean).length}/{storyboard.length} ìë£</span>}
-                {running && <span className="status-badge running">ìì± ì¤...</span>}
+                <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(3)} disabled={storyboard.length===0 || running}>패널 이미지 생성</button>
+                {panels.filter(Boolean).length > 0 && <span style={{fontSize:12,color:'var(--text2)'}}>{panels.filter(Boolean).length}/{storyboard.length} 완료</span>}
+                {running && <span className="status-badge running">생성 중...</span>}
               </div>
 
-              {storyboard.length === 0 && <div className="placeholder">ë¨¼ì  ì¤í ë¦¬ë³´ëë¥¼ ìì±íì¸ì</div>}
+              {storyboard.length === 0 && <div className="placeholder">먼저 스토리보드를 생성하세요</div>}
 
               <div className="panel-grid">
                 {storyboard.map((panel, i) => (
@@ -859,13 +859,13 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
                     {panels[i] ? (
                       <img src={panels[i]} alt={`Panel ${i+1}`} />
                     ) : (
-                      <div className="panel-placeholder">{running ? 'ìì± ëê¸°...' : 'ë¯¸ìì±'}</div>
+                      <div className="panel-placeholder">{running ? '생성 대기...' : '미생성'}</div>
                     )}
                     <div className="panel-info">
                       <span className="tag tag-mood" style={{fontSize:10}}>{panel.type}</span> {panel.description?.substring(0, 40)}
                       {panels[i] && (
                         <div style={{marginTop:4}}>
-                          <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 8px'}} onClick={()=>regeneratePanel(i)} disabled={running}>ì¬ìì±</button>
+                          <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 8px'}} onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
                         </div>
                       )}
                     </div>
@@ -879,11 +879,11 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
           {step === 4 && (
             <div style={{display:'flex',flexDirection:'column',gap:16}}>
               <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                <span style={{fontWeight:700,fontSize:15}}>ì¹í° ë¯¸ë¦¬ë³´ê¸°: {analysis?.title || ''}</span>
-                <span style={{fontSize:12,color:'var(--text2)'}}>({panels.filter(Boolean).length}ê° í¨ë)</span>
+                <span style={{fontWeight:700,fontSize:15}}>웹툰 미리보기 �{analysis?.title || ''}</span>
+                <span style={{fontSize:12,color:'var(--text2)'}}>({panels.filter(Boolean).length}개 패널)</span>
               </div>
 
-              {panels.filter(Boolean).length === 0 && <div className="placeholder">í¨ë ì´ë¯¸ì§ë¥¼ ë¨¼ì  ìì±íì¸ì</div>}
+              {panels.filter(Boolean).length === 0 && <div className="placeholder">패널 이미지를 먼저 생성하세요</div>}
 
               <div className="webtoon-strip">
                 {storyboard.map((panel, i) => {
@@ -917,8 +917,8 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
         {/* Log Panel */}
         <div style={{marginTop:12}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-            <span style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>ë¡ê·¸</span>
-            <button className="btn btn-outline" style={{padding:'2px 8px',fontSize:10}} onClick={()=>setLogs([])}>ì´ê¸°í</button>
+            <span style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>로그</span>
+            <button className="btn btn-outline" style={{padding:'2px 8px',fontSize:10}} onClick={()=>setLogs([])}>초기화</button>
           </div>
           <LogPanel logs={logs} />
         </div>
