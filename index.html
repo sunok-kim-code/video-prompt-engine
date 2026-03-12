@@ -147,16 +147,25 @@ async function fbListEpisodes(projectId) { const db = getDb(); if (!db) throw ne
 async function fbSaveEpisode(projectId, episodeNum, data) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); await db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).set({...data, number: episodeNum, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}, {merge:true}); }
 async function fbDeleteEpisode(projectId, episodeNum) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); const phases = await db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).collection('phases').get(); const batch = db.batch(); phases.docs.forEach(d => batch.delete(d.ref)); batch.delete(db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum))); await batch.commit(); }
 
-// Phase-level with episode support
-async function fbSavePhase(projectId, episodeNum, phaseName, phaseData) {
+// Phase-level with episode support (skipImages: save metadata only, no base64 images)
+async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImages) {
   const db = getDb(); if (!db) return;
   const ref = db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).collection('phases').doc(phaseName);
   const imgs = []; const safe = stripBase64(phaseData, imgs);
-  await ref.set({...safe, imageCount:imgs.length, savedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  const retrySet = async (docRef, data, attempts) => {
+    for (let a = 0; a < (attempts||3); a++) {
+      try { await docRef.set(data); return; } catch(e) {
+        if (a < (attempts||3)-1 && e.code === 'resource-exhausted') { await new Promise(r => setTimeout(r, 2000*(a+1))); } else throw e;
+      }
+    }
+  };
+  await retrySet(ref, {...safe, imageCount: skipImages ? 0 : imgs.length, savedAt: firebase.firestore.FieldValue.serverTimestamp()});
+  if (skipImages || imgs.length === 0) return;
   const imgColl = ref.collection('images');
-  const old = await imgColl.get(); if(old.docs.length>0){const b=db.batch();old.docs.forEach(d=>b.delete(d.ref));await b.commit();}
-  for(let i=0;i<imgs.length;i+=5){const b=db.batch();for(let j=i;j<Math.min(i+5,imgs.length);j++){const im=imgs[j];if(im.data.length>900000){const cs=800000,cn=Math.ceil(im.data.length/cs);b.set(imgColl.doc(im.id),{key:im.key,chunks:cn});for(let c=0;c<cn;c++)b.set(imgColl.doc(im.id+'_c'+c),{data:im.data.substring(c*cs,(c+1)*cs),idx:c});}else b.set(imgColl.doc(im.id),{key:im.key,data:im.data});}await b.commit();}
+  try { const old = await imgColl.get(); if(old.docs.length>0){const b=db.batch();old.docs.forEach(d=>b.delete(d.ref));await b.commit(); await new Promise(r=>setTimeout(r,500));} } catch(e){}
+  for(let i=0;i<imgs.length;i+=2){const b=db.batch();for(let j=i;j<Math.min(i+2,imgs.length);j++){const im=imgs[j];if(im.data.length>900000){const cs=800000,cn=Math.ceil(im.data.length/cs);b.set(imgColl.doc(im.id),{key:im.key,chunks:cn});for(let c=0;c<cn;c++)b.set(imgColl.doc(im.id+'_c'+c),{data:im.data.substring(c*cs,(c+1)*cs),idx:c});}else b.set(imgColl.doc(im.id),{key:im.key,data:im.data});}try{await b.commit();await new Promise(r=>setTimeout(r,300));}catch(e){if(e.code==='resource-exhausted'){await new Promise(r=>setTimeout(r,3000));try{await b.commit();}catch(e2){}}else throw e;}}
 }
+
 async function fbLoadPhase(projectId, episodeNum, phaseName) {
   const db = getDb(); if (!db) return null;
   const ref = db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).collection('phases').doc(phaseName);
@@ -541,11 +550,21 @@ function App() {
       }
 
       const s2 = await fbLoadPhase(projectId, episodeNum, 'step2_references');
-      if (s2 && (Object.keys(s2.characters || {}).length > 0 || Object.keys(s2.backgrounds || {}).length > 0)) {
-        setReferences(s2);
-        detected.add(1);
-        lastStep = 2;
-        log(`  Step 2 (레퍼런스) 로드됨`, 'info');
+      if (s2) {
+        // Reconstruct references from shared assets if saved as metadata only
+        let loadedRefs = s2;
+        if (s2.characterIds || s2.backgroundIds) {
+          loadedRefs = {characters:{}, backgrounds:{}};
+          const curAssets = sharedAssets || {characters:{}, backgrounds:{}};
+          (s2.characterIds||[]).forEach(id => { if(curAssets.characters[id]?.image) loadedRefs.characters[id] = curAssets.characters[id].image; });
+          (s2.backgroundIds||[]).forEach(id => { if(curAssets.backgrounds[id]?.image) loadedRefs.backgrounds[id] = curAssets.backgrounds[id].image; });
+        }
+        if (Object.keys(loadedRefs.characters || {}).length > 0 || Object.keys(loadedRefs.backgrounds || {}).length > 0) {
+          setReferences(loadedRefs);
+          detected.add(1);
+          lastStep = 2;
+          log(`  Step 2 (레퍼런스) 로드됨`, 'info');
+        }
       }
 
       const s3 = await fbLoadPhase(projectId, episodeNum, 'step3_storyboard');
@@ -581,7 +600,7 @@ function App() {
         log(`${episodeNum}화 로드 완료 (${detected.size}개 단계 복원됨)`, 'success');
       }
     } catch(e) { log(`${episodeNum}화 로드 실패: ${e.message}`, 'error'); }
-  }, [projectId, episodes, log]);
+  }, [projectId, episodes, sharedAssets, log]);
 
   // Delete episode
   const deleteEpisode = useCallback(async (episodeNum) => {
@@ -694,7 +713,7 @@ function App() {
         // Save to shared assets
         const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
         sa.characters[char.id] = {...assetData, assetId: char.id, type: 'characters'};
-        if (projectId) await fbSaveAsset(projectId, 'characters', char.id, assetData);
+        if (projectId) { await fbSaveAsset(projectId, 'characters', char.id, assetData); await new Promise(r=>setTimeout(r,500)); }
         log(`${char.name} 레퍼런스 생성 → 공유 에셋 저장 완료`, 'success');
       } catch(e) {
         log(`${char.name} 레퍼런스 실패: ${e.message}`, 'error');
@@ -718,7 +737,7 @@ function App() {
         refs.backgrounds[bg.id] = images[0];
         const assetData = {name: bg.name, bgType: bg.type, description: bg.description, refPrompt: bg.refPrompt, image: images[0]};
         sa.backgrounds[bg.id] = {...assetData, assetId: bg.id, type: 'backgrounds'};
-        if (projectId) await fbSaveAsset(projectId, 'backgrounds', bg.id, assetData);
+        if (projectId) { await fbSaveAsset(projectId, 'backgrounds', bg.id, assetData); await new Promise(r=>setTimeout(r,500)); }
         log(`${bg.name} 배경 생성 → 공유 에셋 저장 완료`, 'success');
       } catch(e) {
         log(`${bg.name} 배경 실패: ${e.message}`, 'error');
@@ -740,7 +759,7 @@ function App() {
           const images = await callImage(prop.refPrompt + ', single object, centered, clean white background, detailed illustration, manhwa style', {aspectRatio: '1:1'});
           const assetData = {name: prop.name, description: prop.description, refPrompt: prop.refPrompt, image: images[0]};
           sa.props[prop.id] = {...assetData, assetId: prop.id, type: 'props'};
-          if (projectId) await fbSaveAsset(projectId, 'props', prop.id, assetData);
+          if (projectId) { await fbSaveAsset(projectId, 'props', prop.id, assetData); await new Promise(r=>setTimeout(r,500)); }
           log(`${prop.name} 소품 생성 → 공유 에셋 저장 완료`, 'success');
         } catch(e) {
           log(`${prop.name} 소품 실패: ${e.message}`, 'error');
@@ -751,11 +770,15 @@ function App() {
     setSharedAssets({...sa});
     setCompletedSteps(prev => new Set([...prev, 1]));
     setStep(2);
-    // Auto-save step 2
+    // Auto-save step 2 (skipImages=true: images already in shared_assets)
     if (projectId && currentEpisode) {
       try {
         const cs = [...new Set([...completedSteps, 0, 1])];
-        await fbSavePhase(projectId, currentEpisode, 'step2_references', refs);
+        await fbSavePhase(projectId, currentEpisode, 'step2_references', {
+          characterIds: Object.keys(refs.characters),
+          backgroundIds: Object.keys(refs.backgrounds),
+          hasImages: true
+        }, true);
         await fbSaveEpisode(projectId, currentEpisode, {step: 2, completedSteps: cs});
         updateEpisodeState(2, cs);
         log('Step 2 자동 저장 완료', 'info');
@@ -1049,7 +1072,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
       // Save phases
       if (analysis) await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis, sourceText});
-      if (Object.keys(references.characters).length > 0) await fbSavePhase(projectId, currentEpisode, 'step2_references', references);
+      if (Object.keys(references.characters).length > 0) await fbSavePhase(projectId, currentEpisode, 'step2_references', {characterIds: Object.keys(references.characters), backgroundIds: Object.keys(references.backgrounds), hasImages: true}, true);
       if (storyboard.length > 0) await fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard});
       if (panels.some(p => p)) await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels});
 
