@@ -539,17 +539,30 @@ async function createTrainingZip(base64Images) {
 
 async function uploadTrainingZipToFal(zipBlob) {
   const apiKey = getFalKey();
-  const formData = new FormData();
-  formData.append('file', zipBlob, 'training_images.zip');
-  // Try REST upload endpoint
-  const res = await fetch('https://rest.alpha.fal.ai/storage/upload/file', {
+  // Step 1: Initiate upload — get presigned upload_url and final file_url
+  const initRes = await fetch('https://rest.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3', {
     method: 'POST',
-    headers: { 'Authorization': 'Key ' + apiKey },
-    body: formData
+    headers: {
+      'Authorization': 'Key ' + apiKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      content_type: 'application/zip',
+      file_name: 'training_images.zip'
+    })
   });
-  if (!res.ok) throw new Error('Training zip upload failed: ' + res.status);
-  const data = await res.json();
-  return data.url || data.file_url;
+  if (!initRes.ok) throw new Error('Upload initiate failed: ' + initRes.status + ' ' + await initRes.text().catch(()=>''));
+  const { upload_url, file_url } = await initRes.json();
+  if (!upload_url || !file_url) throw new Error('Upload initiate returned no URLs');
+
+  // Step 2: PUT the actual file to the presigned URL
+  const putRes = await fetch(upload_url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/zip' },
+    body: zipBlob
+  });
+  if (!putRes.ok) throw new Error('Upload PUT failed: ' + putRes.status);
+  return file_url;
 }
 
 async function submitLoraTraining(imagesUrl, triggerWord, opts={}) {
