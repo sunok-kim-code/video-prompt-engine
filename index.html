@@ -618,6 +618,40 @@ async function pollLoraTraining(requestId, onProgress) {
 const STEPS = ['분석','레퍼런스','스토리보드','패널생성','미리보기'];
 const STEP_LABELS = ['1. 스토리 분석','2. 캐릭터/배경 레퍼런스','3. 스토리보드','4. 패널 이미지 생성','5. 웹툰 미리보기'];
 
+// Art Style Presets
+const ART_STYLES = {
+  ridiWebtoon: {
+    name: '리디 웹툰',
+    prefix: 'Korean webtoon style illustration, romance genre, beautifully detailed eyes with long eyelashes, smooth digital painting with cel shading, subtle pink and lavender color palette, delicate linework, sparkle and petal effects, semi-realistic anime art style, high-quality cover illustration, glossy finish, clean background with soft gradient, cinematic composition. ',
+    charSuffix: ', soft warm lighting, beautifully detailed eyes with long eyelashes, semi-realistic anime art style, glossy finish, high quality',
+    bgSuffix: ', soft warm lighting with bokeh, subtle pink and lavender palette, cinematic composition, high quality',
+  },
+  manhwa: {
+    name: '만화 스타일',
+    prefix: 'Korean manhwa webtoon art style, clean line art, cel shading, vibrant colors, comic panel illustration. ',
+    charSuffix: ', manhwa art style, high quality, detailed',
+    bgSuffix: ', manhwa background art, detailed environment',
+  },
+  realistic: {
+    name: '사실적 (Realistic)',
+    prefix: 'Photorealistic digital art, cinematic lighting, highly detailed, professional photography quality, 8K resolution. ',
+    charSuffix: ', photorealistic, cinematic lighting, highly detailed, professional portrait',
+    bgSuffix: ', photorealistic environment, cinematic lighting, highly detailed',
+  },
+  darkFantasy: {
+    name: '다크 판타지',
+    prefix: 'Dark fantasy webtoon art style, dramatic shadows, rich deep colors, intricate details, gothic atmosphere, painterly style. ',
+    charSuffix: ', dark fantasy art style, dramatic lighting, intricate details',
+    bgSuffix: ', dark fantasy atmosphere, dramatic lighting, detailed environment',
+  },
+  custom: {
+    name: '사용자 정의',
+    prefix: '',
+    charSuffix: '',
+    bgSuffix: '',
+  }
+};
+
 const PROMPTS = {
   ANALYZE_STORY: `You are a webtoon story analyst. Analyze this Korean story/novel text and extract structured data for webtoon production.
 
@@ -790,6 +824,9 @@ function App() {
   // LoRA models (character consistency) — {charId: {url, triggerWord, status, requestId}}
   const [loraModels, setLoraModels] = useState({});
 
+  // Art style selection
+  const [artStyle, setArtStyle] = useState('ridiWebtoon');
+
   // Project management
   const [projectId, setProjectId] = useState(null);
   const [projectTitle, setProjectTitle] = useState('');
@@ -826,7 +863,7 @@ function App() {
     if (imageProvider === 'nanoBanana') return await callNanoBanana(prompt, opts);
     if (imageProvider === 'falAI') {
       // fal.ai FLUX: LoRA + ControlNet(OpenPose) + IP-Adapter pipeline
-      const stylePrefix = 'Korean manhwa webtoon art style, clean line art, cel shading, vibrant colors, comic panel illustration. ';
+      const stylePrefix = (ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).prefix;
       let styledPrompt = stylePrefix + prompt;
       const falOpts = {
         imageSize: opts.aspectRatio === '16:9' ? {width:1024,height:576} : opts.aspectRatio === '1:1' ? {width:768,height:768} : {width:768,height:1024}
@@ -882,10 +919,10 @@ function App() {
         log('레퍼런스 이미지 감지 → Gemini로 전환 (SD는 이미지 입력 불가)', 'info');
         return await callNanoBanana(prompt, opts);
       }
-      // Add manhwa/webtoon style to SD prompts
-      const stylePrefix = 'Korean manhwa webtoon art style, clean line art, cel shading, vibrant colors, comic panel illustration. ';
-      const styledPrompt = stylePrefix + prompt;
-      log('Stable Diffusion 사용 (만화 스타일 적용)', 'info');
+      // Add art style to SD prompts
+      const sdStylePrefix = (ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).prefix;
+      const styledPrompt = sdStylePrefix + prompt;
+      log(`Stable Diffusion 사용 (${(ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).name} 스타일)`, 'info');
       return await callStableDiffusion(styledPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
     // Imagen 4 (default): enrich prompt with reference descriptions
@@ -896,7 +933,7 @@ function App() {
       return await callImagen(enrichedPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
     return await callImagen(prompt, {...opts, aspectRatio: opts.aspectRatio || '3:4'});
-  }, [imageProvider, log]);
+  }, [imageProvider, artStyle, log, loraModels]);
 
   // LoRA Training: train a character LoRA from reference images
   const trainCharacterLora = async (charId, charName, images) => {
@@ -1200,7 +1237,7 @@ function App() {
       }
       log(`캐릭터 레퍼런스 생성 (${i+1}/${data.characters.length}): ${char.name}`);
       try {
-        const images = await callImage(char.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality, detailed');
+        const images = await callImage(char.refPrompt + getCharSuffix());
         refs.characters[char.id] = images[0];
         // Save to shared assets
         const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
@@ -1225,7 +1262,7 @@ function App() {
       }
       log(`배경 레퍼런스 생성 (${i+1}/${data.backgrounds.length}): ${bg.name}`);
       try {
-        const images = await callImage(bg.refPrompt + ', no characters, manhwa background art, detailed environment, wide shot', {aspectRatio: '16:9'});
+        const images = await callImage(bg.refPrompt + getBgSuffix(), {aspectRatio: '16:9'});
         refs.backgrounds[bg.id] = images[0];
         const assetData = {name: bg.name, bgType: bg.type, description: bg.description, refPrompt: bg.refPrompt, image: images[0]};
         sa.backgrounds[bg.id] = {...assetData, assetId: bg.id, type: 'backgrounds'};
@@ -1248,7 +1285,7 @@ function App() {
         }
         log(`소품 레퍼런스 생성 (${i+1}/${data.props.length}): ${prop.name}`);
         try {
-          const images = await callImage(prop.refPrompt + ', single object, centered, clean white background, detailed illustration, manhwa style', {aspectRatio: '1:1'});
+          const images = await callImage(prop.refPrompt + getPropSuffix(), {aspectRatio: '1:1'});
           const assetData = {name: prop.name, description: prop.description, refPrompt: prop.refPrompt, image: images[0]};
           sa.props[prop.id] = {...assetData, assetId: prop.id, type: 'props'};
           if (projectId) { await fbSaveAsset(projectId, 'props', prop.id, assetData); await new Promise(r=>setTimeout(r,500)); }
@@ -1524,7 +1561,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
     setRunning(true);
     try {
       const basePrompt = customPrompt || char.refPrompt;
-      const finalPrompt = customPrompt ? customPrompt : (basePrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality');
+      const finalPrompt = customPrompt ? customPrompt : (basePrompt + getCharSuffix());
       log(`${char.name} 레퍼런스 재생성 중...`);
       const images = await callImage(finalPrompt);
       setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
@@ -1551,9 +1588,9 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
         else if (assetType === 'props') opts.aspectRatio = '1:1';
       } else {
         let suffix = '';
-        if (assetType === 'characters') suffix = ', character reference sheet, full body, front view, clean background, manhwa art style, high quality';
-        else if (assetType === 'backgrounds') { suffix = ', no characters, manhwa background art, detailed environment, wide shot'; opts.aspectRatio = '16:9'; }
-        else if (assetType === 'props') { suffix = ', single object, centered, clean white background, detailed illustration, manhwa style'; opts.aspectRatio = '1:1'; }
+        if (assetType === 'characters') suffix = getCharSuffix();
+        else if (assetType === 'backgrounds') { suffix = getBgSuffix(); opts.aspectRatio = '16:9'; }
+        else if (assetType === 'props') { suffix = getPropSuffix(); opts.aspectRatio = '1:1'; }
         finalPrompt = asset.refPrompt + suffix;
       }
       const images = await callImage(finalPrompt, opts);
@@ -1653,11 +1690,15 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   // ======== RENDER ========
   const showPreview = (src, title) => { setPreviewImage(src); setPreviewTitle(title || ''); };
 
-  // Helper: get full prompt for asset type
+  // Helper: get full prompt for asset type (uses current art style)
+  const getCharSuffix = () => ', character reference sheet, full body, front view, clean background' + ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).charSuffix || '');
+  const getBgSuffix = () => ', no characters, detailed environment, wide shot' + ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).bgSuffix || '');
+  const getPropSuffix = () => ', single object, centered, clean white background, detailed illustration' + ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).charSuffix || '');
+
   const getAssetFullPrompt = (assetType, refPrompt) => {
-    if (assetType === 'characters') return refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality';
-    if (assetType === 'backgrounds') return refPrompt + ', no characters, manhwa background art, detailed environment, wide shot';
-    if (assetType === 'props') return refPrompt + ', single object, centered, clean white background, detailed illustration, manhwa style';
+    if (assetType === 'characters') return refPrompt + getCharSuffix();
+    if (assetType === 'backgrounds') return refPrompt + getBgSuffix();
+    if (assetType === 'props') return refPrompt + getPropSuffix();
     return refPrompt;
   };
 
@@ -1701,6 +1742,11 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
             <option value="stableDiffusion">Stable Diffusion 3.5</option>
             <option value="imagen4">Imagen 4 (고품질)</option>
             <option value="nanoBanana">Gemini (레퍼런스 반영)</option>
+          </select>
+          <select className="form-select" style={{width:130,padding:'6px 10px',fontSize:12,background:'linear-gradient(135deg,#ffecd2,#fcb69f)',borderColor:'#f8a879'}} value={artStyle} onChange={e=>setArtStyle(e.target.value)}>
+            {Object.entries(ART_STYLES).map(([key, style]) => (
+              <option key={key} value={key}>{style.name}</option>
+            ))}
           </select>
         </div>
         {projectId && <button className="api-key-btn" onClick={()=>setShowAssetLibrary(true)} style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',borderColor:'transparent'}}>에셋 라이브러리 ({Object.keys(sharedAssets.characters).length + Object.keys(sharedAssets.backgrounds).length + Object.keys(sharedAssets.props).length})</button>}
@@ -1978,7 +2024,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                               </details>
                               <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap'}}>
                                 <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
-                                  onClick={() => openPromptEditor('charRef', c.id, c.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality', c.name, (p) => regenerateCharRef(c.id, p))} disabled={running}>프롬프트 수정</button>
+                                  onClick={() => openPromptEditor('charRef', c.id, c.refPrompt + getCharSuffix(), c.name, (p) => regenerateCharRef(c.id, p))} disabled={running}>프롬프트 수정</button>
                                 <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
                                   onClick={()=>regenerateCharRef(c.id)} disabled={running}>재생성</button>
                               </div>
@@ -2026,7 +2072,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                               </details>
                               <div style={{display:'flex',gap:4,marginTop:6}}>
                                 <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
-                                  onClick={() => openPromptEditor('bgRef', b.id, b.refPrompt + ', no characters, manhwa background art, detailed environment, wide shot', b.name, (p) => regenerateAsset('backgrounds', b.id, p))} disabled={running}>프롬프트 수정</button>
+                                  onClick={() => openPromptEditor('bgRef', b.id, b.refPrompt + getBgSuffix(), b.name, (p) => regenerateAsset('backgrounds', b.id, p))} disabled={running}>프롬프트 수정</button>
                                 <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
                                   onClick={()=>regenerateAsset('backgrounds', b.id)} disabled={running}>재생성</button>
                               </div>
