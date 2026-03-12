@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -129,6 +130,13 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .img-modal-close{position:absolute;top:-12px;right:-12px;background:#fff;border:none;border-radius:50%;width:28px;height:28px;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .clickable-img{cursor:pointer;transition:opacity 0.2s;}
 .clickable-img:hover{opacity:0.85;}
+.prompt-editor-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9998;display:flex;align-items:center;justify-content:center;}
+.prompt-editor-box{background:var(--surface);border-radius:12px;padding:20px;width:90%;max-width:700px;max-height:80vh;display:flex;flex-direction:column;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,0.3);}
+.prompt-editor-box h3{margin:0;font-size:16px;color:var(--text);}
+.prompt-editor-box textarea{width:100%;min-height:180px;padding:12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;line-height:1.6;background:var(--surface2);color:var(--text);}
+.prompt-editor-box .btn-row{display:flex;gap:8px;justify-content:flex-end;}
+.prompt-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;background:var(--surface2);color:var(--accent);cursor:pointer;border:1px solid var(--border);transition:all 0.2s;}
+.prompt-badge:hover{background:var(--accent);color:#fff;}
 </style>
 </head>
 <body>
@@ -245,7 +253,7 @@ async function fbDeleteAsset(projectId, assetType, assetId) {
 async function autoLoadServerConfig() {
   try { const res = await fetch('/api/firebase-config'); if (!res.ok) throw new Error(''); const data = await res.json();
     if (data.firebase) saveFirebaseConfig(data.firebase);
-    if (data.vertex) { if(data.vertex.projectId)localStorage.setItem('VERTEX_PROJECT_ID',data.vertex.projectId); if(data.vertex.location)localStorage.setItem('VERTEX_LOCATION',data.vertex.location); if(data.vertex.accessToken)localStorage.setItem('VERTEX_ACCESS_TOKEN',data.vertex.accessToken); if(data.vertex.grokApiKey)localStorage.setItem('GROK_API_KEY',data.vertex.grokApiKey); }
+    if (data.vertex) { if(data.vertex.projectId)localStorage.setItem('VERTEX_PROJECT_ID',data.vertex.projectId); if(data.vertex.location)localStorage.setItem('VERTEX_LOCATION',data.vertex.location); if(data.vertex.accessToken)localStorage.setItem('VERTEX_ACCESS_TOKEN',data.vertex.accessToken); if(data.vertex.grokApiKey)localStorage.setItem('GROK_API_KEY',data.vertex.grokApiKey); if(data.vertex.stabilityApiKey)localStorage.setItem('STABILITY_API_KEY',data.vertex.stabilityApiKey); }
   } catch(e) { try{initFirebase();}catch(e2){} }
 }
 autoLoadServerConfig();
@@ -330,6 +338,278 @@ async function callNanoBanana(prompt, opts={}) {
     if(!ip.length)throw new Error('No image generated'); return ip.map(p=>`data:${p.inlineData.mimeType};base64,${p.inlineData.data}`);
   }
   throw new Error('NanoBanana 429: Rate limit exceeded after '+maxRetries+' retries');
+}
+
+// ============================================================
+// STABLE DIFFUSION API (Stability AI)
+// ============================================================
+function getStabilityKey() { const k=localStorage.getItem('STABILITY_API_KEY'); if(!k)throw new Error('Stability AI API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
+function hasStabilityKey() { return !!localStorage.getItem('STABILITY_API_KEY'); }
+
+async function callStableDiffusion(prompt, opts={}) {
+  const apiKey = getStabilityKey();
+  const model = opts.model || 'sd3.5-large-turbo';
+  const url = 'https://api.stability.ai/v2beta/stable-image/generate/sd3';
+
+  // Map aspect ratios - SD supports: 1:1, 16:9, 21:9, 2:3, 3:2, 4:5, 5:4, 9:16, 9:21
+  const arMap = {'3:4':'2:3', '4:3':'3:2'};
+  const aspectRatio = arMap[opts.aspectRatio] || opts.aspectRatio || '2:3';
+
+  const formData = new FormData();
+  formData.append('prompt', prompt.substring(0, 10000));
+  formData.append('model', model);
+  formData.append('aspect_ratio', aspectRatio);
+  formData.append('output_format', 'png');
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'Accept': 'application/json'
+      },
+      body: formData
+    });
+
+    if (res.status === 429) {
+      const wait = Math.min(15000 * Math.pow(2, attempt), 60000);
+      console.warn('StableDiffusion 429 rate limit, waiting '+wait/1000+'s (attempt '+(attempt+1)+'/3)...');
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+
+    if (!res.ok) {
+      const e = await res.text();
+      throw new Error('StableDiffusion ' + res.status + ': ' + e.substring(0, 300));
+    }
+
+    const data = await res.json();
+    if (data.image) {
+      return [`data:image/png;base64,${data.image}`];
+    }
+    throw new Error('No image in SD response');
+  }
+  throw new Error('StableDiffusion 429: Rate limit exceeded after 3 retries');
+}
+
+// ============================================================
+// FAL.AI API (FLUX + ControlNet + IP-Adapter + LoRA)
+// ============================================================
+function getFalKey() { const k=localStorage.getItem('FAL_API_KEY'); if(!k)throw new Error('fal.ai API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
+function hasFalKey() { return !!localStorage.getItem('FAL_API_KEY'); }
+
+async function callFalAI(prompt, opts={}) {
+  const apiKey = getFalKey();
+  // Use fal-ai/flux-general for ControlNet + LoRA + IP-Adapter support
+  const endpoint = 'https://fal.run/fal-ai/flux-general';
+
+  // Build request body
+  const body = {
+    prompt: prompt.substring(0, 4000),
+    num_inference_steps: opts.steps || 28,
+    guidance_scale: opts.guidanceScale || 3.5,
+    num_images: 1,
+    enable_safety_checker: false,
+    output_format: 'png',
+    image_size: opts.imageSize || {width: 768, height: 1024}
+  };
+
+  // LoRA support — for character/style consistency
+  if (opts.loras?.length > 0) {
+    body.loras = opts.loras.map(l => ({
+      path: l.path || l.url,
+      scale: l.scale || 0.8
+    }));
+  }
+
+  // IP-Adapter — for art style consistency using reference images
+  if (opts.ipAdapterImages?.length > 0) {
+    body.ip_adapters = opts.ipAdapterImages.slice(0, 2).map(img => ({
+      ip_adapter_image_url: img.url || img,
+      scale: img.scale || 0.6
+    }));
+  }
+
+  // ControlNet (OpenPose) — for dynamic poses
+  if (opts.controlNetImage) {
+    body.controlnet_unions = [{
+      control_image_url: opts.controlNetImage.url || opts.controlNetImage,
+      control_mode: opts.controlNetMode || 'openpose',
+      conditioning_scale: opts.controlNetScale || 0.7
+    }];
+  }
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Key ' + apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (res.status === 429 || res.status === 503) {
+      const wait = Math.min(15000 * Math.pow(2, attempt), 60000);
+      console.warn('fal.ai ' + res.status + ', waiting ' + wait/1000 + 's (attempt ' + (attempt+1) + '/3)...');
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+    if (!res.ok) {
+      const e = await res.text();
+      throw new Error('fal.ai ' + res.status + ': ' + e.substring(0, 300));
+    }
+
+    const data = await res.json();
+    if (data.images?.length > 0) {
+      // fal.ai returns image URLs, need to fetch and convert to data URL
+      const imgUrl = data.images[0].url;
+      try {
+        const imgRes = await fetch(imgUrl);
+        const blob = await imgRes.blob();
+        return [await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        })];
+      } catch(fetchErr) {
+        // If can't fetch image, return URL directly
+        return [imgUrl];
+      }
+    }
+    throw new Error('No image in fal.ai response');
+  }
+  throw new Error('fal.ai: Rate limit exceeded after 3 retries');
+}
+
+// Helper: upload base64 image to fal.ai CDN for use as reference
+async function uploadToFalCDN(base64DataUrl) {
+  const apiKey = getFalKey();
+  // Extract base64 data and mime type
+  const match = base64DataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if (!match) return null;
+  const mimeType = match[1];
+  const base64Data = match[2];
+  const byteChars = atob(base64Data);
+  const byteArr = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+  const blob = new Blob([byteArr], {type: mimeType});
+
+  // Upload to fal.ai storage
+  const formData = new FormData();
+  formData.append('file', blob, 'image.png');
+  const res = await fetch('https://fal.run/fal-ai/any/upload', {
+    method: 'POST',
+    headers: { 'Authorization': 'Key ' + apiKey },
+    body: formData
+  });
+  if (!res.ok) {
+    // Fallback: try direct REST upload endpoint
+    const res2 = await fetch('https://rest.alpha.fal.ai/storage/upload/file', {
+      method: 'POST',
+      headers: { 'Authorization': 'Key ' + apiKey },
+      body: formData
+    });
+    if (!res2.ok) return null;
+    const data2 = await res2.json();
+    return data2.url || data2.file_url;
+  }
+  const data = await res.json();
+  return data.url || data.file_url;
+}
+
+// ============================================================
+// FAL.AI LoRA TRAINING (Character Consistency)
+// ============================================================
+async function createTrainingZip(base64Images) {
+  // Create a zip file containing training images
+  const zip = new JSZip();
+  for (let i = 0; i < base64Images.length; i++) {
+    const match = base64Images[i].match(/^data:image\/(\w+);base64,(.+)$/);
+    if (!match) continue;
+    const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+    const byteChars = atob(match[2]);
+    const byteArr = new Uint8Array(byteChars.length);
+    for (let j = 0; j < byteChars.length; j++) byteArr[j] = byteChars.charCodeAt(j);
+    zip.file(`image_${i}.${ext}`, byteArr);
+  }
+  return await zip.generateAsync({type: 'blob'});
+}
+
+async function uploadTrainingZipToFal(zipBlob) {
+  const apiKey = getFalKey();
+  const formData = new FormData();
+  formData.append('file', zipBlob, 'training_images.zip');
+  // Try REST upload endpoint
+  const res = await fetch('https://rest.alpha.fal.ai/storage/upload/file', {
+    method: 'POST',
+    headers: { 'Authorization': 'Key ' + apiKey },
+    body: formData
+  });
+  if (!res.ok) throw new Error('Training zip upload failed: ' + res.status);
+  const data = await res.json();
+  return data.url || data.file_url;
+}
+
+async function submitLoraTraining(imagesUrl, triggerWord, opts={}) {
+  const apiKey = getFalKey();
+  // Submit to queue endpoint for async training
+  const body = {
+    images_data_url: imagesUrl,
+    trigger_word: triggerWord || 'ohwx',
+    steps: opts.steps || 1000,
+    is_style: false,
+    create_masks: true,
+    rank: opts.rank || 16
+  };
+  const res = await fetch('https://queue.fal.run/fal-ai/flux-lora-fast-training', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Key ' + apiKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const e = await res.text();
+    throw new Error('LoRA training submit failed: ' + res.status + ' ' + e.substring(0, 200));
+  }
+  return await res.json(); // {request_id, ...}
+}
+
+async function pollLoraTraining(requestId, onProgress) {
+  const apiKey = getFalKey();
+  const statusUrl = `https://queue.fal.run/fal-ai/flux-lora-fast-training/requests/${requestId}/status`;
+  const resultUrl = `https://queue.fal.run/fal-ai/flux-lora-fast-training/requests/${requestId}`;
+
+  // Poll every 10 seconds for up to 15 minutes
+  for (let i = 0; i < 90; i++) {
+    await new Promise(r => setTimeout(r, 10000));
+    try {
+      const sRes = await fetch(statusUrl, {
+        headers: { 'Authorization': 'Key ' + apiKey }
+      });
+      if (!sRes.ok) continue;
+      const status = await sRes.json();
+      if (onProgress) onProgress(status);
+      if (status.status === 'COMPLETED') {
+        // Fetch result
+        const rRes = await fetch(resultUrl, {
+          headers: { 'Authorization': 'Key ' + apiKey }
+        });
+        if (!rRes.ok) throw new Error('Failed to fetch training result');
+        return await rRes.json();
+      }
+      if (status.status === 'FAILED') {
+        throw new Error('LoRA training failed: ' + (status.error || 'unknown error'));
+      }
+    } catch(e) {
+      if (e.message.includes('LoRA training failed')) throw e;
+      // Ignore poll errors, retry
+    }
+  }
+  throw new Error('LoRA training timed out (15 minutes)');
 }
 
 // ============================================================
@@ -457,7 +737,9 @@ function ApiKeyModal({onClose}) {
   const [vl,setVl]=useState(localStorage.getItem('VERTEX_LOCATION')||'us-central1');
   const [vt,setVt]=useState(localStorage.getItem('VERTEX_ACCESS_TOKEN')||'');
   const [xk,setXk]=useState(localStorage.getItem('XAI_API_KEY')||'');
-  const save=()=>{if(vp)localStorage.setItem('VERTEX_PROJECT_ID',vp);if(vl)localStorage.setItem('VERTEX_LOCATION',vl);if(vt)localStorage.setItem('VERTEX_ACCESS_TOKEN',vt);if(xk)localStorage.setItem('XAI_API_KEY',xk);onClose();};
+  const [sk,setSk]=useState(localStorage.getItem('STABILITY_API_KEY')||'');
+  const [fk,setFk]=useState(localStorage.getItem('FAL_API_KEY')||'');
+  const save=()=>{if(vp)localStorage.setItem('VERTEX_PROJECT_ID',vp);if(vl)localStorage.setItem('VERTEX_LOCATION',vl);if(vt)localStorage.setItem('VERTEX_ACCESS_TOKEN',vt);if(xk)localStorage.setItem('XAI_API_KEY',xk);if(sk)localStorage.setItem('STABILITY_API_KEY',sk);if(fk)localStorage.setItem('FAL_API_KEY',fk);onClose();};
   return (
     <div className="modal-overlay" onClick={onClose}><div className="modal-box" onClick={e=>e.stopPropagation()}>
       <div className="modal-title">API 설정</div>
@@ -468,6 +750,10 @@ function ApiKeyModal({onClose}) {
       <div className="key-status"><div className={`dot ${hasGeminiKey()?'on':''}`}/><span>Vertex AI {hasGeminiKey()?'설정됨':'미설정'}</span></div>
       <div style={{marginBottom:12}}><label className="form-label">xAI (Grok) Key</label><input className="modal-input" type="password" value={xk} onChange={e=>setXk(e.target.value)}/></div>
       <div className="key-status"><div className={`dot ${hasXaiKey()?'on':''}`}/><span>xAI {hasXaiKey()?'설정됨':'미설정'}</span></div>
+      <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">Stability AI API Key (Stable Diffusion)</label><input className="modal-input" type="password" value={sk} onChange={e=>setSk(e.target.value)} placeholder="sk-..."/></div>
+      <div className="key-status"><div className={`dot ${hasStabilityKey()?'on':''}`}/><span>Stability AI {hasStabilityKey()?'설정됨':'미설정'}</span></div>
+      <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">fal.ai API Key (FLUX + ControlNet)</label><input className="modal-input" type="password" value={fk} onChange={e=>setFk(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx:xxxxxxxx"/></div>
+      <div className="key-status"><div className={`dot ${hasFalKey()?'on':''}`}/><span>fal.ai {hasFalKey()?'설정됨':'미설정'}</span></div>
       <div className="modal-actions"><button className="btn-cancel" onClick={onClose}>취소</button><button className="btn-save" onClick={save}>저장</button></div>
     </div></div>
   );
@@ -494,12 +780,15 @@ function App() {
   const [references, setReferences] = useState({characters:{}, backgrounds:{}});
   const [storyboard, setStoryboard] = useState([]);
   const [panels, setPanels] = useState([]);
-  const [imageProvider, setImageProvider] = useState('imagen4');
+  const [imageProvider, setImageProvider] = useState('stableDiffusion');
 
   // Shared assets (project-level)
   const [sharedAssets, setSharedAssets] = useState({characters:{}, backgrounds:{}, props:{}});
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
   const [assetTab, setAssetTab] = useState('characters');
+
+  // LoRA models (character consistency) — {charId: {url, triggerWord, status, requestId}}
+  const [loraModels, setLoraModels] = useState({});
 
   // Project management
   const [projectId, setProjectId] = useState(null);
@@ -514,6 +803,16 @@ function App() {
   const [previewImage, setPreviewImage] = useState(null);
   const [previewTitle, setPreviewTitle] = useState('');
 
+  // Prompt editor state: {type, id, prompt, title, onSubmit}
+  const [promptEditor, setPromptEditor] = useState(null);
+  const [editedPrompt, setEditedPrompt] = useState('');
+
+  const openPromptEditor = (type, id, prompt, title, onSubmit) => {
+    setPromptEditor({type, id, title, onSubmit});
+    setEditedPrompt(prompt);
+  };
+  const closePromptEditor = () => { setPromptEditor(null); setEditedPrompt(''); };
+
   const log = useCallback((msg, type='info') => {
     const ts = new Date().toLocaleTimeString();
     setLogs(prev => [...prev, {msg: `[${ts}] ${msg}`, type}]);
@@ -525,13 +824,156 @@ function App() {
 
   const callImage = useCallback(async (prompt, opts={}) => {
     if (imageProvider === 'nanoBanana') return await callNanoBanana(prompt, opts);
-    // Imagen 4 does not support referenceImages - use Gemini for reference-based generation
+    if (imageProvider === 'falAI') {
+      // fal.ai FLUX: LoRA + ControlNet(OpenPose) + IP-Adapter pipeline
+      const stylePrefix = 'Korean manhwa webtoon art style, clean line art, cel shading, vibrant colors, comic panel illustration. ';
+      let styledPrompt = stylePrefix + prompt;
+      const falOpts = {
+        imageSize: opts.aspectRatio === '16:9' ? {width:1024,height:576} : opts.aspectRatio === '1:1' ? {width:768,height:768} : {width:768,height:1024}
+      };
+
+      // Auto-apply trained LoRAs for characters in this panel
+      const activeLoras = [];
+      if (opts.characterIds?.length > 0) {
+        for (const cid of opts.characterIds) {
+          const lora = loraModels[cid];
+          if (lora?.status === 'ready' && lora.url) {
+            activeLoras.push({path: lora.url, scale: 0.8});
+            // Inject trigger word into prompt
+            if (lora.triggerWord && !styledPrompt.includes(lora.triggerWord)) {
+              styledPrompt = styledPrompt + ', ' + lora.triggerWord;
+            }
+          }
+        }
+      }
+      if (activeLoras.length > 0) {
+        falOpts.loras = activeLoras;
+        log(`fal.ai: LoRA ${activeLoras.length}개 자동 적용 (캐릭터 고정)`, 'info');
+      }
+
+      // Upload reference images as IP-Adapter inputs for style consistency
+      if (opts.referenceImages?.length > 0) {
+        log('fal.ai: 레퍼런스 이미지 업로드 중 (IP-Adapter)...', 'info');
+        const ipImages = [];
+        for (const ref of opts.referenceImages.slice(0, 2)) {
+          if (ref.image?.startsWith('data:')) {
+            try {
+              const url = await uploadToFalCDN(ref.image);
+              if (url) ipImages.push({url, scale: 0.6});
+            } catch(e) { console.warn('fal CDN upload failed:', e); }
+          }
+        }
+        if (ipImages.length > 0) {
+          falOpts.ipAdapterImages = ipImages;
+          const refDescs = opts.referenceImages.map(r => r.description).filter(Boolean).join('; ');
+          const loraInfo = activeLoras.length > 0 ? ` + LoRA ${activeLoras.length}개` : '';
+          log(`fal.ai FLUX 사용 (IP-Adapter ${ipImages.length}개${loraInfo} + 만화스타일)`, 'info');
+          const finalPrompt = refDescs ? styledPrompt + '\n\nCharacter/scene details: ' + refDescs : styledPrompt;
+          return await callFalAI(finalPrompt, falOpts);
+        }
+      }
+      const loraInfo = activeLoras.length > 0 ? ` (LoRA ${activeLoras.length}개 적용)` : '';
+      log(`fal.ai FLUX 사용 (만화 스타일 적용${loraInfo})`, 'info');
+      return await callFalAI(styledPrompt, falOpts);
+    }
+    if (imageProvider === 'stableDiffusion') {
+      // SD can't process reference images — fall back to Gemini when refs exist
+      if (opts.referenceImages?.length > 0) {
+        log('레퍼런스 이미지 감지 → Gemini로 전환 (SD는 이미지 입력 불가)', 'info');
+        return await callNanoBanana(prompt, opts);
+      }
+      // Add manhwa/webtoon style to SD prompts
+      const stylePrefix = 'Korean manhwa webtoon art style, clean line art, cel shading, vibrant colors, comic panel illustration. ';
+      const styledPrompt = stylePrefix + prompt;
+      log('Stable Diffusion 사용 (만화 스타일 적용)', 'info');
+      return await callStableDiffusion(styledPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+    }
+    // Imagen 4 (default): enrich prompt with reference descriptions
     if (opts.referenceImages?.length > 0) {
-      log('레퍼런스 이미지 포함 → Gemini 이미지 생성 사용', 'info');
-      return await callNanoBanana(prompt, opts);
+      const refDescs = opts.referenceImages.map(r => r.description).filter(Boolean).join('; ');
+      const enrichedPrompt = refDescs ? prompt + '\n\nIMPORTANT visual references for consistency: ' + refDescs : prompt;
+      log('Imagen 4 사용 (레퍼런스 설명 포함)', 'info');
+      return await callImagen(enrichedPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
     return await callImagen(prompt, {...opts, aspectRatio: opts.aspectRatio || '3:4'});
   }, [imageProvider, log]);
+
+  // LoRA Training: train a character LoRA from reference images
+  const trainCharacterLora = async (charId, charName, images) => {
+    if (!hasFalKey()) { log('fal.ai API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
+    if (!images || images.length === 0) { log('학습할 캐릭터 이미지가 없습니다.', 'error'); return; }
+
+    setLoraModels(prev => ({...prev, [charId]: {status: 'preparing', triggerWord: charId.replace(/[^a-zA-Z]/g,'') || 'ohwx'}}));
+    log(`LoRA 학습 시작: ${charName} (이미지 ${images.length}장)...`, 'info');
+
+    try {
+      // 1. Create zip from images
+      log(`${charName}: 학습 이미지 패키징 중...`, 'info');
+      const zipBlob = await createTrainingZip(images);
+      log(`${charName}: ZIP 생성 완료 (${(zipBlob.size/1024).toFixed(0)}KB)`, 'info');
+
+      // 2. Upload zip to fal CDN
+      log(`${charName}: 이미지 업로드 중...`, 'info');
+      const zipUrl = await uploadTrainingZipToFal(zipBlob);
+      log(`${charName}: 업로드 완료`, 'success');
+
+      // 3. Submit training
+      const triggerWord = charId.replace(/[^a-zA-Z0-9]/g, '') || 'ohwx';
+      log(`${charName}: LoRA 학습 제출 중 (trigger: "${triggerWord}")...`, 'info');
+      const submitResult = await submitLoraTraining(zipUrl, triggerWord, {steps: 1000});
+      const requestId = submitResult.request_id;
+      log(`${charName}: 학습 제출 완료 (ID: ${requestId}). 학습에 5~10분 소요됩니다...`, 'info');
+
+      setLoraModels(prev => ({...prev, [charId]: {status: 'training', triggerWord, requestId}}));
+
+      // 4. Poll for completion
+      const result = await pollLoraTraining(requestId, (status) => {
+        if (status.queue_position !== undefined) {
+          log(`${charName}: 대기열 위치 ${status.queue_position}...`, 'info');
+        }
+      });
+
+      // 5. Extract LoRA URL
+      const loraUrl = result.diffusers_lora_file?.url;
+      if (!loraUrl) throw new Error('학습 결과에 LoRA URL이 없습니다');
+
+      const loraData = {url: loraUrl, triggerWord, status: 'ready', requestId, trainedAt: new Date().toISOString()};
+      setLoraModels(prev => ({...prev, [charId]: loraData}));
+
+      // 6. Save to Firestore
+      if (projectId) {
+        try {
+          await fbSaveAsset(projectId, 'lora_models', charId, {name: charName, charId, ...loraData});
+          log(`${charName}: LoRA 모델 저장 완료`, 'success');
+        } catch(e) { log(`LoRA 저장 실패: ${e.message}`, 'error'); }
+      }
+
+      log(`${charName}: LoRA 학습 완료! URL: ${loraUrl.substring(0, 60)}...`, 'success');
+      return loraData;
+    } catch(e) {
+      log(`${charName} LoRA 학습 실패: ${e.message}`, 'error');
+      setLoraModels(prev => ({...prev, [charId]: {...prev[charId], status: 'failed', error: e.message}}));
+    }
+  };
+
+  // Load LoRA models from Firestore shared assets
+  const loadLoraModels = useCallback(async (pid) => {
+    try {
+      const db = getDb(); if (!db) return;
+      const snap = await db.collection('webtoon_projects').doc(pid).collection('shared_assets').get();
+      const loras = {};
+      snap.docs.forEach(doc => {
+        const d = doc.data();
+        if (d.type === 'lora_models' && d.url && d.status === 'ready') {
+          loras[d.charId || d.assetId] = {url: d.url, triggerWord: d.triggerWord, status: 'ready', trainedAt: d.trainedAt};
+        }
+      });
+      if (Object.keys(loras).length > 0) {
+        setLoraModels(loras);
+        log(`LoRA 모델 ${Object.keys(loras).length}개 로드 완료`, 'success');
+      }
+    } catch(e) { /* ignore */ }
+  }, []);
 
   const parseJSON = (text) => {
     let cleaned = text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
@@ -622,10 +1064,16 @@ function App() {
       const s4 = await fbLoadPhase(projectId, episodeNum, 'step4_panels');
       if (s4 && s4.panels?.some(p => p)) {
         setPanels(s4.panels);
-        detected.add(3);
-        lastStep = 4;
         const generated = s4.panels.filter(p => p).length;
-        log(`  Step 4 (패널 이미지) 로드됨: ${generated}/${s4.panels.length}개`, 'info');
+        const total = s4.panels.length;
+        if (generated === total) {
+          detected.add(3);
+          lastStep = 4;
+          log(`  Step 4 (패널 이미지) 로드됨: ${generated}/${total}개 — 완료`, 'info');
+        } else {
+          lastStep = 3;
+          log(`  Step 4 (패널 이미지) 로드됨: ${generated}/${total}개 — 미완료, 이어서 생성 가능`, 'info');
+        }
       }
 
       // Also check episode doc for completedSteps (merge with detected)
@@ -933,15 +1381,18 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
         }
       }
 
+      // Extract character IDs for LoRA auto-application
+      const panelCharIds = panel.characters ? panel.characters.map(pc => pc.id || pc).filter(Boolean) : [];
+
       try {
-        const images = await callImage(panel.imagePrompt, {referenceImages: refImages, aspectRatio: '3:4'});
+        const images = await callImage(panel.imagePrompt, {referenceImages: refImages, aspectRatio: '3:4', characterIds: panelCharIds});
         newPanels[i] = images[0];
         log(`패널 ${i+1} 완료`, 'success');
       } catch(e) {
         log(`패널 ${i+1} 실패: ${e.message}`, 'error');
         if (e.message.includes('429')) await new Promise(r => setTimeout(r, 10000));
         try {
-          const images = await callImage(panel.imagePrompt, {aspectRatio: '3:4'});
+          const images = await callImage(panel.imagePrompt, {aspectRatio: '3:4', characterIds: panelCharIds});
           newPanels[i] = images[0];
           log(`패널 ${i+1} 레퍼런스 없이 재생성 완료`, 'success');
         } catch(e2) {
@@ -949,13 +1400,20 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
         }
       }
       setPanels([...newPanels]);
+      // Incremental save: save after each panel is generated
+      if (projectId && currentEpisode && newPanels[i]) {
+        try {
+          await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels});
+          log(`패널 ${i+1} 저장 완료`, 'info');
+        } catch(e) { log(`패널 ${i+1} 저장 실패: ${e.message}`, 'error'); }
+      }
       // Delay between panels to avoid API rate limits
       if (i < sb.length - 1) await new Promise(r => setTimeout(r, 3000));
     }
 
     setCompletedSteps(prev => new Set([...prev, 3]));
     setStep(4);
-    // Auto-save step 4
+    // Final save step 4
     if (projectId && currentEpisode) {
       try {
         const cs = [...new Set([...completedSteps, 0, 1, 2, 3])];
@@ -1010,11 +1468,18 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   };
 
   // ======== Regenerate single panel ========
-  const regeneratePanel = async (idx) => {
+  const regeneratePanel = async (idx, customPrompt) => {
     if (!storyboard[idx]) return;
     setRunning(true);
     try {
       const panel = storyboard[idx];
+      const usePrompt = customPrompt || panel.imagePrompt;
+      // Update storyboard prompt if custom
+      if (customPrompt) {
+        const newSb = [...storyboard];
+        newSb[idx] = {...newSb[idx], imagePrompt: customPrompt};
+        setStoryboard(newSb);
+      }
       const refImages = [];
       const sa = sharedAssets;
       if (panel.characters && analysis) {
@@ -1036,8 +1501,9 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
           }
         }
       }
+      const panelCharIds = panel.characters ? panel.characters.map(pc => pc.id || pc).filter(Boolean) : [];
       log(`패널 ${idx+1} 재생성 중...`);
-      const images = await callImage(panel.imagePrompt, {referenceImages: refImages, aspectRatio: '3:4'});
+      const images = await callImage(usePrompt, {referenceImages: refImages, aspectRatio: '3:4', characterIds: panelCharIds});
       const newPanels = [...panels];
       newPanels[idx] = images[0];
       setPanels(newPanels);
@@ -1051,17 +1517,19 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   };
 
   // ======== Regenerate single character reference (updates shared asset) ========
-  const regenerateCharRef = async (charId) => {
+  const regenerateCharRef = async (charId, customPrompt) => {
     if (!analysis) return;
     const char = analysis.characters.find(c => c.id === charId);
     if (!char) return;
     setRunning(true);
     try {
+      const basePrompt = customPrompt || char.refPrompt;
+      const finalPrompt = customPrompt ? customPrompt : (basePrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality');
       log(`${char.name} 레퍼런스 재생성 중...`);
-      const images = await callImage(char.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality');
+      const images = await callImage(finalPrompt);
       setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
-      // Update shared asset
-      const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
+      const updatedRefPrompt = customPrompt || char.refPrompt;
+      const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, personality: char.personality, refPrompt: updatedRefPrompt, image: images[0]};
       setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: {...assetData, assetId: charId, type: 'characters'}}}));
       if (projectId) await fbSaveAsset(projectId, 'characters', charId, assetData);
       log(`${char.name} 레퍼런스 재생성 → 공유 에셋 업데이트 완료`, 'success');
@@ -1070,18 +1538,26 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   };
 
   // ======== Regenerate single asset from library ========
-  const regenerateAsset = async (assetType, assetId) => {
+  const regenerateAsset = async (assetType, assetId, customPrompt) => {
     const asset = sharedAssets[assetType]?.[assetId];
     if (!asset) return;
     setRunning(true);
     try {
       log(`${asset.name} 에셋 재생성 중...`);
-      let suffix = '', opts = {};
-      if (assetType === 'characters') suffix = ', character reference sheet, full body, front view, clean background, manhwa art style, high quality';
-      else if (assetType === 'backgrounds') { suffix = ', no characters, manhwa background art, detailed environment, wide shot'; opts.aspectRatio = '16:9'; }
-      else if (assetType === 'props') { suffix = ', single object, centered, clean white background, detailed illustration, manhwa style'; opts.aspectRatio = '1:1'; }
-      const images = await callImage(asset.refPrompt + suffix, opts);
-      const updated = {...asset, image: images[0]};
+      let finalPrompt, opts = {};
+      if (customPrompt) {
+        finalPrompt = customPrompt;
+        if (assetType === 'backgrounds') opts.aspectRatio = '16:9';
+        else if (assetType === 'props') opts.aspectRatio = '1:1';
+      } else {
+        let suffix = '';
+        if (assetType === 'characters') suffix = ', character reference sheet, full body, front view, clean background, manhwa art style, high quality';
+        else if (assetType === 'backgrounds') { suffix = ', no characters, manhwa background art, detailed environment, wide shot'; opts.aspectRatio = '16:9'; }
+        else if (assetType === 'props') { suffix = ', single object, centered, clean white background, detailed illustration, manhwa style'; opts.aspectRatio = '1:1'; }
+        finalPrompt = asset.refPrompt + suffix;
+      }
+      const images = await callImage(finalPrompt, opts);
+      const updated = {...asset, image: images[0], refPrompt: customPrompt || asset.refPrompt};
       setSharedAssets(prev => ({...prev, [assetType]: {...prev[assetType], [assetId]: updated}}));
       if (assetType === 'characters') setReferences(prev => ({...prev, characters: {...prev.characters, [assetId]: images[0]}}));
       if (assetType === 'backgrounds') setReferences(prev => ({...prev, backgrounds: {...prev.backgrounds, [assetId]: images[0]}}));
@@ -1149,6 +1625,9 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
         if (totalAssets > 0) log(`공유 에셋 ${totalAssets}개 로드 완료`, 'success');
       } catch(e) { log('공유 에셋 로드 실패: ' + e.message, 'error'); }
 
+      // Load LoRA models
+      try { await loadLoraModels(pid); } catch(e) { /* ignore */ }
+
       // Load episodes
       const episodeList = await fbListEpisodes(pid);
       setEpisodes(episodeList);
@@ -1174,8 +1653,35 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   // ======== RENDER ========
   const showPreview = (src, title) => { setPreviewImage(src); setPreviewTitle(title || ''); };
 
+  // Helper: get full prompt for asset type
+  const getAssetFullPrompt = (assetType, refPrompt) => {
+    if (assetType === 'characters') return refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality';
+    if (assetType === 'backgrounds') return refPrompt + ', no characters, manhwa background art, detailed environment, wide shot';
+    if (assetType === 'props') return refPrompt + ', single object, centered, clean white background, detailed illustration, manhwa style';
+    return refPrompt;
+  };
+
   return (
     <div>
+      {/* Prompt Editor Modal */}
+      {promptEditor && (
+        <div className="prompt-editor-overlay" onClick={closePromptEditor}>
+          <div className="prompt-editor-box" onClick={e => e.stopPropagation()}>
+            <h3>프롬프트 편집: {promptEditor.title}</h3>
+            <textarea value={editedPrompt} onChange={e => setEditedPrompt(e.target.value)} placeholder="이미지 생성 프롬프트를 입력하세요..." />
+            <div className="btn-row">
+              <button className="btn btn-outline btn-sm" onClick={closePromptEditor}>취소</button>
+              <button className="btn btn-primary btn-sm" disabled={running} onClick={() => {
+                const p = editedPrompt.trim();
+                if (!p) return;
+                closePromptEditor();
+                promptEditor.onSubmit(p);
+              }}>이 프롬프트로 생성</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Image Preview Modal */}
       {previewImage && (
         <div className="img-modal-overlay" onClick={() => setPreviewImage(null)}>
@@ -1191,8 +1697,10 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
         <div className="app-logo">웹툰 프로덕션</div>
         <div className="nav-tabs">
           <select className="form-select" style={{width:140,padding:'6px 10px',fontSize:12}} value={imageProvider} onChange={e=>setImageProvider(e.target.value)}>
-            <option value="imagen4">Imagen 4</option>
-            <option value="nanoBanana">Gemini Image</option>
+            <option value="falAI">FLUX + ControlNet (fal.ai)</option>
+            <option value="stableDiffusion">Stable Diffusion 3.5</option>
+            <option value="imagen4">Imagen 4 (고품질)</option>
+            <option value="nanoBanana">Gemini (레퍼런스 반영)</option>
           </select>
         </div>
         {projectId && <button className="api-key-btn" onClick={()=>setShowAssetLibrary(true)} style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',borderColor:'transparent'}}>에셋 라이브러리 ({Object.keys(sharedAssets.characters).length + Object.keys(sharedAssets.backgrounds).length + Object.keys(sharedAssets.props).length})</button>}
@@ -1245,9 +1753,26 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                   )}
                   <div className="asset-item-meta">
                     <span>ID: {id}</span>
+                    {assetTab === 'characters' && loraModels[id]?.status === 'ready' && (
+                      <span style={{color:'#155724',fontWeight:600}}>LoRA 학습완료</span>
+                    )}
+                    {assetTab === 'characters' && loraModels[id]?.status === 'training' && (
+                      <span style={{color:'#856404',fontWeight:600}}>LoRA 학습중...</span>
+                    )}
                   </div>
                 </div>
+                {asset.refPrompt && (
+                  <details style={{marginTop:4,gridColumn:'1/-1'}}>
+                    <summary className="prompt-badge">프롬프트 보기</summary>
+                    <div style={{fontSize:11,color:'var(--text2)',padding:'6px 0',lineHeight:1.5,fontFamily:'monospace',wordBreak:'break-all'}}>{getAssetFullPrompt(assetTab, asset.refPrompt)}</div>
+                  </details>
+                )}
                 <div className="asset-item-actions">
+                  {assetTab === 'characters' && imageProvider === 'falAI' && asset.image && !loraModels[id]?.status?.match(/ready|training/) && (
+                    <button className="btn btn-sm" style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none',fontSize:11}}
+                      onClick={() => trainCharacterLora(id, asset.name, [asset.image])} disabled={running}>LoRA 학습</button>
+                  )}
+                  <button className="btn btn-outline btn-sm" onClick={() => openPromptEditor(assetTab, id, getAssetFullPrompt(assetTab, asset.refPrompt), asset.name, (p) => regenerateAsset(assetTab, id, p))} disabled={running}>프롬프트 수정 후 생성</button>
                   <button className="btn btn-outline btn-sm" onClick={()=>regenerateAsset(assetTab, id)} disabled={running}>재생성</button>
                   <button className="btn btn-outline btn-sm" style={{color:'var(--err)',borderColor:'var(--err)'}} onClick={async ()=>{
                     if(!confirm(`${asset.name} 에셋을 삭제하시겠습니까?`)) return;
@@ -1441,10 +1966,43 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                               <div className="panel-placeholder">미생성</div>
                             )}
                             <div className="ref-card-info">
-                              <div className="ref-card-name">{c.name} <span className="tag tag-char" style={{fontSize:10}}>{c.role}</span></div>
+                              <div className="ref-card-name">{c.name} <span className="tag tag-char" style={{fontSize:10}}>{c.role}</span>
+                                {loraModels[c.id]?.status === 'ready' && <span className="tag" style={{fontSize:9,background:'#d4edda',color:'#155724',marginLeft:4}}>LoRA</span>}
+                                {loraModels[c.id]?.status === 'training' && <span className="tag" style={{fontSize:9,background:'#fff3cd',color:'#856404',marginLeft:4,animation:'pulse 1.5s infinite'}}>학습중</span>}
+                                {loraModels[c.id]?.status === 'failed' && <span className="tag" style={{fontSize:9,background:'#f8d7da',color:'#721c24',marginLeft:4}}>실패</span>}
+                              </div>
                               <div className="ref-card-desc">{c.appearance}</div>
-                              <button className="btn btn-outline btn-sm" style={{marginTop:6,width:'100%',justifyContent:'center'}}
-                                onClick={()=>regenerateCharRef(c.id)} disabled={running}>재생성</button>
+                              <details style={{marginTop:4}}>
+                                <summary className="prompt-badge">프롬프트</summary>
+                                <div style={{fontSize:10,color:'var(--text2)',padding:'4px 0',lineHeight:1.4,fontFamily:'monospace'}}>{c.refPrompt}</div>
+                              </details>
+                              <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap'}}>
+                                <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
+                                  onClick={() => openPromptEditor('charRef', c.id, c.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality', c.name, (p) => regenerateCharRef(c.id, p))} disabled={running}>프롬프트 수정</button>
+                                <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
+                                  onClick={()=>regenerateCharRef(c.id)} disabled={running}>재생성</button>
+                              </div>
+                              {/* LoRA Training Button */}
+                              {imageProvider === 'falAI' && references.characters[c.id] && (
+                                <div style={{marginTop:6}}>
+                                  {loraModels[c.id]?.status === 'ready' ? (
+                                    <div style={{fontSize:10,color:'#155724',background:'#d4edda',padding:'4px 8px',borderRadius:6,display:'flex',alignItems:'center',gap:4}}>
+                                      <span style={{fontWeight:700}}>LoRA 학습 완료</span>
+                                      <span style={{color:'var(--text2)'}}>— 패널 생성 시 자동 적용됩니다</span>
+                                    </div>
+                                  ) : loraModels[c.id]?.status === 'training' || loraModels[c.id]?.status === 'preparing' ? (
+                                    <div style={{fontSize:10,color:'#856404',background:'#fff3cd',padding:'4px 8px',borderRadius:6}}>
+                                      LoRA 학습 중... (5~10분 소요)
+                                    </div>
+                                  ) : (
+                                    <button className="btn btn-sm" style={{width:'100%',justifyContent:'center',fontSize:11,background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none'}}
+                                      onClick={() => trainCharacterLora(c.id, c.name, [references.characters[c.id]])}
+                                      disabled={running || loraModels[c.id]?.status === 'training'}>
+                                      LoRA 학습 (캐릭터 고정)
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1462,6 +2020,16 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                             <div className="ref-card-info">
                               <div className="ref-card-name">{b.name}</div>
                               <div className="ref-card-desc">{b.description}</div>
+                              <details style={{marginTop:4}}>
+                                <summary className="prompt-badge">프롬프트</summary>
+                                <div style={{fontSize:10,color:'var(--text2)',padding:'4px 0',lineHeight:1.4,fontFamily:'monospace'}}>{b.refPrompt}</div>
+                              </details>
+                              <div style={{display:'flex',gap:4,marginTop:6}}>
+                                <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
+                                  onClick={() => openPromptEditor('bgRef', b.id, b.refPrompt + ', no characters, manhwa background art, detailed environment, wide shot', b.name, (p) => regenerateAsset('backgrounds', b.id, p))} disabled={running}>프롬프트 수정</button>
+                                <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
+                                  onClick={()=>regenerateAsset('backgrounds', b.id)} disabled={running}>재생성</button>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -1503,7 +2071,13 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                             {panel.narration && <div style={{fontSize:12,color:'var(--text2)',fontStyle:'italic',marginLeft:8}}>📝 {panel.narration}</div>}
                             <details style={{marginTop:6}}>
                               <summary style={{fontSize:11,color:'var(--text2)',cursor:'pointer'}}>이미지 프롬프트</summary>
-                              <div style={{fontSize:11,color:'var(--text2)',padding:'4px 0',lineHeight:1.5}}>{panel.imagePrompt}</div>
+                              <div style={{fontSize:11,color:'var(--text2)',padding:'4px 0',lineHeight:1.5,fontFamily:'monospace'}}>{panel.imagePrompt}</div>
+                              <button className="btn btn-outline btn-sm" style={{fontSize:10,marginTop:4}} onClick={() => openPromptEditor('storyboard', i, panel.imagePrompt, `패널 ${i+1} 프롬프트`, (p) => {
+                                const newSb = [...storyboard];
+                                newSb[i] = {...newSb[i], imagePrompt: p};
+                                setStoryboard(newSb);
+                                log(`패널 ${i+1} 프롬프트 수정됨`, 'success');
+                              })}>프롬프트 수정</button>
                             </details>
                           </div>
                         </div>
@@ -1535,11 +2109,17 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                         )}
                         <div className="panel-info">
                           <span className="tag tag-mood" style={{fontSize:10}}>{panel.type}</span> {panel.description?.substring(0, 40)}
-                          <div style={{marginTop:4}}>
+                          <details style={{marginTop:2}}>
+                            <summary className="prompt-badge">프롬프트</summary>
+                            <div style={{fontSize:10,color:'var(--text2)',padding:'4px 0',lineHeight:1.4,fontFamily:'monospace',maxHeight:80,overflow:'auto'}}>{panel.imagePrompt?.substring(0,300)}</div>
+                          </details>
+                          <div style={{display:'flex',gap:4,marginTop:4}}>
+                            <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 6px'}}
+                              onClick={() => openPromptEditor('panel', i, panel.imagePrompt, `패널 ${i+1}`, (p) => regeneratePanel(i, p))} disabled={running}>프롬프트 수정</button>
                             {panels[i] ? (
-                              <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 8px'}} onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
+                              <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
                             ) : (
-                              <button className="btn btn-primary btn-sm" style={{fontSize:10,padding:'2px 8px'}} onClick={()=>regeneratePanel(i)} disabled={running}>개별 생성</button>
+                              <button className="btn btn-primary btn-sm" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>regeneratePanel(i)} disabled={running}>생성</button>
                             )}
                           </div>
                         </div>
