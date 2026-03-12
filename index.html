@@ -517,19 +517,69 @@ function App() {
     try {
       if (!projectId) return;
       log(`${episodeNum}화 로드 중...`);
+
+      // Clear current state before loading
+      setSourceText('');
+      setAnalysis(null);
+      setReferences({characters:{}, backgrounds:{}});
+      setStoryboard([]);
+      setPanels([]);
+      setCompletedSteps(new Set());
+      setStep(0);
+
+      // Load each phase and detect completed steps from actual data
+      const detected = new Set();
+      let lastStep = 0;
+
       const s1 = await fbLoadPhase(projectId, episodeNum, 'step1_analysis');
-      if (s1) { setAnalysis(s1.analysis); setSourceText(s1.sourceText || ''); }
+      if (s1 && s1.analysis) {
+        setAnalysis(s1.analysis);
+        setSourceText(s1.sourceText || '');
+        detected.add(0);
+        lastStep = 1;
+        log(`  Step 1 (분석) 로드됨`, 'info');
+      }
+
       const s2 = await fbLoadPhase(projectId, episodeNum, 'step2_references');
-      if (s2) setReferences(s2);
+      if (s2 && (Object.keys(s2.characters || {}).length > 0 || Object.keys(s2.backgrounds || {}).length > 0)) {
+        setReferences(s2);
+        detected.add(1);
+        lastStep = 2;
+        log(`  Step 2 (레퍼런스) 로드됨`, 'info');
+      }
+
       const s3 = await fbLoadPhase(projectId, episodeNum, 'step3_storyboard');
-      if (s3) setStoryboard(s3.storyboard || []);
+      if (s3 && s3.storyboard?.length > 0) {
+        setStoryboard(s3.storyboard);
+        detected.add(2);
+        lastStep = 3;
+        log(`  Step 3 (스토리보드) 로드됨: ${s3.storyboard.length}개 패널`, 'info');
+      }
+
       const s4 = await fbLoadPhase(projectId, episodeNum, 'step4_panels');
-      if (s4) setPanels(s4.panels || []);
+      if (s4 && s4.panels?.some(p => p)) {
+        setPanels(s4.panels);
+        detected.add(3);
+        lastStep = 4;
+        const generated = s4.panels.filter(p => p).length;
+        log(`  Step 4 (패널 이미지) 로드됨: ${generated}/${s4.panels.length}개`, 'info');
+      }
+
+      // Also check episode doc for completedSteps (merge with detected)
       const episodeDoc = episodes.find(e => e.number === episodeNum);
-      if (episodeDoc && episodeDoc.completedSteps) setCompletedSteps(new Set(episodeDoc.completedSteps));
-      if (episodeDoc && episodeDoc.step !== undefined) setStep(episodeDoc.step);
+      if (episodeDoc?.completedSteps) {
+        episodeDoc.completedSteps.forEach(s => detected.add(s));
+      }
+
+      setCompletedSteps(detected);
+      setStep(episodeDoc?.step !== undefined ? episodeDoc.step : lastStep);
       setCurrentEpisode(episodeNum);
-      log(`${episodeNum}화 로드 완료`, 'success');
+
+      if (detected.size === 0) {
+        log(`${episodeNum}화 로드 완료 (저장된 데이터 없음)`, 'success');
+      } else {
+        log(`${episodeNum}화 로드 완료 (${detected.size}개 단계 복원됨)`, 'success');
+      }
     } catch(e) { log(`${episodeNum}화 로드 실패: ${e.message}`, 'error'); }
   }, [projectId, episodes, log]);
 
@@ -560,7 +610,16 @@ function App() {
     } catch(e) { log(`삭제 실패: ${e.message}`, 'error'); }
   }, [projectId, episodes, currentEpisode, loadEpisode, log]);
 
-  // ======== STEP 1: Analyze Story ========
+  // Helper: update local episode state after auto-save
+  const updateEpisodeState = (stepNum, newCompletedSteps) => {
+    setEpisodes(prev => prev.map(e =>
+      e.number === currentEpisode
+        ? {...e, step: stepNum, completedSteps: newCompletedSteps}
+        : e
+    ));
+  };
+
+    // ======== STEP 1: Analyze Story ========
   const runStep1 = async () => {
     log('Step 1: 스토리 분석 시작...', 'info');
     setStep(0);
@@ -595,6 +654,16 @@ function App() {
     setAnalysis(parsed);
     setCompletedSteps(prev => new Set([...prev, 0]));
     setStep(1);
+    // Auto-save step 1
+    if (projectId && currentEpisode) {
+      try {
+        const cs = [...new Set([...completedSteps, 0])];
+        await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis: parsed, sourceText});
+        await fbSaveEpisode(projectId, currentEpisode, {step: 1, completedSteps: cs});
+        updateEpisodeState(1, cs);
+        log('Step 1 자동 저장 완료', 'info');
+      } catch(e) { log('Step 1 자동 저장 실패: ' + e.message, 'error'); }
+    }
     return parsed;
   };
 
@@ -682,6 +751,16 @@ function App() {
     setSharedAssets({...sa});
     setCompletedSteps(prev => new Set([...prev, 1]));
     setStep(2);
+    // Auto-save step 2
+    if (projectId && currentEpisode) {
+      try {
+        const cs = [...new Set([...completedSteps, 0, 1])];
+        await fbSavePhase(projectId, currentEpisode, 'step2_references', refs);
+        await fbSaveEpisode(projectId, currentEpisode, {step: 2, completedSteps: cs});
+        updateEpisodeState(2, cs);
+        log('Step 2 자동 저장 완료', 'info');
+      } catch(e) { log('Step 2 자동 저장 실패: ' + e.message, 'error'); }
+    }
     return refs;
   };
 
@@ -730,6 +809,16 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
     setPanels(new Array(parsed.length).fill(null));
     setCompletedSteps(prev => new Set([...prev, 2]));
     setStep(3);
+    // Auto-save step 3
+    if (projectId && currentEpisode) {
+      try {
+        const cs = [...new Set([...completedSteps, 0, 1, 2])];
+        await fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: parsed});
+        await fbSaveEpisode(projectId, currentEpisode, {step: 3, completedSteps: cs});
+        updateEpisodeState(3, cs);
+        log('Step 3 자동 저장 완료', 'info');
+      } catch(e) { log('Step 3 자동 저장 실패: ' + e.message, 'error'); }
+    }
     return parsed;
   };
 
@@ -796,6 +885,16 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
     setCompletedSteps(prev => new Set([...prev, 3]));
     setStep(4);
+    // Auto-save step 4
+    if (projectId && currentEpisode) {
+      try {
+        const cs = [...new Set([...completedSteps, 0, 1, 2, 3])];
+        await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels});
+        await fbSaveEpisode(projectId, currentEpisode, {step: 4, completedSteps: cs});
+        updateEpisodeState(4, cs);
+        log('Step 4 자동 저장 완료', 'info');
+      } catch(e) { log('Step 4 자동 저장 실패: ' + e.message, 'error'); }
+    }
     return newPanels;
   };
 
@@ -811,6 +910,13 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
       if (abortRef.current) return;
       await runStep4(s, r);
       setCompletedSteps(prev => new Set([...prev, 4]));
+      // Final save after full pipeline
+      if (projectId && currentEpisode) {
+        try {
+          await fbSaveEpisode(projectId, currentEpisode, {step: 4, completedSteps: [0,1,2,3,4]});
+          log('전체 파이프라인 저장 완료', 'info');
+        } catch(e) { log('저장 실패: ' + e.message, 'error'); }
+      }
       log(`웹툰 ${currentEpisode || 1}화 생성 완료!`, 'success');
     } catch(e) {
       setErrorMsg(e.message);
@@ -865,6 +971,10 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
       const newPanels = [...panels];
       newPanels[idx] = images[0];
       setPanels(newPanels);
+      // Auto-save updated panels
+      if (projectId && currentEpisode) {
+        try { await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels}); } catch(e) {}
+      }
       log(`패널 ${idx+1} 재생성 완료`, 'success');
     } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
     finally { setRunning(false); }
@@ -1077,14 +1187,16 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
             <span className="project-title-bar">{projectTitle}</span>
             {episodes.map(ep => {
               const isActive = ep.number === currentEpisode;
-              const isComplete = ep.completedSteps && ep.completedSteps.length === 5;
+              const stepsDone = ep.completedSteps ? ep.completedSteps.length : 0;
+              const isComplete = stepsDone >= 4;
               return (
                 <div
                   key={ep.number}
                   className={`episode-pill ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}
                   onClick={() => loadEpisode(ep.number)}
+                  title={`${ep.title || ep.number + '화'} — ${stepsDone}/5 단계 완료`}
                 >
-                  {ep.number}화 {isComplete && '✓'}
+                  {ep.number}화 {stepsDone > 0 && !isComplete && <span style={{fontSize:10,opacity:.7}}>({stepsDone}/5)</span>}{isComplete && '✓'}
                   <button
                     className="episode-delete"
                     onClick={(e) => { e.stopPropagation(); deleteEpisode(ep.number); }}
