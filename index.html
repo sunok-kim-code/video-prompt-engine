@@ -593,33 +593,44 @@ async function submitLoraTraining(imagesUrl, triggerWord, opts={}) {
 
 async function pollLoraTraining(requestId, onProgress) {
   const apiKey = getFalKey();
-  const statusUrl = `https://queue.fal.run/fal-ai/flux-lora-fast-training/requests/${requestId}/status`;
+  const statusUrl = `https://queue.fal.run/fal-ai/flux-lora-fast-training/requests/${requestId}/status?logs=1`;
   const resultUrl = `https://queue.fal.run/fal-ai/flux-lora-fast-training/requests/${requestId}`;
 
   // Poll every 10 seconds for up to 15 minutes
+  let lastLogIdx = 0;
   for (let i = 0; i < 90; i++) {
     await new Promise(r => setTimeout(r, 10000));
     try {
       const sRes = await fetch(statusUrl, {
         headers: { 'Authorization': 'Key ' + apiKey }
       });
-      if (!sRes.ok) continue;
-      const status = await sRes.json();
-      if (onProgress) onProgress(status);
-      if (status.status === 'COMPLETED') {
-        // Fetch result
+      if (!sRes.ok) {
+        if (onProgress) onProgress({status: 'POLL_ERROR', httpStatus: sRes.status, attempt: i});
+        continue;
+      }
+      const data = await sRes.json();
+      // Forward new logs if available
+      if (data.logs?.length > lastLogIdx) {
+        for (let li = lastLogIdx; li < data.logs.length; li++) {
+          if (onProgress) onProgress({status: data.status, logMessage: data.logs[li]?.message || data.logs[li]});
+        }
+        lastLogIdx = data.logs.length;
+      } else {
+        if (onProgress) onProgress(data);
+      }
+      if (data.status === 'COMPLETED') {
         const rRes = await fetch(resultUrl, {
           headers: { 'Authorization': 'Key ' + apiKey }
         });
-        if (!rRes.ok) throw new Error('Failed to fetch training result');
+        if (!rRes.ok) throw new Error('Failed to fetch training result: ' + rRes.status);
         return await rRes.json();
       }
-      if (status.status === 'FAILED') {
-        throw new Error('LoRA training failed: ' + (status.error || 'unknown error'));
+      if (data.status === 'FAILED') {
+        throw new Error('LoRA training failed: ' + (data.error || JSON.stringify(data).substring(0,200)));
       }
     } catch(e) {
       if (e.message.includes('LoRA training failed')) throw e;
-      // Ignore poll errors, retry
+      if (onProgress) onProgress({status: 'POLL_EXCEPTION', error: e.message, attempt: i});
     }
   }
   throw new Error('LoRA training timed out (15 minutes)');
@@ -993,9 +1004,20 @@ function App() {
       setLoraModels(prev => ({...prev, [charId]: {status: 'training', triggerWord, requestId}}));
 
       // 4. Poll for completion
-      const result = await pollLoraTraining(requestId, (status) => {
-        if (status.queue_position !== undefined) {
-          log(`${charName}: 대기열 위치 ${status.queue_position}...`, 'info');
+      const result = await pollLoraTraining(requestId, (info) => {
+        if (info.logMessage) {
+          log(`${charName}: [학습로그] ${info.logMessage}`, 'info');
+        } else if (info.status === 'IN_PROGRESS') {
+          log(`${charName}: 학습 진행 중...`, 'info');
+        } else if (info.status === 'IN_QUEUE') {
+          const pos = info.queue_position !== undefined ? ` (위치: ${info.queue_position})` : '';
+          log(`${charName}: 대기열에서 대기 중${pos}...`, 'info');
+        } else if (info.status === 'POLL_ERROR') {
+          log(`${charName}: 상태 확인 실패 (HTTP ${info.httpStatus}), 재시도...`, 'error');
+        } else if (info.status === 'POLL_EXCEPTION') {
+          log(`${charName}: 폴링 오류: ${info.error}, 재시도...`, 'error');
+        } else if (info.status !== 'COMPLETED') {
+          log(`${charName}: 상태: ${info.status || JSON.stringify(info).substring(0,100)}`, 'info');
         }
       });
 
