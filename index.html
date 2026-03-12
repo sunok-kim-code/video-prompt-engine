@@ -1,13 +1,13 @@
-h<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>웹툰 프로덕션</title>
+<title>ì¹í° íë¡ëì</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
-<script src="https://www.gstatic.com/firebashejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -27,90 +27,70 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .nav-tab.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
 .api-key-btn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;transition:all .2s;}
 .api-key-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
-.api-key-btn.connected{border-color:#27ae60;color:#27ae60;}
 .status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--text2);}
 .status-badge.running{background:#fff3cd;color:#856404;}
 .status-badge.done{background:#d4edda;color:#155724;}
 .status-badge.error{background:#f8d7da;color:#721c24;}
-.main-content{max-width:1400px;margin:0 auto;padding:20px;display:flex;flex-direction:column;height:calc(100vh - 80px);}
-.tabs-container{display:flex;gap:12px;height:100%;min-height:0;}
-.tab-content{flex:1;display:flex;flex-direction:column;gap:12px;overflow:hidden;}
-.tab-content.active{display:flex;}
-.tab-content.inactive{display:none;}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow);}
-.card-title{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
-.form-group{margin-bottom:14px;}
-.form-label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
-.form-input,.form-textarea,.form-select{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--text);transition:border-color .2s;}
-.form-input:focus,.form-textarea:focus,.form-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,92,231,.1);}
-.form-textarea{resize:vertical;min-height:200px;font-family:inherit;}
+.main-content{max-width:1400px;margin:0 auto;padding:20px;display:flex;flex-direction:column;height:calc(100vh - 64px);}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);}
 .btn{padding:10px 20px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px;}
 .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 2px 8px rgba(108,92,231,.3);}
 .btn-primary:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(108,92,231,.4);}
 .btn-primary:disabled{opacity:.5;transform:none;cursor:not-allowed;}
-.btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.btn-sm{padding:6px 14px;font-size:12px;}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text2);}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent);}
+.btn-danger{background:#e74c3c;color:#fff;}
 .btn-success{background:#27ae60;color:#fff;}
-.btn-danger{background:var(--err);color:#fff;}
-.btn-sm{padding:6px 12px;font-size:11px;}
-.btn-block{width:100%;}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
-.scene-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}
-.scene-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;overflow:hidden;}
-.scene-card h3{font-size:13px;font-weight:700;margin-bottom:8px;color:var(--accent);}
-.scene-card .scene-num{font-size:11px;color:var(--text2);}
-.scene-card .scene-summary{font-size:12px;color:var(--text);line-height:1.4;margin-bottom:10px;}
-.scene-card .scene-prompt{background:var(--surface2);border-radius:4px;padding:8px;font-size:11px;font-family:monospace;color:var(--text2);max-height:100px;overflow-y:auto;margin-bottom:8px;}
-.scene-card .scene-image{width:100%;aspect-ratio:16/9;border-radius:6px;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--text2);margin-bottom:8px;font-size:12px;}
-.scene-card .scene-image img{width:100%;height:100%;object-fit:cover;}
-.scene-card .scene-actions{display:flex;gap:6px;flex-wrap:wrap;}
-.scene-card .scene-actions button{flex:1;min-width:60px;padding:6px 8px;font-size:11px;}
-.image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
-.char-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;text-align:center;}
-.char-card img{width:100%;height:200px;object-fit:cover;}
-.char-card .card-content{padding:10px;}
-.char-card .char-name{font-weight:700;color:var(--text);font-size:12px;}
-.char-card .char-role{font-size:10px;color:var(--accent);margin-top:2px;}
-.char-card .char-desc{font-size:10px;color:var(--text2);margin-top:4px;}
-.bg-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;text-align:center;}
-.bg-card img{width:100%;height:180px;object-fit:cover;}
-.bg-card .card-content{padding:10px;}
-.bg-card .bg-name{font-weight:700;color:var(--text);font-size:12px;}
-.bg-card .bg-type{font-size:10px;color:var(--accent);margin-top:2px;}
-.progress-bar{height:4px;border-radius:2px;background:var(--surface3);overflow:hidden;margin-bottom:12px;}
-.progress-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--success));transition:width .5s ease;}
-.log-panel{background:#1a1a2e;border-radius:8px;padding:12px;max-height:150px;overflow-y:auto;font-family:'Consolas','Monaco',monospace;font-size:11px;color:#a0a0c0;border:1px solid var(--border);}
-.log-entry{margin-bottom:2px;line-height:1.4;}
-.log-entry.info{color:#69db7c;}
-.log-entry.warn{color:#ffd43b;}
-.log-entry.error{color:#ff6b6b;}
-.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000;}
-.modal-box{background:var(--surface);border-radius:16px;padding:28px;width:460px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,.2);}
-.modal-title{font-size:18px;font-weight:700;margin-bottom:6px;}
-.modal-desc{font-size:13px;color:var(--text2);margin-bottom:18px;line-height:1.5;}
-.modal-input{width:100%;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:14px;background:var(--surface2);color:var(--text);font-family:monospace;margin-bottom:12px;}
+.form-input,.form-textarea,.form-select{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);color:var(--text);transition:border-color .2s;}
+.form-input:focus,.form-textarea:focus,.form-select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,92,231,.1);}
+.form-textarea{resize:vertical;min-height:200px;font-family:inherit;}
+.form-label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;}
+.log-panel{background:#1a1a2e;color:#a0a0cc;padding:12px 16px;border-radius:8px;font-family:'Fira Code',monospace;font-size:12px;max-height:180px;overflow-y:auto;line-height:1.6;}
+.log-entry{white-space:pre-wrap;word-break:break-all;}
+.log-entry.error{color:#e74c3c;}.log-entry.success{color:#27ae60;}.log-entry.info{color:#3498db;}
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;}
+.modal-box{background:var(--surface);border-radius:16px;padding:32px;max-width:480px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-title{font-size:18px;font-weight:700;margin-bottom:8px;}
+.modal-desc{color:var(--text2);font-size:13px;margin-bottom:20px;}
+.modal-input{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--surface);margin-bottom:4px;}
 .modal-input:focus{outline:none;border-color:var(--accent);}
-.modal-actions{display:flex;gap:10px;margin-top:16px;justify-content:flex-end;}
-.modal-actions button{padding:10px 20px;border-radius:8px;border:none;font-weight:600;cursor:pointer;font-size:13px;}
-.modal-actions .btn-save{background:var(--accent);color:#fff;}
-.modal-actions .btn-cancel{background:var(--surface2);color:var(--text2);}
-.key-status{display:flex;align-items:center;gap:6px;margin:10px 0;font-size:12px;color:var(--text2);}
-.key-status .dot{width:8px;height:8px;border-radius:50%;background:#e03030;}
-.key-status .dot.on{background:#27ae60;}
-.edit-prompt-area{display:flex;flex-direction:column;gap:8px;background:var(--surface2);padding:10px;border-radius:6px;}
-.edit-prompt-area textarea{padding:8px;border:1px solid var(--border);border-radius:4px;font-size:12px;font-family:monospace;min-height:80px;}
-.edit-prompt-area .edit-btns{display:flex;gap:6px;}
-.edit-prompt-area button{padding:6px 12px;border-radius:4px;border:none;font-size:11px;cursor:pointer;font-weight:600;}
-.placeholder{padding:40px;text-align:center;color:var(--text2);font-size:13px;background:var(--surface);border-radius:8px;border:1px dashed var(--border);}
-::-webkit-scrollbar{width:6px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-::-webkit-scrollbar-thumb:hover{background:var(--text2);}
-@media(max-width:900px){
-.grid-2,.grid-3{grid-template-columns:1fr;}
-.scene-grid{grid-template-columns:1fr;}
-.nav-tabs{flex-wrap:wrap;}
-}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;}
+.btn-cancel{padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-weight:600;}
+.btn-save{padding:8px 20px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;}
+.key-status{display:flex;align-items:center;gap:8px;padding:8px 0;font-size:12px;color:var(--text2);}
+.dot{width:8px;height:8px;border-radius:50%;background:#ccc;}.dot.on{background:#27ae60;}
+/* Step indicator */
+.step-bar{display:flex;gap:2px;margin-bottom:16px;}
+.step-item{flex:1;text-align:center;padding:10px 4px;font-size:12px;font-weight:600;border-radius:8px;background:var(--surface2);color:var(--text2);cursor:pointer;transition:all .2s;position:relative;}
+.step-item.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
+.step-item.done{background:#d4edda;color:#155724;}
+.step-item.current{background:#fff3cd;color:#856404;animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.7;}}
+/* Grid layouts */
+.ref-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
+.ref-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:all .2s;}
+.ref-card:hover{border-color:var(--accent);box-shadow:0 4px 16px rgba(108,92,231,.15);}
+.ref-card img{width:100%;aspect-ratio:1;object-fit:cover;}
+.ref-card-info{padding:10px;font-size:12px;}
+.ref-card-name{font-weight:700;margin-bottom:2px;}
+.ref-card-desc{color:var(--text2);font-size:11px;line-height:1.4;max-height:44px;overflow:hidden;}
+/* Panel grid */
+.panel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+.panel-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;position:relative;}
+.panel-card img{width:100%;aspect-ratio:3/4;object-fit:cover;}
+.panel-card .panel-num{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.7);color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;}
+.panel-card .panel-info{padding:8px;font-size:11px;color:var(--text2);line-height:1.4;}
+.panel-placeholder{aspect-ratio:3/4;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:12px;}
+/* Webtoon preview */
+.webtoon-strip{max-width:600px;margin:0 auto;display:flex;flex-direction:column;gap:4px;}
+.webtoon-strip img{width:100%;display:block;}
+.placeholder{padding:40px;text-align:center;color:var(--text2);font-size:13px;}
+/* Tag */
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-right:4px;}
+.tag-mood{background:#e8d5f5;color:#6c3483;}
+.tag-char{background:#d5e8f5;color:#2471a3;}
+.tag-loc{background:#d5f5e3;color:#1e8449;}
 </style>
 </head>
 <body>
@@ -118,1677 +98,834 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 <script type="text/babel">
 
 // ============================================================
-// Firebase / Firestore Project Management
+// Firebase / Firestore Project Management (preserved)
 // ============================================================
 let _db = null;
-function getFirebaseConfig() {
-  try {
-    const raw = localStorage.getItem('firebase_config');
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
-  return null;
-}
-function saveFirebaseConfig(cfg) {
-  localStorage.setItem('firebase_config', JSON.stringify(cfg));
-  _db = null;
-  initFirebase();
-}
-function initFirebase() {
-  const cfg = getFirebaseConfig();
-  if (!cfg || !cfg.apiKey || !cfg.projectId) return null;
-  try {
-    if (!firebase.apps.length) {
-      firebase.initializeApp(cfg);
-    }
-    _db = firebase.firestore();
-    return _db;
-  } catch(e) { console.error('Firebase init error:', e); return null; }
-}
-function getDb() {
-  if (_db) return _db;
-  return initFirebase();
-}
+function getFirebaseConfig() { try { const raw = localStorage.getItem('firebase_config'); if (raw) return JSON.parse(raw); } catch(e) {} return null; }
+function saveFirebaseConfig(cfg) { localStorage.setItem('firebase_config', JSON.stringify(cfg)); _db = null; initFirebase(); }
+function initFirebase() { const cfg = getFirebaseConfig(); if (!cfg || !cfg.apiKey || !cfg.projectId) return null; try { if (!firebase.apps.length) firebase.initializeApp(cfg); _db = firebase.firestore(); return _db; } catch(e) { return null; } }
+function getDb() { if (_db) return _db; return initFirebase(); }
 
-async function fbListProjects() {
-  const db = getDb();
-  if (!db) throw new Error('Firebase not configured');
-  const snap = await db.collection('webtoon_projects').orderBy('updatedAt','desc').get();
-  return snap.docs.map(d => ({id: d.id, ...d.data()}));
-}
+async function fbListProjects() { const db = getDb(); if (!db) throw new Error('Firebase not configured'); const snap = await db.collection('webtoon_projects').orderBy('updatedAt','desc').get(); return snap.docs.map(d => ({id: d.id, ...d.data()})); }
+async function fbSaveProject(projectId, data) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); await db.collection('webtoon_projects').doc(projectId).set({...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}, {merge:true}); return projectId; }
+async function fbLoadProject(projectId) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); const doc = await db.collection('webtoon_projects').doc(projectId).get(); if (!doc.exists) throw new Error('Not found'); return {id:doc.id,...doc.data()}; }
+async function fbDeleteProject(projectId) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); const phases = await db.collection('webtoon_projects').doc(projectId).collection('phases').get(); const batch = db.batch(); phases.docs.forEach(d => batch.delete(d.ref)); batch.delete(db.collection('webtoon_projects').doc(projectId)); await batch.commit(); }
 
-async function fbSaveProject(projectId, data) {
-  const db = getDb();
-  if (!db) throw new Error('Firebase not configured');
-  const ref = db.collection('webtoon_projects').doc(projectId);
-  const payload = {
-    ...data,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  };
-  if (payload.scenes) {
-    payload.sceneCount = payload.scenes.length;
-  }
-  await ref.set(payload, {merge: true});
-  return projectId;
-}
-
-async function fbLoadProject(projectId) {
-  const db = getDb();
-  if (!db) throw new Error('Firebase not configured');
-  const doc = await db.collection('webtoon_projects').doc(projectId).get();
-  if (!doc.exists) throw new Error('Project not found');
-  return {id: doc.id, ...doc.data()};
-}
-
-async function fbDeleteProject(projectId) {
-  const db = getDb();
-  if (!db) throw new Error('Firebase not configured');
-  const phases = await db.collection('webtoon_projects').doc(projectId).collection('phases').get();
-  const batch = db.batch();
-  phases.docs.forEach(d => batch.delete(d.ref));
-  batch.delete(db.collection('webtoon_projects').doc(projectId));
-  await batch.commit();
-}
-
-// Strip base64 for metadata docs, but collect images separately
-function stripBase64(obj, collectedImages) {
+function stripBase64(obj, imgs) {
   if (!obj || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(item => stripBase64(item, collectedImages));
+  if (Array.isArray(obj)) return obj.map(item => stripBase64(item, imgs));
   const out = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (typeof v === 'string' && v.startsWith('data:') && v.length > 500) {
-      const imgId = 'img_' + Math.random().toString(36).substring(2, 10);
-      out[k] = '[img:' + imgId + ']';
-      if (collectedImages) collectedImages.push({id: imgId, data: v, key: k});
-    } else if (typeof v === 'object' && v !== null) {
-      out[k] = stripBase64(v, collectedImages);
-    } else if (typeof v === 'string' && v.length > 900000) {
-      out[k] = v.substring(0, 900000) + '...[truncated]';
-    } else {
-      out[k] = v;
-    }
+  for (const [k,v] of Object.entries(obj)) {
+    if (typeof v === 'string' && v.startsWith('data:') && v.length > 500) { const id='img_'+Math.random().toString(36).slice(2,10); out[k]='[img:'+id+']'; if(imgs) imgs.push({id,data:v,key:k}); }
+    else if (typeof v === 'object' && v !== null) out[k] = stripBase64(v, imgs);
+    else out[k] = v;
   }
   return out;
 }
-
-// Restore base64 images from collected image docs back into data
-function restoreBase64(obj, imageMap) {
-  if (!obj || typeof obj !== 'object') {
-    if (typeof obj === 'string' && obj.startsWith('[img:') && obj.endsWith(']')) {
-      const imgId = obj.slice(5, -1);
-      return imageMap[imgId] || obj;
-    }
-    return obj;
-  }
-  if (Array.isArray(obj)) return obj.map(item => restoreBase64(item, imageMap));
-  const out = {};
-  for (const [k, v] of Object.entries(obj)) {
-    out[k] = restoreBase64(v, imageMap);
-  }
-  return out;
+function restoreBase64(obj, map) {
+  if (!obj || typeof obj !== 'object') { if (typeof obj === 'string' && obj.startsWith('[img:') && obj.endsWith(']')) return map[obj.slice(5,-1)] || obj; return obj; }
+  if (Array.isArray(obj)) return obj.map(item => restoreBase64(item, map));
+  const out = {}; for (const [k,v] of Object.entries(obj)) out[k] = restoreBase64(v, map); return out;
 }
-
 async function fbSavePhase(projectId, phaseName, phaseData) {
-  const db = getDb();
-  if (!db) throw new Error('Firebase not configured');
-  const phaseRef = db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName);
-  const collectedImages = [];
-  const safeData = stripBase64(phaseData, collectedImages);
-  // Save metadata (without base64)
-  await phaseRef.set({
-    ...safeData,
-    imageCount: collectedImages.length,
-    savedAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  // Save images as separate documents in subcollection (each < 1MB)
-  const imgColl = phaseRef.collection('images');
-  // Delete old images first
-  const oldImgs = await imgColl.get();
-  const delBatch = db.batch();
-  oldImgs.docs.forEach(d => delBatch.delete(d.ref));
-  if (oldImgs.docs.length > 0) await delBatch.commit();
-  // Save new images in batches of 5
-  for (let i = 0; i < collectedImages.length; i += 5) {
-    const batch = db.batch();
-    for (let j = i; j < Math.min(i + 5, collectedImages.length); j++) {
-      const img = collectedImages[j];
-      // Split large images into chunks if needed (Firestore 1MB limit)
-      const data = img.data;
-      if (data.length > 900000) {
-        // Store in multiple chunks
-        const chunkSize = 800000;
-        const chunks = Math.ceil(data.length / chunkSize);
-        batch.set(imgColl.doc(img.id), {key: img.key, chunks, totalLength: data.length});
-        for (let c = 0; c < chunks; c++) {
-          batch.set(imgColl.doc(img.id + '_chunk_' + c), {data: data.substring(c * chunkSize, (c + 1) * chunkSize), idx: c});
-        }
-      } else {
-        batch.set(imgColl.doc(img.id), {key: img.key, data});
-      }
-    }
-    await batch.commit();
-  }
+  const db = getDb(); if (!db) return;
+  const ref = db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName);
+  const imgs = []; const safe = stripBase64(phaseData, imgs);
+  await ref.set({...safe, imageCount:imgs.length, savedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  const imgColl = ref.collection('images');
+  const old = await imgColl.get(); if(old.docs.length>0){const b=db.batch();old.docs.forEach(d=>b.delete(d.ref));await b.commit();}
+  for(let i=0;i<imgs.length;i+=5){const b=db.batch();for(let j=i;j<Math.min(i+5,imgs.length);j++){const im=imgs[j];if(im.data.length>900000){const cs=800000,cn=Math.ceil(im.data.length/cs);b.set(imgColl.doc(im.id),{key:im.key,chunks:cn});for(let c=0;c<cn;c++)b.set(imgColl.doc(im.id+'_c'+c),{data:im.data.substring(c*cs,(c+1)*cs),idx:c});}else b.set(imgColl.doc(im.id),{key:im.key,data:im.data});}await b.commit();}
 }
-
 async function fbLoadPhase(projectId, phaseName) {
-  const db = getDb();
-  if (!db) throw new Error('Firebase not configured');
-  const phaseRef = db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName);
-  const doc = await phaseRef.get();
-  if (!doc.exists) return null;
-  const phaseData = doc.data();
-  // Load images from subcollection
-  const imgSnap = await phaseRef.collection('images').get();
-  const imageMap = {};
-  const chunkMeta = {};
-  const chunkData = {};
-  imgSnap.docs.forEach(d => {
-    const dData = d.data();
-    if (d.id.includes('_chunk_')) {
-      // This is a chunk
-      const parentId = d.id.split('_chunk_')[0];
-      if (!chunkData[parentId]) chunkData[parentId] = {};
-      chunkData[parentId][dData.idx] = dData.data;
-    } else if (dData.chunks) {
-      // This is chunk metadata
-      chunkMeta[d.id] = dData;
-    } else if (dData.data) {
-      // Regular image doc
-      imageMap[d.id] = dData.data;
-    }
-  });
-  // Reassemble chunked images
-  for (const [imgId, meta] of Object.entries(chunkMeta)) {
-    const chunks = chunkData[imgId] || {};
-    let assembled = '';
-    for (let i = 0; i < meta.chunks; i++) {
-      assembled += (chunks[i] || '');
-    }
-    if (assembled.length > 0) imageMap[imgId] = assembled;
-  }
-  // Restore base64 into phase data
-  return restoreBase64(phaseData, imageMap);
-}
-
-async function fbListPhases(projectId) {
-  const db = getDb();
-  if (!db) throw new Error('Firebase not configured');
-  const snap = await db.collection('webtoon_projects').doc(projectId).collection('phases').orderBy('savedAt','desc').get();
-  return snap.docs.map(d => ({id: d.id, ...d.data()}));
-}
-
-// Load all phase data for a project and return reconstructed state
-async function fbLoadAllPhases(projectId) {
-  const result = {globalAsset: null, scenes: [], sourceText: '', phase: 'IDLE'};
-  try {
-    const p1 = await fbLoadPhase(projectId, 'phase1_assets');
-    if (p1) {
-      result.globalAsset = p1.globalAsset || null;
-      result.sourceText = p1.sourceTextFull || '';
-      result.phase = 'PHASE_1_COMPLETE';
-    }
-    const p2 = await fbLoadPhase(projectId, 'phase2_scenes');
-    if (p2 && p2.scenes) {
-      result.scenes = p2.scenes;
-      result.phase = 'PHASE_2_COMPLETE';
-    }
-    const p3 = await fbLoadPhase(projectId, 'phase3_prompts');
-    if (p3 && p3.scenes) {
-      // Merge P3 data (prompts) into scenes
-      for (const s3 of p3.scenes) {
-        const existing = result.scenes.find(s => s.sceneNumber === s3.sceneNumber);
-        if (existing) {
-          existing.imagePrompt = s3.imagePrompt || existing.imagePrompt;
-          existing.status = s3.status || existing.status;
-        }
-      }
-      result.phase = 'PHASE_3_COMPLETE';
-    }
-    const p3img = await fbLoadPhase(projectId, 'phase3_images');
-    if (p3img && p3img.scenes) {
-      for (const si of p3img.scenes) {
-        const existing = result.scenes.find(s => s.sceneNumber === si.sceneNumber);
-        if (existing) {
-          existing.anchorImage = si.anchorImage || existing.anchorImage;
-          existing.status = si.status || existing.status;
-        }
-      }
-    }
-    const p4 = await fbLoadPhase(projectId, 'phase4_video');
-    if (p4 && p4.scenes) {
-      for (const s4 of p4.scenes) {
-        const existing = result.scenes.find(s => s.sceneNumber === s4.sceneNumber);
-        if (existing) {
-          existing.video = s4.video || existing.video;
-          existing.status = s4.status || existing.status;
-        }
-      }
-      result.phase = 'PHASE_4_COMPLETE';
-    }
-    const p5 = await fbLoadPhase(projectId, 'phase5_webtoon');
-    if (p5 && p5.scenes) {
-      for (const s5 of p5.scenes) {
-        const existing = result.scenes.find(s => s.sceneNumber === s5.sceneNumber);
-        if (existing) {
-          existing.webtoonAssets = s5.webtoonAssets || existing.webtoonAssets;
-        }
-      }
-      result.phase = 'PHASE_5_COMPLETE';
-    }
-  } catch(e) { console.warn('[fbLoadAllPhases] Error:', e); }
-  return result;
+  const db = getDb(); if (!db) return null;
+  const ref = db.collection('webtoon_projects').doc(projectId).collection('phases').doc(phaseName);
+  const doc = await ref.get(); if (!doc.exists) return null;
+  const d = doc.data(); const snap = await ref.collection('images').get();
+  const map={}, cmeta={}, cdata={};
+  snap.docs.forEach(s=>{const sd=s.data();if(s.id.includes('_c')){const pid=s.id.split('_c')[0];if(!cdata[pid])cdata[pid]={};cdata[pid][sd.idx]=sd.data;}else if(sd.chunks)cmeta[s.id]=sd;else if(sd.data)map[s.id]=sd.data;});
+  for(const [id,m] of Object.entries(cmeta)){let a='';for(let i=0;i<m.chunks;i++)a+=(cdata[id]?.[i]||'');if(a)map[id]=a;}
+  return restoreBase64(d, map);
 }
 
 async function autoLoadServerConfig() {
-  try {
-    const res = await fetch('/api/firebase-config');
-    if (!res.ok) throw new Error('API ' + res.status);
-    const data = await res.json();
-    console.log('[Config] Server config loaded:', data.status);
-    if (data.firebase) {
-      saveFirebaseConfig(data.firebase);
-      console.log('[Config] Firebase auto-configured from server');
-    }
-    if (data.vertex) {
-      if (data.vertex.projectId) localStorage.setItem('VERTEX_PROJECT_ID', data.vertex.projectId);
-      if (data.vertex.location) localStorage.setItem('VERTEX_LOCATION', data.vertex.location);
-      if (data.vertex.accessToken) localStorage.setItem('VERTEX_ACCESS_TOKEN', data.vertex.accessToken);
-      if (data.vertex.grokApiKey) localStorage.setItem('GROK_API_KEY', data.vertex.grokApiKey);
-      console.log('[Config] Vertex AI auto-configured from server');
-    }
-  } catch(e) {
-    console.log('[Config] Server config not available, using localStorage:', e.message);
-    try { initFirebase(); } catch(e2) {}
-  }
+  try { const res = await fetch('/api/firebase-config'); if (!res.ok) throw new Error(''); const data = await res.json();
+    if (data.firebase) saveFirebaseConfig(data.firebase);
+    if (data.vertex) { if(data.vertex.projectId)localStorage.setItem('VERTEX_PROJECT_ID',data.vertex.projectId); if(data.vertex.location)localStorage.setItem('VERTEX_LOCATION',data.vertex.location); if(data.vertex.accessToken)localStorage.setItem('VERTEX_ACCESS_TOKEN',data.vertex.accessToken); if(data.vertex.grokApiKey)localStorage.setItem('GROK_API_KEY',data.vertex.grokApiKey); }
+  } catch(e) { try{initFirebase();}catch(e2){} }
 }
 autoLoadServerConfig();
 
 const {useState,useCallback,useRef,useEffect,useMemo} = React;
 
 // ============================================================
-// TOKEN & API KEY MANAGEMENT
+// TOKEN & API KEY MANAGEMENT (preserved)
 // ============================================================
-
-let _cachedToken = null;
-let _tokenExpiry = 0;
-
-async function fetchFreshToken() {
-  const now = Date.now();
-  if (_cachedToken && _tokenExpiry > now + 300000) {
-    return _cachedToken;
-  }
-  try {
-    const res = await fetch('/api/vertex-token');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.access_token) {
-        _cachedToken = data.access_token;
-        _tokenExpiry = now + (data.expires_in || 3600) * 1000;
-        localStorage.setItem('VERTEX_ACCESS_TOKEN', data.access_token);
-        console.log('[Token] Fresh token obtained from server');
-        return _cachedToken;
-      }
-    }
-  } catch(e) {
-    console.warn('[Token] Server token fetch failed, falling back to localStorage:', e.message);
-  }
-  return localStorage.getItem('VERTEX_ACCESS_TOKEN');
-}
-
-async function getVertexConfig() {
-  const projectId = localStorage.getItem('VERTEX_PROJECT_ID');
-  const location = localStorage.getItem('VERTEX_LOCATION') || 'us-central1';
-  const accessToken = await fetchFreshToken();
-  if (!projectId || !accessToken) throw new Error('Vertex AI config not set');
-  return {projectId, location, accessToken};
-}
-
-async function getGeminiKey() {
-  return (await getVertexConfig()).accessToken;
-}
-
-function setGeminiKey(k) { localStorage.setItem('GEMINI_API_KEY', k); }
-function hasGeminiKey() { return !!(localStorage.getItem('VERTEX_PROJECT_ID') || localStorage.getItem('GEMINI_API_KEY')); }
-
-function getXaiKey() {
-  const k = localStorage.getItem('XAI_API_KEY');
-  if (!k) throw new Error('XAI_KEY_MISSING');
-  return k;
-}
-
-function setXaiKey(k) { localStorage.setItem('XAI_API_KEY', k); }
-function hasXaiKey() { return !!localStorage.getItem('XAI_API_KEY'); }
+let _cachedToken = null, _tokenExpiry = 0;
+async function fetchFreshToken() { const now=Date.now(); if(_cachedToken&&_tokenExpiry>now+300000)return _cachedToken; try{const res=await fetch('/api/vertex-token');if(res.ok){const d=await res.json();if(d.access_token){_cachedToken=d.access_token;_tokenExpiry=now+(d.expires_in||3600)*1000;localStorage.setItem('VERTEX_ACCESS_TOKEN',d.access_token);return _cachedToken;}}}catch(e){} return localStorage.getItem('VERTEX_ACCESS_TOKEN'); }
+async function getVertexConfig() { const p=localStorage.getItem('VERTEX_PROJECT_ID'),l=localStorage.getItem('VERTEX_LOCATION')||'us-central1',t=await fetchFreshToken(); if(!p||!t)throw new Error('Vertex AI config not set'); return{projectId:p,location:l,accessToken:t}; }
+function hasGeminiKey(){return !!(localStorage.getItem('VERTEX_PROJECT_ID')||localStorage.getItem('GEMINI_API_KEY'));}
+function hasXaiKey(){return !!localStorage.getItem('XAI_API_KEY');}
+function getXaiKey(){const k=localStorage.getItem('XAI_API_KEY');if(!k)throw new Error('XAI key missing');return k;}
 
 // ============================================================
-// API CLIENTS
+// API CLIENTS (preserved)
 // ============================================================
+function extractBase64(u){if(!u||typeof u!=='string')return null;const m=u.match(/^data:image\/\w+;base64,(.+)$/);return m?m[1]:null;}
 
 async function callGemini(systemPrompt, userPrompt, opts={}) {
-  const model = opts.model || 'gemini-2.5-flash';
-  const thinkBudget = opts.thinkBudget ?? 0;
-  const {projectId, location, accessToken} = await getVertexConfig();
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
-  const body = {
-    systemInstruction: {parts:[{text:systemPrompt}]},
-    contents: [{role:'user',parts:[{text:userPrompt}]}],
-    generationConfig: {
-      temperature: opts.temperature || 0.7,
-      topP: opts.topP || 0.9,
-      maxOutputTokens: opts.maxTokens || 8192,
-      thinkingConfig: {thinkingBudget: thinkBudget}
-    }
-  };
-  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
-  if(!res.ok) {
-    const errText = await res.text();
-    throw new Error('Gemini API ' + res.status + ': ' + errText.substring(0,200));
-  }
-  const data = await res.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  const textParts = parts.filter(p => p.text && !p.thought);
-  return textParts.map(p => p.text).join('');
+  const model=opts.model||'gemini-2.5-flash'; const {projectId,location,accessToken}=await getVertexConfig();
+  const url=`https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+  const body={systemInstruction:{parts:[{text:systemPrompt}]},contents:[{role:'user',parts:[{text:userPrompt}]}],generationConfig:{temperature:opts.temperature||0.7,topP:opts.topP||0.9,maxOutputTokens:opts.maxTokens||8192,thinkingConfig:{thinkingBudget:opts.thinkBudget??0}}};
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken},body:JSON.stringify(body)});
+  if(!res.ok){const e=await res.text();throw new Error('Gemini '+res.status+': '+e.substring(0,200));}
+  const data=await res.json(); const parts=data.candidates?.[0]?.content?.parts||[]; return parts.filter(p=>p.text&&!p.thought).map(p=>p.text).join('');
 }
 
-function extractBase64(dataUrl) {
-  if (!dataUrl || typeof dataUrl !== 'string') return null;
-  const m = dataUrl.match(/^data:image\/\w+;base64,(.+)$/);
-  return m ? m[1] : null;
+async function callImagen(prompt, opts={}) {
+  const {projectId,location,accessToken}=await getVertexConfig();
+  const model=opts.model||'imagen-4.0-generate-001';
+  const url=`https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
+  const instance={prompt};
+  if(opts.referenceImages?.length>0){instance.referenceImages=opts.referenceImages.slice(0,3).map(r=>({referenceImage:{bytesBase64Encoded:extractBase64(r.image)||''},referenceType:'REFERENCE_TYPE_SUBJECT',subjectDescription:r.description||''})).filter(r=>r.referenceImage.bytesBase64Encoded);}
+  const body={instances:[instance],parameters:{sampleCount:opts.sampleCount||1,aspectRatio:opts.aspectRatio||'3:4',personGeneration:'allow_all'}};
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken},body:JSON.stringify(body)});
+  if(!res.ok){const e=await res.text();
+    if(e.includes('referenceImages')||e.includes('REFERENCE_TYPE')){delete instance.referenceImages;const r2=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken},body:JSON.stringify({instances:[instance],parameters:body.parameters})});if(!r2.ok)throw new Error('Imagen '+r2.status);const d2=await r2.json();if(!d2.predictions?.length)throw new Error('No predictions');return d2.predictions.map(p=>`data:image/png;base64,${p.bytesBase64Encoded}`);}
+    throw new Error('Imagen '+res.status+': '+e.substring(0,200));}
+  const data=await res.json(); if(!data.predictions?.length)throw new Error('No predictions'); return data.predictions.map(p=>`data:image/png;base64,${p.bytesBase64Encoded}`);
 }
 
-async function callImagen(prompt, opts = {}) {
-  const {projectId, location, accessToken} = await getVertexConfig();
-  const model = opts.model || 'imagen-4.0-ultra-generate-001';
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
-  const instance = {prompt};
-  if (opts.referenceImages && opts.referenceImages.length > 0) {
-    instance.referenceImages = opts.referenceImages.slice(0, 3).map(ref => ({
-      referenceImage: {bytesBase64Encoded: extractBase64(ref.image) || ''},
-      referenceType: 'REFERENCE_TYPE_SUBJECT',
-      subjectDescription: ref.description || ''
-    })).filter(r => r.referenceImage.bytesBase64Encoded);
-  }
-  const body = {instances:[instance], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
-  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
-  if (!res.ok) {
-    const errText = await res.text();
-    if (errText.includes('referenceImages') || errText.includes('REFERENCE_TYPE')) {
-      console.warn('[Imagen] Reference image not supported, retrying without...');
-      delete instance.referenceImages;
-      const retryBody = {instances:[instance], parameters:{sampleCount: opts.sampleCount||1, aspectRatio: opts.aspectRatio||'1:1', personGeneration:'allow_all'}};
-      const res2 = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(retryBody)});
-      if (!res2.ok) throw new Error('Imagen API ' + res2.status + ': ' + (await res2.text()).substring(0,200));
-      const data2 = await res2.json();
-      if (!data2.predictions || !data2.predictions.length) throw new Error('No predictions returned');
-      return data2.predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
-    }
-    throw new Error('Imagen API ' + res.status + ': ' + errText.substring(0, 200));
-  }
-  const data = await res.json();
-  const predictions = data.predictions;
-  if (!predictions || predictions.length === 0) throw new Error('No predictions returned');
-  return predictions.map(p => `data:image/png;base64,${p.bytesBase64Encoded}`);
-}
-
-async function callNanoBanana(prompt, opts = {}) {
-  const {projectId, location, accessToken} = await getVertexConfig();
-  const model = opts.model || 'gemini-2.0-flash-preview-image-generation';
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
-  const parts = [];
-  if (opts.referenceImages && opts.referenceImages.length > 0) {
-    parts.push({text: 'Reference character/background images for visual consistency. Generate new image matching these characters exactly:'});
-    for (const ref of opts.referenceImages.slice(0, 3)) {
-      const b64 = extractBase64(ref.image);
-      if (b64) {
-        parts.push({inlineData: {mimeType: 'image/png', data: b64}});
-        if (ref.description) parts.push({text: '[Ref: ' + ref.description.substring(0, 200) + ']'});
-      }
-    }
-  }
-  parts.push({text: prompt});
-  const body = {
-    contents: [{role:'user', parts}],
-    generationConfig: {responseModalities: ['TEXT','IMAGE'], temperature: 1.0}
-  };
-  const res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:JSON.stringify(body)});
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error('NanoBanana API ' + res.status + ': ' + errText.substring(0, 200));
-  }
-  const data = await res.json();
-  const resParts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
-  const imgParts = resParts.filter(p => p.inlineData && p.inlineData.mimeType && p.inlineData.mimeType.startsWith('image/'));
-  if (imgParts.length === 0) throw new Error('No image generated');
-  return imgParts.map(p => `data:${p.inlineData.mimeType};base64,${p.inlineData.data}`);
-}
-
-async function callGrokImage(prompt, opts={}) {
-  const xaiKey = getXaiKey();
-  const url = 'https://api.x.ai/v1/images/generations';
-  const body = {
-    model: opts.model || 'grok-imagine-image',
-    prompt: prompt,
-    n: opts.n || 1,
-    response_format: 'url'
-  };
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + xaiKey
-    },
-    body: JSON.stringify(body)
-  });
-  if(!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Grok Image API ${res.status}: ${errText}`);
-  }
-  const data = await res.json();
-  const images = data.data || [];
-  if(images.length === 0) throw new Error('Grok 이미지 생성 결과가 없습니다.');
-  return images.map(img => img.url || `data:image/jpeg;base64,${img.b64_json}`);
-}
-
-async function callGrok(systemPrompt, userPrompt, opts={}) {
-  const xaiKey = getXaiKey();
-  const model = opts.model || 'grok-3-mini-fast';
-  const url = 'https://api.x.ai/v1/chat/completions';
-  const body = {
-    model: model,
-    messages: [
-      {role: 'system', content: systemPrompt},
-      {role: 'user', content: userPrompt}
-    ],
-    temperature: opts.temperature || 0.7,
-    stream: false
-  };
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + xaiKey
-    },
-    body: JSON.stringify(body)
-  });
-  if(!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Grok API ${res.status}: ${errText}`);
-  }
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
-}
-
-async function callVeo(prompt, imageBase64, opts={}) {
-  const {projectId, location, accessToken} = await getVertexConfig();
-  const model = opts.model || 'veo-2.0-generate-001';
-  const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predictLongRunning`;
-  console.log('[callVeo] URL:', url);
-  const instances = [{prompt: prompt}];
-  if(imageBase64) {
-    let b64 = imageBase64.replace(/^data:image\/[^;]+;base64,/,'');
-    if (b64.length > 3000000) {
-      console.warn('[callVeo] Image base64 too large ('+Math.round(b64.length/1024)+'KB), skipping image');
-    } else {
-      instances[0].image = {bytesBase64Encoded: b64, mimeType: 'image/jpeg'};
-      console.log('[callVeo] Image included: ' + Math.round(b64.length/1024) + 'KB');
-    }
-  }
-  const body = {
-    instances,
-    parameters: {
-      aspectRatio: opts.aspectRatio || '16:9',
-      personGeneration: 'allow_all',
-      durationSeconds: opts.duration || 5
-    }
-  };
-  const bodyStr = JSON.stringify(body);
-  console.log('[callVeo] Request body size: ' + Math.round(bodyStr.length/1024) + 'KB');
-  let res;
-  try {
-    res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:bodyStr});
-  } catch(fetchErr) {
-    console.error('[callVeo] Fetch failed:', fetchErr);
-    // Retry without image if payload was too large
-    if (imageBase64) {
-      console.log('[callVeo] Retrying without image...');
-      const retryBody = JSON.stringify({instances:[{prompt}], parameters:body.parameters});
-      res = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken}, body:retryBody});
-    } else {
-      throw new Error('Veo fetch failed: ' + fetchErr.message);
-    }
-  }
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error('Veo API ' + res.status + ': ' + errText.substring(0, 300));
-  }
-  const opData = await res.json();
-  if (!opData.name) throw new Error('No operation name returned');
-  const pollUrl = `https://${location}-aiplatform.googleapis.com/v1/${opData.name}`;
-  let attempt = 0;
-  while(attempt < 30) {
-    await new Promise(r => setTimeout(r, 2000));
-    const pollRes = await fetch(pollUrl, {method:'GET', headers:{'Authorization':'Bearer '+accessToken}});
-    if (!pollRes.ok) throw new Error('Poll failed: ' + pollRes.status);
-    const pollData = await pollRes.json();
-    if (pollData.done) {
-      if (pollData.response) {
-        const predictions = pollData.response.predictions || [];
-        if (predictions.length > 0 && predictions[0].mpeg4Bytes) {
-          return predictions[0].mpeg4Bytes;
-        }
-      }
-      throw new Error('No video generated');
-    }
-    attempt++;
-  }
-  throw new Error('Veo generation timeout');
+async function callNanoBanana(prompt, opts={}) {
+  const {projectId,location,accessToken}=await getVertexConfig();
+  const model=opts.model||'gemini-2.0-flash-preview-image-generation';
+  const url=`https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+  const parts=[];
+  if(opts.referenceImages?.length>0){parts.push({text:'Reference images for visual consistency:'});for(const ref of opts.referenceImages.slice(0,3)){const b=extractBase64(ref.image);if(b){parts.push({inlineData:{mimeType:'image/png',data:b}});if(ref.description)parts.push({text:'[Ref: '+ref.description.substring(0,200)+']'});}}}
+  parts.push({text:prompt});
+  const body={contents:[{role:'user',parts}],generationConfig:{responseModalities:['TEXT','IMAGE'],temperature:1.0}};
+  const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken},body:JSON.stringify(body)});
+  if(!res.ok)throw new Error('NanoBanana '+res.status+': '+(await res.text()).substring(0,200));
+  const data=await res.json(); const rp=(data.candidates?.[0]?.content?.parts)||[]; const ip=rp.filter(p=>p.inlineData?.mimeType?.startsWith('image/'));
+  if(!ip.length)throw new Error('No image generated'); return ip.map(p=>`data:${p.inlineData.mimeType};base64,${p.inlineData.data}`);
 }
 
 // ============================================================
-// CONSTANTS & PROMPTS
+// NEW PIPELINE: WEBTOON EPISODE PRODUCTION (5 Steps)
 // ============================================================
+// Step 1: Analyze story â extract characters, backgrounds, plot flow
+// Step 2: Generate character/background reference images
+// Step 3: Create storyboard (panel-by-panel breakdown)
+// Step 4: Generate panel images sequentially with character refs
+// Step 5: Assemble into webtoon preview
 
-const PIPELINE_A_SYSTEM = {
-  sceneSplit: `You are an expert story analyst. Split the given story/script into individual scenes for webtoon production.
-
-CRITICAL: You MUST respond with ONLY a valid JSON array. No markdown, no explanation, no code fences.
-
-Each scene object must have these fields:
-- "sceneNumber": integer (1-based)
-- "summary": string (1-2 sentence scene description in Korean)
-- "dialogues": array of {"speaker": string, "text": string}
-- "narrativeMood": string (e.g. "tense", "romantic", "action", "calm")
-- "keyCharacters": array of character ID strings (e.g. ["char_1", "char_2"])
-- "primaryLocation": string (location ID, e.g. "bg_1")
-- "duration": number (estimated seconds for this scene, 3-10)
-
-Example output format:
-[{"sceneNumber":1,"summary":"주인공이 카페에서 친구를 만난다","dialogues":[{"speaker":"주의공","text":"오랜만이야!"}],"narrativeMood":"warm","keyCharacters":["char_1","char_2"],"primaryLocation":"bg_1","duration":5}]
-
-Split the story naturally by location changes, time jumps, or dramatic beats.
-Respond with ONLY the JSON array.`,
-
-  imagePrompt: `You are an expert image generation prompt engineer specializing in webtoon/manga style artwork.
-
-Convert the structured Korean scene description into an optimized English prompt for image generation.
-
-Rules:
-1. Maximum 200 words
-2. Start with the most important visual element
-3. Include art style, composition, lighting, mood
-4. Use comma-separated descriptive tags
-5. Add quality boosters: masterpiece, best quality, highly detailed
-6. Specify aspect ratio hint if relevant (webtoon=portrait 3:4)
-7. Include negative prompt suggestions after [NEGATIVE]:
-
-Output format:
-[PROMPT]: (the prompt)
-[NEGATIVE]: (negative prompt)
-[STYLE]: (recommended style/model)
-[RATIO]: (recommended aspect ratio)`
-};
-
-const PIPELINE_B_SYSTEM = {
-  motionPrompt: `You are an expert video generation prompt engineer.
-
-Convert scene description into an optimized English motion prompt for AI video generation.
-
-Rules:
-1. Maximum 80 words (video models have strict limits)
-2. Focus on MOTION, not static description
-3. Describe what CHANGES in the scene
-4. Include camera movement instruction
-5. Specify physics: hair flow, cloth movement, particle effects
-6. Temporal flow: start state → action → end state
-7. Do NOT describe the image itself
-
-Final output: Single paragraph, English only, ≤80 words.`
-};
-
-const PROJECT_PHASES = [
-  'IDLE',
-  'PHASE_1_ANALYZING','PHASE_1_GENERATING_ASSETS','PHASE_1_COMPLETE',
-  'PHASE_2_SPLITTING','PHASE_2_DIRECTING','PHASE_2_COMPLETE',
-  'PHASE_3_GENERATING','PHASE_3_COMPLETE',
-  'PHASE_4_GENERATING','PHASE_4_COMPLETE',
-  'PHASE_5_EXPANDING','PHASE_5_COMPLETE',
-  'COMPLETED','ERROR'
-];
-
-const STATE_TRANSITIONS = {
-  IDLE:['PHASE_1_ANALYZING'],
-  PHASE_1_ANALYZING:['PHASE_1_GENERATING_ASSETS','ERROR'],
-  PHASE_1_GENERATING_ASSETS:['PHASE_1_COMPLETE','ERROR'],
-  PHASE_1_COMPLETE:['PHASE_2_SPLITTING'],
-  PHASE_2_SPLITTING:['PHASE_2_DIRECTING','ERROR'],
-  PHASE_2_DIRECTING:['PHASE_2_COMPLETE','ERROR'],
-  PHASE_2_COMPLETE:['PHASE_3_GENERATING'],
-  PHASE_3_GENERATING:['PHASE_3_COMPLETE','ERROR'],
-  PHASE_3_COMPLETE:['PHASE_4_GENERATING'],
-  PHASE_4_GENERATING:['PHASE_4_COMPLETE','ERROR'],
-  PHASE_4_COMPLETE:['PHASE_5_EXPANDING','COMPLETED'],
-  PHASE_5_EXPANDING:['PHASE_5_COMPLETE','ERROR'],
-  PHASE_5_COMPLETE:['COMPLETED'],
-  COMPLETED:[],
-  ERROR:['PHASE_1_ANALYZING','PHASE_2_SPLITTING','PHASE_3_GENERATING','PHASE_4_GENERATING','PHASE_5_EXPANDING']
-};
-
-const PHASE_LABELS = {
-  IDLE:'대기',
-  PHASE_1_ANALYZING:'Phase 1: 스토리 분석 중...',
-  PHASE_1_GENERATING_ASSETS:'Phase 1: 에셋 이미지 생성 중...',
-  PHASE_1_COMPLETE:'Phase 1 완료',
-  PHASE_2_SPLITTING:'씬c: 씬c 분할 중...',
-  PHASE_2_DIRECTING:'씬c: DP 구도 분석 중...',
-  PHASE_2_COMPLETE:'씬c 완료',
-  PHASE_3_GENERATING:'Phase 3: 앵커 이미지 생성 중...',
-  PHASE_3_COMPLETE:'Phase 3 완료',
-  PHASE_4_GENERATING:'Phase 4: 영상 생성 중...',
-  PHASE_4_COMPLETE:'Phase 4 완료',
-  PHASE_5_EXPANDING:'Phase 5: 웹툰 확장 중...',
-  PHASE_5_COMPLETE:'Phase 5 완료',
-  COMPLETED:'전체 완료',
-  ERROR:'오류 발생'
-};
+const STEPS = ['ë¶ì','ë í¼ë°ì¤','ì¤í ë¦¬ë³´ë','í¨ëìì±','ë¯¸ë¦¬ë³´ê¸°'];
+const STEP_LABELS = ['1. ì¤í ë¦¬ ë¶ì','2. ìºë¦­í°/ë°°ê²½ ë í¼ë°ì¤','3. ì¤í ë¦¬ë³´ë','4. í¨ë ì´ë¯¸ì§ ìì±','5. ì¹í° ë¯¸ë¦¬ë³´ê¸°'];
 
 const PROMPTS = {
-  CHARACTER_EXTRACTION: 'You are a webtoon/manhwa character analyst. Analyze the given story text and extract ALL characters. For each character, provide a JSON array of objects with these fields: id (unique snake_case id), name (character name in Korean), role (protagonist/antagonist/supporting/extra), appearance ({age, gender, height, build, hair, eyes, skin, distinguishing:[]}), defaultOutfit (string description), expressionRange (array of typical expressions), referencePrompt (detailed English prompt for consistent image generation including all visual details). Return ONLY valid JSON array. No markdown, no explanation.',
-  LOCATION_EXTRACTION: 'You are a webtoon background/location analyst. Analyze the given story text and extract ALL distinct locations. For each location, provide a JSON array of objects with fields: id (unique snake_case id), name (location name in Korean), locationType (interior/exterior/fantasy/abstract), timeOfDay (dawn/morning/afternoon/evening/night), mood (string), description (detailed Korean description), referencePrompt (detailed English prompt for image generation). Return ONLY valid JSON array. No markdown, no explanation.',
-  DP_COMPOSITION: 'You are a cinematographer/DP for webtoon production. Given a scene description and available characters/locations, determine the optimal visual composition. Return a JSON object: cameraAngle (eye_level/low_angle/high_angle/dutch_angle/birds_eye/over_shoulder), shotSize (extreme_close_up/close_up/medium_close_up/medium_shot/medium_wide/wide_shot/extreme_wide), lighting (cinematic/dark_moody/bright_key/golden_hour/neon_cyberpunk/soft_diffused/dramatic_rim), characterPoses ([{characterId, pose, position, expression, outfit}]), backgroundOverride (optional), focalPoint (string), depthOfField (shallow/medium/deep), motionHint (string), narrativeMood (string). Return ONLY valid JSON object.',
-  ANCHOR_PROMPT_ASSEMBLY: 'You are a professional image prompt engineer. Given a scene composition (camera, lighting, characters, background), assemble a detailed English image generation prompt. Structure: [Shot Size], [Camera Angle], [Character descriptions with poses], [Background/Environment], [Lighting], [Mood/Atmosphere], [Style: manhwa/webtoon style, detailed illustration]. Add negative prompt for: deformed, blurry, low quality, extra limbs, bad anatomy, watermark, text. Return JSON: { prompt: "...", negativePrompt: "..." }'
+  ANALYZE_STORY: `You are a webtoon story analyst. Analyze this Korean story/novel text and extract structured data for webtoon production.
+
+Return ONLY a valid JSON object (no markdown, no explanation):
+{
+  "title": "episode title in Korean",
+  "synopsis": "2-3 sentence synopsis in Korean",
+  "characters": [
+    {
+      "id": "char_1",
+      "name": "name in Korean",
+      "role": "protagonist|antagonist|supporting",
+      "age": "approximate age",
+      "gender": "male|female",
+      "appearance": "detailed physical description in English for image generation (hair color, style, eye color, skin tone, height, build, distinguishing features)",
+      "outfit": "default outfit description in English",
+      "personality": "brief personality in Korean",
+      "refPrompt": "detailed English prompt for generating a consistent character reference sheet: full body portrait, front-facing, neutral background, anime/manhwa style, [all appearance details]"
+    }
+  ],
+  "backgrounds": [
+    {
+      "id": "bg_1",
+      "name": "location name in Korean",
+      "type": "interior|exterior",
+      "description": "detailed visual description in English for image generation",
+      "refPrompt": "detailed English prompt for generating background: [environment details], wide shot, no characters, manhwa background art style, detailed illustration"
+    }
+  ],
+  "plotBeats": [
+    {"beat": 1, "summary": "Korean summary of this plot beat", "characters": ["char_1"], "location": "bg_1", "mood": "calm|tense|action|emotional|comedic"}
+  ]
+}
+
+Extract ALL characters mentioned (even minor ones). Create 3-6 backgrounds for distinct locations. Break the story into 8-20 plot beats that cover the full narrative.`,
+
+  CREATE_STORYBOARD: `You are a professional webtoon storyboard artist. Given the story analysis (characters, backgrounds, plot), create a panel-by-panel storyboard for a webtoon episode.
+
+IMPORTANT: This is a VERTICAL SCROLL webtoon. Create 20-40 panels that tell the complete story.
+
+Return ONLY a valid JSON array (no markdown):
+[
+  {
+    "panelNumber": 1,
+    "plotBeat": 1,
+    "type": "establishing|dialogue|action|emotion|transition|closeup",
+    "shotSize": "extreme_wide|wide|medium_wide|medium|medium_close|close_up|extreme_close",
+    "cameraAngle": "eye_level|low_angle|high_angle|birds_eye|dutch_angle|over_shoulder",
+    "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"center"}],
+    "background": "bg_1",
+    "dialogue": [{"speaker":"char_1","text":"ëì¬ ë´ì©"}],
+    "narration": "ëë ì´ìì´ ìì¼ë©´ ì¬ê¸°ì",
+    "mood": "calm|tense|dramatic|warm|sad|comedic|action",
+    "description": "Brief Korean description of what happens in this panel",
+    "imagePrompt": "Detailed English prompt for image generation: [shot size], [camera angle], [character descriptions with poses and expressions], [background/environment], [lighting and atmosphere], manhwa/webtoon style, detailed illustration, vibrant colors"
+  }
+]
+
+Rules:
+- Start with an establishing wide shot
+- Vary shot sizes and angles for visual interest
+- Use close-ups for emotional moments
+- Use wide shots for action and establishing scenes
+- Include at least one panel per plot beat
+- Add transition panels between major scene changes
+- Each imagePrompt must be self-contained (include full character appearance details, not just names)
+- Dialogue should match the original story text`
 };
 
 // ============================================================
 // COMPONENTS
 // ============================================================
-
 function LogPanel({logs}) {
   const ref = useRef();
-  useEffect(()=>{if(ref.current) ref.current.scrollTop = ref.current.scrollHeight;},[logs]);
-  return (
-    <div className="log-panel" ref={ref}>
-      {logs.map((l,i)=>(
-        <div key={i} className={`log-entry ${l.type}`}>
-          {l.msg}
-        </div>
-      ))}
-      {logs.length===0 && <div className="log-entry">대기 중...</div>}
-    </div>
-  );
+  useEffect(()=>{if(ref.current)ref.current.scrollTop=ref.current.scrollHeight;},[logs]);
+  return (<div className="log-panel" ref={ref}>{logs.map((l,i)=>(<div key={i} className={`log-entry ${l.type||''}`}>{l.msg}</div>))}{logs.length===0&&<div className="log-entry">ëê¸° ì¤...</div>}</div>);
 }
 
-function ApiKeyModal({onClose, onSave}) {
-  const [vertexProjectId, setVertexProjectId] = useState(localStorage.getItem('VERTEX_PROJECT_ID') || '');
-  const [vertexLocation, setVertexLocation] = useState(localStorage.getItem('VERTEX_LOCATION') || 'us-central1');
-  const [vertexAccessToken, setVertexAccessToken] = useState(localStorage.getItem('VERTEX_ACCESS_TOKEN') || '');
-  const [xaiKey, setXaiKeyState] = useState(localStorage.getItem('XAI_API_KEY') || '');
-
-  const handleSave = () => {
-    if (vertexProjectId) localStorage.setItem('VERTEX_PROJECT_ID', vertexProjectId);
-    if (vertexLocation) localStorage.setItem('VERTEX_LOCATION', vertexLocation);
-    if (vertexAccessToken) localStorage.setItem('VERTEX_ACCESS_TOKEN', vertexAccessToken);
-    if (xaiKey) localStorage.setItem('XAI_API_KEY', xaiKey);
-    onSave && onSave();
-    onClose();
-  };
-
+function ApiKeyModal({onClose}) {
+  const [vp,setVp]=useState(localStorage.getItem('VERTEX_PROJECT_ID')||'');
+  const [vl,setVl]=useState(localStorage.getItem('VERTEX_LOCATION')||'us-central1');
+  const [vt,setVt]=useState(localStorage.getItem('VERTEX_ACCESS_TOKEN')||'');
+  const [xk,setXk]=useState(localStorage.getItem('XAI_API_KEY')||'');
+  const save=()=>{if(vp)localStorage.setItem('VERTEX_PROJECT_ID',vp);if(vl)localStorage.setItem('VERTEX_LOCATION',vl);if(vt)localStorage.setItem('VERTEX_ACCESS_TOKEN',vt);if(xk)localStorage.setItem('XAI_API_KEY',xk);onClose();};
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={e => e.stopPropagation()}>
-        <div className="modal-title">API 설정</div>
-        <div className="modal-desc">Vertex AI 및 xAI (Grok) API 키를 설정합니다.</div>
-
-        <div className="form-group">
-          <label className="form-label">Vertex AI Project ID</label>
-          <input className="modal-input" value={vertexProjectId} onChange={e => setVertexProjectId(e.target.value)} />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Vertex AI Location</label>
-          <input className="modal-input" value={vertexLocation} onChange={e => setVertexLocation(e.target.value)} />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Vertex AI Access Token</label>
-          <input className="modal-input" type="password" value={vertexAccessToken} onChange={e => setVertexAccessToken(e.target.value)} />
-        </div>
-
-        <div className="key-status">
-          <div className={`dot ${hasGeminiKey() ? 'on' : ''}`}></div>
-          <span>Vertex AI {hasGeminiKey() ? '✅ 설정됨' : '❌ 미설정'}</span>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">xAI (Grok) API Key</label>
-          <input className="modal-input" type="password" value={xaiKey} onChange={e => setXaiKeyState(e.target.value)} />
-        </div>
-
-        <div className="key-status">
-          <div className={`dot ${hasXaiKey() ? 'on' : ''}`}></div>
-          <span>xAI {hasXaiKey() ? '✅ 설정됨' : '❌ 미설정'}</span>
-        </div>
-
-        <div className="modal-actions">
-          <button className="btn-cancel" onClick={onClose}>취소</button>
-          <button className="btn-save" onClick={handleSave}>저장</button>
-        </div>
-      </div>
-    </div>
+    <div className="modal-overlay" onClick={onClose}><div className="modal-box" onClick={e=>e.stopPropagation()}>
+      <div className="modal-title">API ì¤ì </div>
+      <div className="modal-desc">Vertex AI API ì¤ì </div>
+      <div style={{marginBottom:12}}><label className="form-label">Project ID</label><input className="modal-input" value={vp} onChange={e=>setVp(e.target.value)}/></div>
+      <div style={{marginBottom:12}}><label className="form-label">Location</label><input className="modal-input" value={vl} onChange={e=>setVl(e.target.value)}/></div>
+      <div style={{marginBottom:12}}><label className="form-label">Access Token</label><input className="modal-input" type="password" value={vt} onChange={e=>setVt(e.target.value)}/></div>
+      <div className="key-status"><div className={`dot ${hasGeminiKey()?'on':''}`}/><span>Vertex AI {hasGeminiKey()?'ì¤ì ë¨':'ë¯¸ì¤ì '}</span></div>
+      <div style={{marginBottom:12}}><label className="form-label">xAI (Grok) Key</label><input className="modal-input" type="password" value={xk} onChange={e=>setXk(e.target.value)}/></div>
+      <div className="key-status"><div className={`dot ${hasXaiKey()?'on':''}`}/><span>xAI {hasXaiKey()?'ì¤ì ë¨':'ë¯¸ì¤ì '}</span></div>
+      <div className="modal-actions"><button className="btn-cancel" onClick={onClose}>ì·¨ì</button><button className="btn-save" onClick={save}>ì ì¥</button></div>
+    </div></div>
   );
 }
 
 // ============================================================
 // MAIN APP
 // ============================================================
-
 function App() {
-  const [activeTab, setActiveTab] = useState('source');
   const [showApiModal, setShowApiModal] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [step, setStep] = useState(0); // 0-4 for the 5 steps
+  const [running, setRunning] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const abortRef = useRef(false);
+
+  // Data state
+  const [sourceText, setSourceText] = useState('');
+  const [analysis, setAnalysis] = useState(null); // Step 1 result
+  const [references, setReferences] = useState({characters:{}, backgrounds:{}}); // Step 2: {char_id: imageUrl}
+  const [storyboard, setStoryboard] = useState([]); // Step 3: panel array
+  const [panels, setPanels] = useState([]); // Step 4: generated images per panel
+  const [imageProvider, setImageProvider] = useState('imagen4');
+
+  // Project management
+  const [projectId, setProjectId] = useState(null);
+  const [projectTitle, setProjectTitle] = useState('');
+  const [projectList, setProjectList] = useState([]);
+  const [showProjects, setShowProjects] = useState(false);
+
+  // Completed steps tracking
+  const [completedSteps, setCompletedSteps] = useState(new Set());
 
   const log = useCallback((msg, type='info') => {
-    const timestamp = new Date().toLocaleTimeString('ko-KR');
-    setLogs(prev => [...prev, {msg: `[${timestamp}] ${msg}`, type}]);
+    const ts = new Date().toLocaleTimeString();
+    setLogs(prev => [...prev, {msg: `[${ts}] ${msg}`, type}]);
   }, []);
 
-  return (
-    <div style={{display: 'flex', flexDirection: 'column', height: '100vh'}}>
-      {/* Header */}
-      <div className="app-header">
-        <div className="app-logo">웹툰 프로덕션</div>
-        <div className="nav-tabs">
-          {[
-            {id: 'source', label: '소스입력'},
-            {id: 'phase1', label: 'P1 분석'},
-            {id: 'scenes', label: '씬c'},
-            {id: 'images', label: '이미지'},
-            {id: 'videos', label: '영상'},
-            {id: 'webtoon', label: '웹툰'}
-          ].map(tab => (
-            <button
-              key={tab.id}
-              className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        <button className={`api-key-btn ${hasGeminiKey() || hasXaiKey() ? 'connected' : ''}`} onClick={() => setShowApiModal(true)}>
-          ⚙️ API 설정
-        </button>
-      </div>
-
-      {/* Main Content */}
-      <div className="main-content">
-        <LongFormOrchestrator log={log} activeTab={activeTab} setActiveTab={setActiveTab} />
-
-        {/* Log Panel at Bottom */}
-        <div style={{marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--border)'}}>
-          <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 12, fontWeight: 600, color: 'var(--text2)'}}>
-            로그
-            <button onClick={() => setLogs([])} style={{padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'white', color: 'var(--text2)', cursor: 'pointer', fontSize: 11}}>
-              초기화
-            </button>
-          </div>
-          <LogPanel logs={logs} />
-        </div>
-      </div>
-
-      {showApiModal && <ApiKeyModal onClose={() => setShowApiModal(false)} onSave={() => {}} />}
-    </div>
-  );
-}
-
-// ============================================================
-// LONG FORM ORCHESTRATOR (MAIN PIPELINE LOGIC)
-// ============================================================
-
-function LongFormOrchestrator({log, activeTab, setActiveTab}) {
-  const [phase, setPhase] = useState('IDLE');
-  const [sourceText, setSourceText] = useState('');
-  const [projectTitle, setProjectTitle] = useState('');
-  const [globalAsset, setGlobalAsset] = useState(null);
-  const [lfScenes, setLfScenes] = useState([]);
-  const lfScenesRef = useRef([]);
-  const [phaseHistory, setPhaseHistory] = useState([]);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [running, setRunning] = useState(false);
-  const [currentSceneIdx, setCurrentSceneIdx] = useState(-1);
-  const abortRef = useRef(false);
-  const [textProvider, setTextProvider] = useState('gemini');
-  const [imageProvider, setImageProvider] = useState('imagen4');
-  const [enableWebtoon, setEnableWebtoon] = useState(true);
-  const [editingPromptIdx, setEditingPromptIdx] = useState(-1);
-  const [editingPromptText, setEditingPromptText] = useState('');
-
-  const [projectList, setProjectList] = useState([]);
-  const [currentProjectId, setCurrentProjectId] = useState('');
-  const [showProjectPanel, setShowProjectPanel] = useState(false);
-  const [fbConfig, setFbConfig] = useState(getFirebaseConfig() || {});
-  const [fbStatus, setFbStatus] = useState(getDb() ? 'connected' : 'not configured');
-  const [savingStatus, setSavingStatus] = useState('');
-
-  useEffect(() => {
-    const checkConfig = () => {
-      if (getDb()) {
-        fbListProjects().then(list => setProjectList(list)).catch(e => console.warn('FB list error:', e));
-        setFbStatus('connected');
-      }
-    };
-    checkConfig();
-    const timer = setTimeout(checkConfig, 2000);
-    return () => clearTimeout(timer);
+  const callText = useCallback(async (system, user) => {
+    return await callGemini(system, user, {maxTokens: 16384, thinkBudget: 1024});
   }, []);
 
-  const callTextLF = useCallback(async (systemPrompt, userPrompt, opts={}) => {
-    if (textProvider === 'grok') {
-      return await callGrok(systemPrompt, userPrompt, opts);
-    } else {
-      return await callGemini(systemPrompt, userPrompt, opts);
-    }
-  }, [textProvider]);
-
-  const callImageLF = useCallback(async (prompt, opts) => {
-    opts = opts || {};
-    const refs = opts.referenceImages || [];
-    if (imageProvider === 'grok') {
-      return await callGrokImage(prompt);
-    } else if (imageProvider === 'nanoBananaPro') {
-      return await callNanoBanana(prompt, {model: 'gemini-2.0-pro-preview-image-generation', referenceImages: refs});
-    } else if (imageProvider === 'nanoBanana') {
-      return await callNanoBanana(prompt, {model: 'gemini-2.0-flash-preview-image-generation', referenceImages: refs});
-    } else {
-      const model = imageProvider === 'imagen4ultra' ? 'imagen-4.0-ultra-generate-001' : 'imagen-4.0-generate-001';
-      return await callImagen(prompt, Object.assign({aspectRatio:'9:16', model, referenceImages: refs}, opts));
-    }
+  const callImage = useCallback(async (prompt, opts={}) => {
+    if (imageProvider === 'nanoBanana') return await callNanoBanana(prompt, opts);
+    return await callImagen(prompt, {...opts, aspectRatio: opts.aspectRatio || '3:4'});
   }, [imageProvider]);
 
-  const phaseRef = useRef('IDLE');
-  useEffect(() => { phaseRef.current = phase; }, [phase]);
-  const transition = useCallback((newPhase, errorMessage='') => {
-    const cur = phaseRef.current;
-    const allowed = STATE_TRANSITIONS[cur];
-    if (!allowed || !allowed.includes(newPhase)) { log('[FSM] Invalid: '+cur+' -> '+newPhase, 'error'); return false; }
-    phaseRef.current = newPhase;
-    setPhase(newPhase);
-    setPhaseHistory(prev => [...prev, { phase: newPhase, stamp: new Date().toISOString(), ...(errorMessage && { error: errorMessage }) }]);
-    if (newPhase === 'ERROR') setErrorMsg(errorMessage || 'Unknown error');
-    log('[FSM] '+cur+' -> '+newPhase, newPhase === 'ERROR' ? 'error' : 'info');
-    return true;
-  }, [log]);
-
-  const runPhase1 = useCallback(async () => {
-    transition('PHASE_1_ANALYZING');
-    log('[Phase 1-A] Extracting characters from story...');
-    const charRaw = await callTextLF(PROMPTS.CHARACTER_EXTRACTION, sourceText);
-    let characters;
-    try { characters = JSON.parse(charRaw.replace(/```json\n?|```/g, '').trim()); }
-    catch(e) { throw new Error('Character JSON parse failed: '+e.message); }
-    log('[Phase 1-A] '+characters.length+' characters extracted');
-    if (abortRef.current) throw new Error('Aborted');
-
-    log('[Phase 1-A] Extracting locations...');
-    const locRaw = await callTextLF(PROMPTS.LOCATION_EXTRACTION, sourceText);
-    let backgrounds;
-    try { backgrounds = JSON.parse(locRaw.replace(/```json\n?|```/g, '').trim()); }
-    catch(e) { throw new Error('Location JSON parse failed: '+e.message); }
-    log('[Phase 1-A] '+backgrounds.length+' locations extracted');
-    if (abortRef.current) throw new Error('Aborted');
-
-    transition('PHASE_1_GENERATING_ASSETS');
-    for (let i=0; i<characters.length; i++) {
-      if (abortRef.current) throw new Error('Aborted');
-      log('[Phase 1-B] Character image '+(i+1)+'/'+characters.length+': '+characters[i].name);
-      try { const urls = await callImageLF(characters[i].referencePrompt+', character sheet, multiple angles, white background, manhwa style');
-        characters[i].referenceImageUrl = urls[0]; }
-      catch(e) { log('[Phase 1-B] Char image failed: '+e.message, 'warn'); characters[i].referenceImageUrl = null; }
+  const parseJSON = (text) => {
+    let cleaned = text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+    // Find JSON start
+    const arrStart = cleaned.indexOf('[');
+    const objStart = cleaned.indexOf('{');
+    if (arrStart >= 0 && (objStart < 0 || arrStart < objStart)) cleaned = cleaned.substring(arrStart);
+    else if (objStart >= 0) cleaned = cleaned.substring(objStart);
+    // Find matching end
+    let depth = 0, end = 0;
+    const opener = cleaned[0];
+    const closer = opener === '[' ? ']' : '}';
+    for (let i = 0; i < cleaned.length; i++) {
+      if (cleaned[i] === opener) depth++;
+      else if (cleaned[i] === closer) { depth--; if (depth === 0) { end = i + 1; break; } }
     }
-    for (let i=0; i<backgrounds.length; i++) {
-      if (abortRef.current) throw new Error('Aborted');
-      log('[Phase 1-B] Background image '+(i+1)+'/'+backgrounds.length+': '+backgrounds[i].name);
-      try { const urls = await callImageLF(backgrounds[i].referencePrompt+', detailed background, no characters, manhwa style');
-        backgrounds[i].referenceImageUrl = urls[0]; }
-      catch(e) { log('[Phase 1-B] BG image failed: '+e.message, 'warn'); backgrounds[i].referenceImageUrl = null; }
-    }
-    const asset = { characters, backgrounds, styleGuide:{artStyle:'manhwa',colorPalette:[],moodBoard:''}, createdAt:new Date().toISOString(), version:1 };
-    setGlobalAsset(asset);
-    transition('PHASE_1_COMPLETE');
-    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase1_assets', {globalAsset: asset, sourceTextFull: sourceText}); log('[AutoSave] Phase 1 saved'); } catch(e){log('[AutoSave] Phase 1 error: '+e.message,'warn');} }
-    log('[Phase 1] Complete: '+characters.length+' characters, '+backgrounds.length+' backgrounds');
-  }, [sourceText, callTextLF, callImageLF, transition, log, currentProjectId]);
-
-  const runPhase2 = useCallback(async () => {
-    transition('PHASE_2_SPLITTING');
-    log('[Phase 2-A] Splitting story into scenes...');
-    const sceneRaw = await callTextLF(PIPELINE_A_SYSTEM.sceneSplit, sourceText, {maxTokens: 16384});
-    let scenes;
-    try {
-      let cleaned = sceneRaw.replace(/```json\n?|```/g, '').trim();
-      const arrStart = cleaned.indexOf('[');
-      const arrEnd = cleaned.lastIndexOf(']');
-      if (arrStart >= 0 && arrEnd > arrStart) { cleaned = cleaned.substring(arrStart, arrEnd + 1); }
-      try { scenes = JSON.parse(cleaned); } catch(e1) {
-        const lastBrace = cleaned.lastIndexOf('}');
-        if (lastBrace > 0) { cleaned = cleaned.substring(0, lastBrace+1) + ']'; scenes = JSON.parse(cleaned); log('[Phase 2] Recovered truncated JSON','warn'); }
-        else { throw e1; }
-      }
-    } catch(e) { throw new Error('Scene split JSON parse failed: ' + e.message); }
-    log('[Phase 2-A] '+scenes.length+' scenes identified');
-    if (abortRef.current) throw new Error('Aborted');
-
-    transition('PHASE_2_DIRECTING');
-    for (let i=0; i<scenes.length; i++) {
-      if (abortRef.current) throw new Error('Aborted');
-      setCurrentSceneIdx(i);
-      const sc = scenes[i];
-      log('[Phase 2-B] DP analysis for scene '+(i+1)+'/'+scenes.length);
-      const charInfo = (globalAsset?.characters||[]).filter(c=>(sc.keyCharacters||[]).includes(c.id)).map(c=>c.name+': '+c.referencePrompt).join('\n');
-      const bgInfo = (globalAsset?.backgrounds||[]).filter(b=>b.id===sc.primaryLocation).map(b=>b.name+': '+b.referencePrompt)[0]||'generic background';
-      const dpInput = 'Scene: '+sc.summary+'\nDialogues: '+JSON.stringify(sc.dialogues)+'\nMood: '+sc.narrativeMood+'\n\nAvailable Characters:\n'+charInfo+'\n\nBackground:\n'+bgInfo;
-      try { const compRaw = await callTextLF(PROMPTS.DP_COMPOSITION, dpInput, {maxTokens: 16384});
-        sc.compositionData = JSON.parse(compRaw.replace(/```json\n?|```/g, '').trim()); }
-      catch(e) { log('[Phase 2-B] DP failed scene '+(i+1)+': '+e.message, 'warn'); sc.compositionData = null; }
-      sc.status = 'composed';
-    }
-    lfScenesRef.current = scenes; setLfScenes(scenes);
-    transition('PHASE_2_COMPLETE');
-    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase2_scenes', {scenes}); log('[AutoSave] Phase 2 saved'); } catch(e){log('[AutoSave] Phase 2 error: '+e.message,'warn');} }
-    log('[Phase 2] Complete: '+scenes.length+' scenes with composition data');
-  }, [sourceText, globalAsset, callTextLF, transition, log, currentProjectId]);
-
-  const runPhase3 = useCallback(async () => {
-    transition('PHASE_3_GENERATING');
-    log('[Phase 3] Generating image prompts...');
-    const updated = [...lfScenesRef.current];
-    for (let i=0; i<updated.length; i++) {
-      if (abortRef.current) throw new Error('Aborted');
-      setCurrentSceneIdx(i);
-      const sc = updated[i];
-      log('[Phase 3] Prompt ' + (i+1) + '/' + updated.length);
-      if (!sc.compositionData) { log('[Phase 3] Scene ' + (i+1) + ' no composition - skip'); continue; }
-      try {
-        const comp = sc.compositionData;
-        const charDescs = (comp.characterPoses||[]).map(cp => {
-          const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null;
-          return (cr ? cr.referencePrompt : '') + ' ' + (cp.pose||'') + ' pose, ' + (cp.expression||'') + ' expression';
-        }).filter(Boolean).join('; ');
-        const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
-        const bgDesc = bgRef ? bgRef.referencePrompt : 'detailed background';
-        const userMsg = 'Scene: ' + sc.summary + '\nComposition: ' + JSON.stringify(comp) + '\nCharacter prompts: ' + charDescs + '\nBackground: ' + bgDesc;
-        const pRaw = await callTextLF(PIPELINE_A_SYSTEM.imagePrompt, userMsg, {maxTokens:4096});
-        try { sc.imagePrompt = JSON.parse(pRaw.replace(/```json|\n|```/g,'')); } catch { sc.imagePrompt = {prompt: pRaw}; }
-        sc.status = 'prompt_ready';
-        log('[Phase 3] Scene ' + (i+1) + ' prompt generated');
-      } catch(e) { log('[Phase 3] Scene ' + (i+1) + ' prompt failed: ' + e.message, 'warn'); }
-    }
-    lfScenesRef.current = updated;
-    setLfScenes([...updated]);
-    transition('PHASE_3_COMPLETE');
-    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase3_prompts', {scenes: updated}); log('[AutoSave] Phase 3 saved'); } catch(e){log('[AutoSave] Phase 3 error: '+e.message,'warn');} }
-    log('[Phase 3] Complete - prompts ready');
-  }, [globalAsset, callTextLF, transition, log, currentProjectId]);
-
-  const runPhase4 = useCallback(async () => {
-    transition('PHASE_4_GENERATING');
-    log('[Phase 4] Preparing video motion prompts...');
-    const updated = [...lfScenesRef.current];
-    for (let i=0; i<updated.length; i++) {
-      if (abortRef.current) throw new Error('Aborted');
-      setCurrentSceneIdx(i);
-      const sc = updated[i];
-      log('[Phase 4] Video prompt ' + (i+1) + '/' + updated.length);
-      try {
-        const sceneInfo = 'Scene: ' + sc.summary + '\nComposition: ' + JSON.stringify(sc.compositionData||{});
-        const motionRaw = await callTextLF(PIPELINE_B_SYSTEM.motionPrompt, sceneInfo, {maxTokens:2048});
-        sc.videoPrompt = { motionPrompt: motionRaw.trim(), aspectRatio:'9:16', duration:5 };
-        log('[Phase 4] Scene ' + (i+1) + ' video prompt ready');
-      } catch(e) { log('[Phase 4] Scene ' + (i+1) + ' failed: ' + e.message, 'warn'); }
-    }
-    lfScenesRef.current = updated;
-    setLfScenes([...updated]);
-    transition('PHASE_4_COMPLETE');
-    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase4_video', {scenes: updated}); log('[AutoSave] Phase 4 saved'); } catch(e){log('[AutoSave] Phase 4 error: '+e.message,'warn');} }
-    log('[Phase 4] Complete - video prompts ready');
-  }, [callTextLF, transition, log, currentProjectId]);
-
-  // === Scene-type panel configurations ===
-  const PANEL_CONFIGS = {
-    dialogue: {label:'대화', panels:[
-      {type:'medium_two_shot', prompt:'medium two-shot of characters talking face to face, eye-level angle, warm lighting, manhwa style, speech bubble composition'},
-      {type:'close_up_speaker', prompt:'close-up portrait of the speaking character, expressive face, detailed eyes, manhwa style panel'},
-      {type:'over_shoulder', prompt:'over-the-shoulder shot, listener POV, depth of field background blur, manhwa style'},
-      {type:'reaction_close', prompt:'extreme close-up reaction shot, dramatic expression, speed lines, manhwa emotion panel'},
-      {type:'environment_context', prompt:'wide establishing shot showing the conversation setting, atmospheric lighting, manhwa style'}
-    ]},
-    action: {label:'액션', panels:[
-      {type:'dynamic_wide', prompt:'dynamic wide-angle action shot, dramatic perspective, speed lines, impact effects, manhwa action panel'},
-      {type:'impact_close', prompt:'extreme close-up of impact moment, motion blur, debris particles, intense manhwa style'},
-      {type:'sequence_motion', prompt:'multi-frame motion sequence, character in dynamic pose mid-action, manga speed lines'},
-      {type:'aerial_establishing', prompt:'dramatic aerial/bird-eye view of the action scene, epic scale, manhwa cinematic composition'},
-      {type:'aftermath_detail', prompt:'detail shot of aftermath, broken objects or settling dust, tense atmosphere, manhwa style'},
-      {type:'character_power', prompt:'dramatic character power-up or attack pose, glowing effects, energy lines, manhwa style'}
-    ]},
-    emotion: {label:'감정', panels:[
-      {type:'extreme_close_eyes', prompt:'extreme close-up of eyes showing emotion, detailed iris, tears or sparkle, manhwa emotional art'},
-      {type:'symbolic_atmosphere', prompt:'symbolic atmospheric panel, visual metaphor for the emotion, abstract background, manhwa style'},
-      {type:'full_body_posture', prompt:'full body shot showing emotional posture, body language expressing feelings, soft lighting, manhwa'},
-      {type:'memory_flashback', prompt:'soft-focus flashback or memory panel, dreamy vignette effect, faded colors, manhwa style'},
-      {type:'close_up_hands', prompt:'detail close-up of hands showing emotion (clenching, trembling, reaching), manhwa style'},
-      {type:'silent_wide', prompt:'wide silent panel, character alone in environment, atmospheric mood, cinematic manhwa composition'},
-      {type:'face_shadow', prompt:'half-shadow face portrait, dramatic chiaroscuro lighting, intense gaze, manhwa emotional panel'}
-    ]},
-    establishing: {label:'배경전환', panels:[
-      {type:'panoramic_wide', prompt:'panoramic ultra-wide establishing shot, detailed environment, atmospheric perspective, manhwa background art'},
-      {type:'detail_texture', prompt:'architectural or nature detail close-up, texture and material focus, ambient lighting, manhwa style'},
-      {type:'time_indicator', prompt:'sky/weather establishing shot indicating time of day, clouds, sun/moon position, atmospheric manhwa'},
-      {type:'transition_path', prompt:'path or corridor leading to the next location, perspective depth, guiding composition, manhwa style'},
-      {type:'character_arrival', prompt:'small character figure entering the new environment, sense of scale, wide composition, manhwa'}
-    ]},
-    calm: {label:'일상', panels:[
-      {type:'slice_of_life_wide', prompt:'slice-of-life wide shot, everyday activity, warm natural lighting, cozy manhwa style'},
-      {type:'object_detail', prompt:'still-life detail of meaningful object in scene, shallow depth of field, soft lighting, manhwa'},
-      {type:'character_candid', prompt:'candid character moment, natural relaxed pose, gentle expression, soft manhwa art style'},
-      {type:'environment_mood', prompt:'environment establishing shot with mood lighting, peaceful atmosphere, manhwa background'},
-      {type:'interaction_medium', prompt:'medium shot of characters interacting casually, comfortable body language, warm tones, manhwa style'}
-    ]},
-    tense: {label:'긴장', panels:[
-      {type:'dutch_angle', prompt:'dutch angle tilted shot creating unease, dramatic shadows, suspenseful composition, manhwa thriller style'},
-      {type:'extreme_close_detail', prompt:'extreme close-up of tension-revealing detail (sweating, gripping, eye twitch), manhwa suspense'},
-      {type:'silhouette_shadow', prompt:'silhouette or heavy shadow composition, mysterious figure, backlit dramatic, noir manhwa style'},
-      {type:'split_panel', prompt:'split composition showing two opposing forces or perspectives, tension between subjects, manhwa style'},
-      {type:'low_angle_threat', prompt:'low-angle menacing shot, looming presence, exaggerated perspective, dark atmosphere, manhwa thriller'},
-      {type:'clock_urgency', prompt:'time pressure composition, visual urgency cues, ticking countdown feel, intense manhwa panel'}
-    ]}
+    return JSON.parse(cleaned.substring(0, end));
   };
 
-  function getMoodPanelConfig(mood) {
-    const m = (mood || 'calm').toLowerCase();
-    if (m.includes('action') || m.includes('fight') || m.includes('battle') || m.includes('chase')) return PANEL_CONFIGS.action;
-    if (m.includes('tense') || m.includes('suspense') || m.includes('thriller') || m.includes('horror') || m.includes('dark')) return PANEL_CONFIGS.tense;
-    if (m.includes('emotion') || m.includes('sad') || m.includes('romantic') || m.includes('love') || m.includes('heartbreak') || m.includes('grief')) return PANEL_CONFIGS.emotion;
-    if (m.includes('establishing') || m.includes('transition') || m.includes('travel') || m.includes('arrival')) return PANEL_CONFIGS.establishing;
-    if (m.includes('dialogue') || m.includes('conversation') || m.includes('talk') || m.includes('meeting') || m.includes('warm')) return PANEL_CONFIGS.dialogue;
-    return PANEL_CONFIGS.calm;
-  }
+  // ======== STEP 1: Analyze Story ========
+  const runStep1 = async () => {
+    log('Step 1: ì¤í ë¦¬ ë¶ì ìì...', 'info');
+    setStep(0);
+    const result = await callText(PROMPTS.ANALYZE_STORY, sourceText);
+    const parsed = parseJSON(result);
+    log(`ë¶ì ìë£: ìºë¦­í° ${parsed.characters?.length || 0}ëª, ë°°ê²½ ${parsed.backgrounds?.length || 0}ê°, íë¡¯ ${parsed.plotBeats?.length || 0}ê°`, 'success');
+    setAnalysis(parsed);
+    setProjectTitle(parsed.title || sourceText.substring(0, 20));
+    setCompletedSteps(prev => new Set([...prev, 0]));
+    setStep(1);
+    return parsed;
+  };
 
-  const runPhase5 = useCallback(async () => {
-    if (!enableWebtoon) { log('[Phase 5] Webtoon disabled, skipping'); transition('COMPLETED'); return; }
-    transition('PHASE_5_EXPANDING');
-    log('[Phase 5] Expanding to webtoon multi-panels...');
-    const updated = [...lfScenesRef.current];
-    for (let i=0; i<updated.length; i++) {
-      if (abortRef.current) throw new Error('Aborted');
-      setCurrentSceneIdx(i);
-      const sc = updated[i];
-      if (!sc.anchorImage) continue;
-      const mood = sc.narrativeMood || 'calm';
-      const config = getMoodPanelConfig(mood);
-      const hasDialogue = sc.dialogues && sc.dialogues.length > 0;
-      let panels = [...config.panels];
-      // If scene has dialogue but isn't dialogue-typed, inject a dialogue close-up
-      if (hasDialogue && config !== PANEL_CONFIGS.dialogue) {
-        panels.splice(1, 0, PANEL_CONFIGS.dialogue.panels[3]); // reaction_close
+  // ======== STEP 2: Generate Reference Images ========
+  const runStep2 = async (analysisData) => {
+    const data = analysisData || analysis;
+    if (!data) throw new Error('ë¶ì ë°ì´í° ìì');
+    log('Step 2: ë í¼ë°ì¤ ì´ë¯¸ì§ ìì± ìì...', 'info');
+    setStep(1);
+    const refs = {characters:{}, backgrounds:{}};
+
+    // Generate character references
+    for (let i = 0; i < data.characters.length; i++) {
+      if (abortRef.current) throw new Error('ì¤ë¨ë¨');
+      const char = data.characters[i];
+      log(`ìºë¦­í° ë í¼ë°ì¤ ìì± (${i+1}/${data.characters.length}): ${char.name}`);
+      try {
+        const images = await callImage(char.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality, detailed');
+        refs.characters[char.id] = images[0];
+        log(`${char.name} ë í¼ë°ì¤ ìë£`, 'success');
+      } catch(e) {
+        log(`${char.name} ë í¼ë°ì¤ ì¤í¨: ${e.message}`, 'error');
       }
-      // Cap at 7 panels max
-      panels = panels.slice(0, 7);
-      log('[Phase 5] Scene '+(i+1)+'/'+updated.length+' mood="'+mood+'" type="'+config.label+'" panels='+panels.length);
-      // Collect character reference images
+      setReferences({...refs});
+    }
+
+    // Generate background references
+    for (let i = 0; i < data.backgrounds.length; i++) {
+      if (abortRef.current) throw new Error('ì¤ë¨ë¨');
+      const bg = data.backgrounds[i];
+      log(`ë°°ê²½ ë í¼ë°ì¤ ìì± (${i+1}/${data.backgrounds.length}): ${bg.name}`);
+      try {
+        const images = await callImage(bg.refPrompt + ', no characters, manhwa background art, detailed environment, wide shot', {aspectRatio: '16:9'});
+        refs.backgrounds[bg.id] = images[0];
+        log(`${bg.name} ë°°ê²½ ìë£`, 'success');
+      } catch(e) {
+        log(`${bg.name} ë°°ê²½ ì¤í¨: ${e.message}`, 'error');
+      }
+      setReferences({...refs});
+    }
+
+    setCompletedSteps(prev => new Set([...prev, 1]));
+    setStep(2);
+    return refs;
+  };
+
+  // ======== STEP 3: Create Storyboard ========
+  const runStep3 = async (analysisData) => {
+    const data = analysisData || analysis;
+    if (!data) throw new Error('ë¶ì ë°ì´í° ìì');
+    log('Step 3: ì¤í ë¦¬ë³´ë ìì± ìì...', 'info');
+    setStep(2);
+
+    // Build context with character and background details
+    const charContext = data.characters.map(c => `${c.id}: ${c.name} (${c.role}) - ${c.appearance}`).join('\n');
+    const bgContext = data.backgrounds.map(b => `${b.id}: ${b.name} - ${b.description}`).join('\n');
+    const plotContext = data.plotBeats.map(p => `Beat ${p.beat}: ${p.summary} [mood: ${p.mood}, chars: ${p.characters.join(',')}, loc: ${p.location}]`).join('\n');
+
+    const userPrompt = `Story title: ${data.title}
+Synopsis: ${data.synopsis}
+
+Characters:
+${charContext}
+
+Backgrounds:
+${bgContext}
+
+Plot beats:
+${plotContext}
+
+Original story text:
+${sourceText.substring(0, 6000)}
+
+Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt must include FULL character appearance descriptions (not just IDs).`;
+
+    const result = await callText(PROMPTS.CREATE_STORYBOARD, userPrompt);
+    const parsed = parseJSON(result);
+    log(`ì¤í ë¦¬ë³´ë ìë£: ${parsed.length}ê° í¨ë`, 'success');
+    setStoryboard(parsed);
+    setPanels(new Array(parsed.length).fill(null));
+    setCompletedSteps(prev => new Set([...prev, 2]));
+    setStep(3);
+    return parsed;
+  };
+
+  // ======== STEP 4: Generate Panel Images ========
+  const runStep4 = async (storyboardData, refsData) => {
+    const sb = storyboardData || storyboard;
+    const refs = refsData || references;
+    if (!sb.length) throw new Error('ì¤í ë¦¬ë³´ë ìì');
+    log('Step 4: í¨ë ì´ë¯¸ì§ ìì± ìì...', 'info');
+    setStep(3);
+
+    const newPanels = [...(panels.length === sb.length ? panels : new Array(sb.length).fill(null))];
+
+    for (let i = 0; i < sb.length; i++) {
+      if (abortRef.current) throw new Error('ì¤ë¨ë¨');
+      if (newPanels[i]) { log(`í¨ë ${i+1} ì´ë¯¸ ìì±ë¨, ê±´ëë`); continue; }
+
+      const panel = sb[i];
+      log(`í¨ë ${i+1}/${sb.length} ìì± ì¤... (${panel.type}, ${panel.shotSize})`);
+
+      // Build reference images for this panel's characters
       const refImages = [];
-      const comp = sc.compositionData || {};
-      if ((globalAsset||{}).characters) {
-        const charIds = sc.keyCharacters || (comp.characterPoses||[]).map(cp=>cp.characterId);
-        for (const cid of charIds) {
-          const ch = globalAsset.characters.find(c=>c.id===cid);
-          if (ch && ch.referenceImageUrl) { refImages.push({image: ch.referenceImageUrl, description: ch.name+': '+ch.referencePrompt}); }
+      if (panel.characters && analysis) {
+        for (const pc of panel.characters) {
+          const charId = pc.id || pc;
+          if (refs.characters[charId]) {
+            const charInfo = analysis.characters.find(c => c.id === charId);
+            refImages.push({image: refs.characters[charId], description: charInfo?.appearance || charInfo?.name || charId});
+          }
+        }
+        // Also add background reference if available
+        if (panel.background && refs.backgrounds[panel.background]) {
+          refImages.push({image: refs.backgrounds[panel.background], description: 'background environment'});
         }
       }
-      const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
-      if (bgRef && bgRef.referenceImageUrl) { refImages.push({image: bgRef.referenceImageUrl, description: 'Background: '+bgRef.referencePrompt}); }
-      // Build base scene prompt
-      const basePrompt = sc.imagePrompt?.prompt || sc.summary;
-      const charRefs = [];
-      if ((globalAsset||{}).characters) {
-        const charIds = sc.keyCharacters || (comp.characterPoses||[]).map(cp=>cp.characterId);
-        for (const cid of charIds) {
-          const ch = globalAsset.characters.find(c=>c.id===cid);
-          if (ch && ch.referencePrompt) charRefs.push(ch.name+': '+ch.referencePrompt);
-        }
-      }
-      const charCtx = charRefs.length > 0 ? '\nCharacter details: '+charRefs.join('; ') : '';
-      const bgCtx = bgRef && bgRef.referencePrompt ? '\nBackground: '+bgRef.referencePrompt : '';
-      sc.webtoonAssets = [];
-      // Include anchor image as first panel
-      sc.webtoonAssets.push({templateId:'anchor', panelLabel:'메인 앵커', url: sc.anchorImage.url});
-      for (const panel of panels) {
-        if (abortRef.current) throw new Error('Aborted');
+
+      try {
+        const images = await callImage(panel.imagePrompt, {referenceImages: refImages, aspectRatio: '3:4'});
+        newPanels[i] = images[0];
+        log(`í¨ë ${i+1} ìë£`, 'success');
+      } catch(e) {
+        log(`í¨ë ${i+1} ì¤í¨: ${e.message}`, 'error');
+        // Retry without reference
         try {
-          const fullPrompt = basePrompt + ', ' + panel.prompt + charCtx + bgCtx;
-          const urls = await callImageLF(fullPrompt, {referenceImages: refImages, aspectRatio: '9:16'});
-          sc.webtoonAssets.push({templateId: panel.type, panelLabel: panel.prompt.split(',')[0], url: urls[0]});
-          log('[Phase 5] Panel '+panel.type+' done for scene '+(i+1));
-        } catch(e) { log('[Phase 5] Panel '+panel.type+' failed: '+e.message, 'warn'); }
-        // Update UI progressively
-        lfScenesRef.current = [...updated]; setLfScenes([...updated]);
+          const images = await callImage(panel.imagePrompt, {aspectRatio: '3:4'});
+          newPanels[i] = images[0];
+          log(`í¨ë ${i+1} ë í¼ë°ì¤ ìì´ ì¬ìì± ìë£`, 'success');
+        } catch(e2) {
+          log(`í¨ë ${i+1} ìµì¢ ì¤í¨: ${e2.message}`, 'error');
+        }
       }
-      sc.status = 'complete';
+      setPanels([...newPanels]);
     }
-    lfScenesRef.current = updated; setLfScenes([...updated]);
-    if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase5_webtoon', {scenes: updated.map(s=>({sceneNumber:s.sceneNumber, webtoonAssets:(s.webtoonAssets||[]).map(a=>({templateId:a.templateId,panelLabel:a.panelLabel}))}))}); log('[AutoSave] Phase 5 saved'); } catch(e){log('[AutoSave] Phase 5 error: '+e.message,'warn');} }
-    transition('PHASE_5_COMPLETE');
-    transition('COMPLETED');
-    log('[Phase 5] Complete - '+updated.reduce((n,s)=>(n+(s.webtoonAssets||[]).length),0)+' total panels generated');
-  }, [enableWebtoon, callImageLF, globalAsset, transition, log, currentProjectId]);
 
-  const runFullPipeline = useCallback(async () => {
-    if (!sourceText.trim()) { log('Source text empty', 'error'); return; }
-    // Auto-create project if none exists
-    if (!currentProjectId && getDb()) {
-      const newId = 'proj_' + Date.now();
-      setCurrentProjectId(newId);
-      const title = projectTitle || sourceText.trim().substring(0, 30);
-      setProjectTitle(title);
-      try { await fbSaveProject(newId, {title, phase: 'IDLE', createdAt: firebase.firestore.FieldValue.serverTimestamp()}); log('[Project] Auto-created: '+newId); } catch(e){}
-    }
-    setRunning(true); abortRef.current = false; setErrorMsg('');
+    setCompletedSteps(prev => new Set([...prev, 3]));
+    setStep(4);
+    return newPanels;
+  };
+
+  // ======== Full Pipeline ========
+  const runFullPipeline = async () => {
+    setRunning(true); setErrorMsg(''); abortRef.current = false;
     try {
-      await runPhase1(); if(abortRef.current)return;
-      await runPhase2(); if(abortRef.current)return;
-      await runPhase3(); if(abortRef.current)return;
-      await runPhase4(); if(abortRef.current)return;
-      await runPhase5();
-    } catch(e) { if(e.message!=='Aborted'){transition('ERROR',e.message);setErrorMsg(e.message);log('Pipeline error: '+e.message,'error');} }
+      const a = await runStep1();
+      if (abortRef.current) return;
+      const r = await runStep2(a);
+      if (abortRef.current) return;
+      const s = await runStep3(a);
+      if (abortRef.current) return;
+      await runStep4(s, r);
+      setCompletedSteps(prev => new Set([...prev, 4]));
+      log('ì¹í° 1í ìì± ìë£!', 'success');
+    } catch(e) {
+      setErrorMsg(e.message);
+      log('ì¤ë¥: ' + e.message, 'error');
+    } finally { setRunning(false); }
+  };
+
+  // ======== Run Single Step ========
+  const runSingleStep = async (stepIdx) => {
+    setRunning(true); setErrorMsg(''); abortRef.current = false;
+    try {
+      if (stepIdx === 0) await runStep1();
+      else if (stepIdx === 1) await runStep2();
+      else if (stepIdx === 2) await runStep3();
+      else if (stepIdx === 3) await runStep4();
+      else if (stepIdx === 4) { setStep(4); setCompletedSteps(prev => new Set([...prev, 4])); }
+    } catch(e) {
+      setErrorMsg(e.message);
+      log('ì¤ë¥: ' + e.message, 'error');
+    } finally { setRunning(false); }
+  };
+
+  // ======== Regenerate single panel ========
+  const regeneratePanel = async (idx) => {
+    if (!storyboard[idx]) return;
+    setRunning(true);
+    try {
+      const panel = storyboard[idx];
+      const refImages = [];
+      if (panel.characters && analysis) {
+        for (const pc of panel.characters) {
+          const charId = pc.id || pc;
+          if (references.characters[charId]) {
+            const charInfo = analysis.characters.find(c => c.id === charId);
+            refImages.push({image: references.characters[charId], description: charInfo?.appearance || ''});
+          }
+        }
+      }
+      log(`í¨ë ${idx+1} ì¬ìì± ì¤...`);
+      const images = await callImage(panel.imagePrompt, {referenceImages: refImages, aspectRatio: '3:4'});
+      const newPanels = [...panels];
+      newPanels[idx] = images[0];
+      setPanels(newPanels);
+      log(`í¨ë ${idx+1} ì¬ìì± ìë£`, 'success');
+    } catch(e) { log(`ì¬ìì± ì¤í¨: ${e.message}`, 'error'); }
     finally { setRunning(false); }
-  }, [sourceText, runPhase1, runPhase2, runPhase3, runPhase4, runPhase5, transition, log]);
+  };
 
-  const stopPipeline = () => { abortRef.current=true; setRunning(false); };
-
-  // === Per-scene image generation ===
-  const generateSceneImage = useCallback(async (idx) => {
-    const scenes = lfScenesRef.current;
-    const sc = scenes[idx];
-    if (!sc) { setErrorMsg('Scene data not ready'); return; }
-    if (!sc.imagePrompt && !sc.compositionData) { setErrorMsg('씬c 분할과 P3을 먼저 실행하세요'); return; }
-    log('[GenImg] Generating image for scene ' + (idx+1));
-    sc.status = 'generating_image';
-    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
+  // ======== Regenerate single character reference ========
+  const regenerateCharRef = async (charId) => {
+    if (!analysis) return;
+    const char = analysis.characters.find(c => c.id === charId);
+    if (!char) return;
+    setRunning(true);
     try {
-      let prompt;
-      if (sc.imagePrompt && typeof sc.imagePrompt === 'object' && sc.imagePrompt.prompt) { prompt = sc.imagePrompt.prompt; }
-      else if (typeof sc.imagePrompt === 'string') { prompt = sc.imagePrompt; }
-      else { prompt = 'manhwa webtoon style, ' + sc.summary; }
-      const comp = sc.compositionData || {};
-      const charRefs = ((comp.characterPoses||[]).map(cp => { const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null; return cr ? cr.referencePrompt : ''; })).filter(Boolean);
-      if (charRefs.length > 0) { prompt += '\nCharacter details: ' + charRefs.join('; '); }
-      if (!charRefs.length && sc.keyCharacters && (globalAsset||{}).characters) {
-        const kcRefs = sc.keyCharacters.map(cid => { const cr = globalAsset.characters.find(ch=>ch.id===cid); return cr ? cr.referencePrompt : ''; }).filter(Boolean);
-        if (kcRefs.length > 0) { prompt += '\nCharacter details: ' + kcRefs.join('; '); }
-      }
-      const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
-      if (bgRef && bgRef.referencePrompt) { prompt += '\nBackground: ' + bgRef.referencePrompt; }
-      const refImages = [];
-      if ((globalAsset||{}).characters) {
-        const charIds = sc.keyCharacters || (comp.characterPoses||[]).map(cp=>cp.characterId);
-        for (const cid of charIds) {
-          const ch = globalAsset.characters.find(c=>c.id===cid);
-          if (ch && ch.referenceImageUrl) { refImages.push({image: ch.referenceImageUrl, description: ch.name+': '+ch.referencePrompt}); }
-        }
-      }
-      if (bgRef && bgRef.referenceImageUrl) { refImages.push({image: bgRef.referenceImageUrl, description: 'Background: '+bgRef.referencePrompt}); }
-      log('[GenImg] Using '+refImages.length+' reference images for consistency');
-      const imgResult = await callImageLF(prompt, {referenceImages: refImages});
-      const imgUrl = Array.isArray(imgResult) ? imgResult[0] : imgResult;
-      sc.anchorImage = { url: imgUrl, prompt };
-      sc.status = sc.video ? 'complete' : 'image_done';
-      log('[GenImg] Scene ' + (idx+1) + ' image done');
-      // Auto-save scene images
-      if (getDb() && currentProjectId) { try { await fbSavePhase(currentProjectId, 'phase3_images', {scenes: scenes.filter(s=>s.anchorImage).map(s=>({sceneNumber:s.sceneNumber, anchorImage:s.anchorImage, status:s.status}))}); log('[AutoSave] Scene images saved'); } catch(e){log('[AutoSave] Image save error: '+e.message,'warn');} }
-    } catch(e) { log('[GenImg] Error: ' + e.message); sc.status = 'error'; setErrorMsg('Image gen failed: ' + e.message); }
-    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
-  }, [callImageLF, globalAsset, log, currentProjectId]);
+      log(`${char.name} ë í¼ë°ì¤ ì¬ìì± ì¤...`);
+      const images = await callImage(char.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality');
+      setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
+      log(`${char.name} ë í¼ë°ì¤ ì¬ìì± ìë£`, 'success');
+    } catch(e) { log(`ì¬ìì± ì¤í¨: ${e.message}`, 'error'); }
+    finally { setRunning(false); }
+  };
 
-  // === Regenerate image with edited prompt ===
-  const regenerateSceneImageWithPrompt = useCallback(async (idx, newPrompt) => {
-    const scenes = lfScenesRef.current;
-    const sc = scenes[idx];
-    if (!sc) { setErrorMsg('Scene data not ready'); return; }
-    log('[RegenImg] Regenerating image for scene ' + (idx+1));
-    sc.status = 'generating_image';
-    if (sc.imagePrompt && typeof sc.imagePrompt === 'object') { sc.imagePrompt.prompt = newPrompt; }
-    else { sc.imagePrompt = { prompt: newPrompt }; }
-    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
+  // Save / Load
+  const saveProject = async () => {
     try {
-      let prompt = newPrompt;
-      const comp = sc.compositionData || {};
-      const charRefs = ((comp.characterPoses||[]).map(cp => { const cr = (globalAsset||{}).characters ? globalAsset.characters.find(ch=>ch.id===cp.characterId) : null; return cr ? cr.referencePrompt : ''; })).filter(Boolean);
-      if (charRefs.length > 0) { prompt += '\nCharacter details: ' + charRefs.join('; '); }
-      if (!charRefs.length && sc.keyCharacters && (globalAsset||{}).characters) {
-        const kcRefs = sc.keyCharacters.map(cid => { const cr = globalAsset.characters.find(ch=>ch.id===cid); return cr ? cr.referencePrompt : ''; }).filter(Boolean);
-        if (kcRefs.length > 0) { prompt += '\nCharacter details: ' + kcRefs.join('; '); }
-      }
-      const bgRef = (globalAsset||{}).backgrounds ? globalAsset.backgrounds.find(b=>b.id===sc.primaryLocation) : null;
-      if (bgRef && bgRef.referencePrompt) { prompt += '\nBackground: ' + bgRef.referencePrompt; }
-      const refImages = [];
-      if ((globalAsset||{}).characters) {
-        const charIds = sc.keyCharacters || (comp.characterPoses||[]).map(cp=>cp.characterId);
-        for (const cid of charIds) {
-          const ch = globalAsset.characters.find(c=>c.id===cid);
-          if (ch && ch.referenceImageUrl) { refImages.push({image: ch.referenceImageUrl, description: ch.name+': '+ch.referencePrompt}); }
-        }
-      }
-      if (bgRef && bgRef.referenceImageUrl) { refImages.push({image: bgRef.referenceImageUrl, description: 'Background: '+bgRef.referencePrompt}); }
-      const imgResult = await callImageLF(prompt, {referenceImages: refImages});
-      const imgUrl = Array.isArray(imgResult) ? imgResult[0] : imgResult;
-      sc.anchorImage = { url: imgUrl, prompt: newPrompt };
-      sc.status = sc.video ? 'complete' : 'image_done';
-      log('[RegenImg] Scene ' + (idx+1) + ' image regenerated');
-    } catch(e) { log('[RegenImg] Error: ' + e.message); sc.status = 'error'; setErrorMsg('Image regen failed: ' + e.message); }
-    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
-    setEditingPromptIdx(-1);
-  }, [callImageLF, globalAsset, log]);
+      const id = projectId || 'proj_' + Date.now();
+      if (!projectId) setProjectId(id);
+      await fbSaveProject(id, {title: projectTitle || 'ë¬´ì ', step, completedSteps: [...completedSteps]});
+      if (analysis) await fbSavePhase(id, 'step1_analysis', {analysis, sourceText});
+      if (Object.keys(references.characters).length > 0) await fbSavePhase(id, 'step2_references', references);
+      if (storyboard.length > 0) await fbSavePhase(id, 'step3_storyboard', {storyboard});
+      if (panels.some(p => p)) await fbSavePhase(id, 'step4_panels', {panels});
+      log('íë¡ì í¸ ì ì¥ ìë£', 'success');
+    } catch(e) { log('ì ì¥ ì¤í¨: ' + e.message, 'error'); }
+  };
 
-  // === Resize image for video generation (keep under 1MB) ===
-  function resizeImageForVeo(dataUrl, maxWidth, maxHeight) {
-    return new Promise((resolve) => {
-      if (!dataUrl || !dataUrl.startsWith('data:')) { resolve(null); return; }
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let w = img.width, h = img.height;
-        if (w > maxWidth || h > maxHeight) {
-          const ratio = Math.min(maxWidth / w, maxHeight / h);
-          w = Math.round(w * ratio);
-          h = Math.round(h * ratio);
-        }
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        const resized = canvas.toDataURL('image/jpeg', 0.85);
-        resolve(resized.split(',')[1]);
-      };
-      img.onerror = () => resolve(null);
-      img.src = dataUrl;
-    });
-  }
-
-  // === Per-scene video generation ===
-  const generateSceneVideo = useCallback(async (idx) => {
-    const scenes = lfScenesRef.current;
-    const sc = scenes[idx];
-    if (!sc) { setErrorMsg('Scene data not ready'); return; }
-    if (!sc.anchorImage) { setErrorMsg('이미지를 먼저 생성하세요'); return; }
-    log('[GenVid] Generating video for scene ' + (idx+1));
-    sc.status = 'generating_video';
-    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
+  const loadProject = async (pid) => {
     try {
-      const motionPrompt = (sc.videoPrompt && sc.videoPrompt.motionPrompt) || (sc.compositionData && sc.compositionData.motionHint) || sc.summary;
-      let imageB64 = null;
-      if (sc.anchorImage && sc.anchorImage.url) {
-        const imgUrl = typeof sc.anchorImage.url === 'string' ? sc.anchorImage.url : String(sc.anchorImage.url || '');
-        if (imgUrl.startsWith('data:')) {
-          // Resize to reasonable dimensions to avoid payload too large
-          imageB64 = await resizeImageForVeo(imgUrl, 1280, 720);
-          if (imageB64) log('[GenVid] Image resized for Veo, size: ' + Math.round(imageB64.length/1024) + 'KB');
-        }
-      }
-      log('[GenVid] Calling Veo API...');
-      const videoUrls = await callVeo(motionPrompt, imageB64, {aspectRatio:'9:16', duration:5});
-      if (videoUrls && videoUrls.length > 0) { sc.video = { url: videoUrls[0], durationSec: 5, motionPrompt }; sc.status = 'complete'; log('[GenVid] Scene ' + (idx+1) + ' video done'); }
-      else { sc.status = sc.anchorImage ? 'image_done' : 'pending'; log('[GenVid] No video returned'); }
-    } catch(e) { log('[GenVid] Error: ' + e.message); sc.status = 'error'; setErrorMsg('Video gen failed: ' + e.message); }
-    lfScenesRef.current = [...scenes]; setLfScenes([...scenes]);
-  }, [log]);
+      log('íë¡ì í¸ ë¡ë ì¤...');
+      const proj = await fbLoadProject(pid);
+      setProjectId(pid);
+      setProjectTitle(proj.title || '');
+      const s1 = await fbLoadPhase(pid, 'step1_analysis');
+      if (s1) { setAnalysis(s1.analysis); setSourceText(s1.sourceText || ''); }
+      const s2 = await fbLoadPhase(pid, 'step2_references');
+      if (s2) setReferences(s2);
+      const s3 = await fbLoadPhase(pid, 'step3_storyboard');
+      if (s3) setStoryboard(s3.storyboard || []);
+      const s4 = await fbLoadPhase(pid, 'step4_panels');
+      if (s4) setPanels(s4.panels || []);
+      if (proj.completedSteps) setCompletedSteps(new Set(proj.completedSteps));
+      if (proj.step !== undefined) setStep(proj.step);
+      setShowProjects(false);
+      log('íë¡ì í¸ ë¡ë ìë£', 'success');
+    } catch(e) { log('ë¡ë ì¤í¨: ' + e.message, 'error'); }
+  };
 
-  // === Download media ===
-  const downloadMedia = useCallback((dataUrl, filename) => {
-    const a = document.createElement('a'); a.href = dataUrl; a.download = filename;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  }, []);
+  const loadProjectList = async () => {
+    try { setProjectList(await fbListProjects()); } catch(e) { log('ëª©ë¡ ë¡ë ì¤í¨: ' + e.message, 'error'); }
+  };
 
-  // === localStorage save/load ===
-  const SAVE_KEY = 'LF_PIPELINE_STATE';
-  useEffect(() => {
-    try { const s = localStorage.getItem(SAVE_KEY); if (s) { const saved = JSON.parse(s);
-      if (saved.projectTitle) setProjectTitle(saved.projectTitle);
-      if (saved.sourceText) setSourceText(saved.sourceText);
-      if (saved.globalAsset) setGlobalAsset(saved.globalAsset);
-      if (saved.lfScenes && saved.lfScenes.length > 0) { lfScenesRef.current = saved.lfScenes; setLfScenes(saved.lfScenes); }
-      if (saved.phaseHistory) setPhaseHistory(saved.phaseHistory);
-      if (saved.phase && saved.phase !== 'IDLE') setPhase(saved.phase.includes('COMPLETE') || saved.phase === 'COMPLETED' ? saved.phase : 'IDLE');
-      log('[System] restored pipeline state');
-    }} catch(e) {}
-  }, []);
-  useEffect(() => {
-    if (lfScenesRef.current.length > 0 || globalAsset || projectTitle) {
-      try { localStorage.setItem(SAVE_KEY, JSON.stringify({ projectTitle, sourceText, globalAsset, lfScenes: lfScenesRef.current, phase, phaseHistory })); } catch(e) {}
-    }
-  }, [phase, projectTitle, globalAsset, lfScenes]);
-
-  const phaseNum = phase.startsWith('PHASE_') ? parseInt(phase.split('_')[1]) : phase==='COMPLETED' ? 6 : 0;
-  const progressPct = phase==='COMPLETED' ? 100 : phase==='IDLE' ? 0 : Math.round((phaseNum/5)*100);
-
+  // ======== RENDER ========
   return (
-    <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden'}}>
-      {/* Tab Content */}
-      <div style={{flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden'}}>
-        {activeTab === 'source' && (
-          <div style={{display: 'flex', flexDirection: 'column', gap: 12, flex: 1, overflow: 'hidden'}}>
-            {/* Project Bar */}
-            <div style={{display: 'flex', gap: 8, flexWrap: 'wrap', padding: 12, background: '#f0f0f8', borderRadius: 8, alignItems: 'center'}}>
-              <span style={{fontSize: 11, fontWeight: 600, color: 'var(--text2)'}}>📁 프로젝트</span>
-              {currentProjectId && <span style={{fontSize: 11, color: 'var(--text2)', background: 'white', padding: '2px 8px', borderRadius: 4}}>{projectTitle || currentProjectId}</span>}
-              <button onClick={()=>setShowProjectPanel(!showProjectPanel)} className="btn btn-secondary btn-sm">프로젝트 목록</button>
-              <button onClick={async()=>{if(currentProjectId && projectTitle) {setSavingStatus('전체 저장 중...'); try {
-                await fbSaveProject(currentProjectId, {title: projectTitle, phase, sceneCount: lfScenes.length, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
-                if (globalAsset) { await fbSavePhase(currentProjectId, 'phase1_assets', {globalAsset, sourceTextFull: sourceText}); }
-                if (lfScenes.length > 0) {
-                  await fbSavePhase(currentProjectId, 'phase2_scenes', {scenes: lfScenes});
-                  await fbSavePhase(currentProjectId, 'phase3_prompts', {scenes: lfScenes});
-                  const imgScenes = lfScenes.filter(s=>s.anchorImage);
-                  if (imgScenes.length > 0) { await fbSavePhase(currentProjectId, 'phase3_images', {scenes: imgScenes.map(s=>({sceneNumber:s.sceneNumber, anchorImage:s.anchorImage, status:s.status}))}); }
-                }
-                setSavingStatus('✅ 전체 저장됨'); setTimeout(()=>setSavingStatus(''), 3000);
-              } catch(e){setSavingStatus('❌ 저장 실패: '+e.message); log('[Save] Error: '+e.message,'error');}
-              }}} disabled={!projectTitle} className="btn btn-primary btn-sm">💾 저장</button>
-              <button onClick={()=>{setCurrentProjectId('proj_'+Date.now());setProjectTitle('');setSourceText('');setGlobalAsset(null);setLfScenes([]);lfScenesRef.current=[];phaseRef.current='IDLE';setPhase('IDLE');setErrorMsg('');}} className="btn btn-secondary btn-sm">+ 새 프로젝트</button>
-              {savingStatus && <span style={{fontSize: 11, color: savingStatus.includes('실패')?'var(--err)':'var(--success)'}}>  {savingStatus}</span>}
-              {showProjectPanel && projectList.length > 0 && (
-                <div style={{position: 'absolute', top: 200, left: 20, background: 'white', border: '1px solid var(--border)', borderRadius: 8, maxWidth: 300, maxHeight: 250, overflow: 'auto', zIndex: 10}}>
-                  {projectList.map(p => (
-                    <div key={p.id} style={{padding: '8px 12px', borderBottom: '1px solid var(--border)', cursor: 'pointer', fontSize: 12}} onClick={async()=>{
-                      setCurrentProjectId(p.id);setProjectTitle(p.title||p.id);setShowProjectPanel(false);
-                      setSavingStatus('불러오는 중...');
-                      try {
-                        const allData = await fbLoadAllPhases(p.id);
-                        if (allData.sourceText) setSourceText(allData.sourceText);
-                        if (allData.globalAsset) setGlobalAsset(allData.globalAsset);
-                        if (allData.scenes && allData.scenes.length > 0) { lfScenesRef.current = allData.scenes; setLfScenes(allData.scenes); }
-                        if (allData.phase && allData.phase !== 'IDLE') { phaseRef.current = allData.phase; setPhase(allData.phase); }
-                        setSavingStatus('✅ 불러옴 (P1:'+(allData.globalAsset?'✓':'✗')+' 씬c:'+allData.scenes.length+')');
-                        setTimeout(()=>setSavingStatus(''), 4000);
-                        log('[Load] Project loaded: '+p.title+' phase='+allData.phase+' scenes='+allData.scenes.length);
-                      } catch(e) { setSavingStatus('❌ 불러오기 실패'); log('[Load] Error: '+e.message,'error'); }
-                    }}>
-                      <div style={{fontWeight: 600}}>{p.title||p.id}</div>
-                      <div style={{fontSize: 10, color: 'var(--text2)'}}>{p.phase} · {p.sceneCount||0} scenes</div>
+    <div>
+      {/* Header */}
+      <div className="app-header">
+        <div className="app-logo">ì¹í° íë¡ëì</div>
+        <div className="nav-tabs">
+          <select className="form-select" style={{width:140,padding:'6px 10px',fontSize:12}} value={imageProvider} onChange={e=>setImageProvider(e.target.value)}>
+            <option value="imagen4">Imagen 4</option>
+            <option value="nanoBanana">Gemini Image</option>
+          </select>
+        </div>
+        <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API ì¤ì </button>
+      </div>
+
+      {showApiModal && <ApiKeyModal onClose={()=>setShowApiModal(false)} />}
+
+      <div className="main-content">
+        {/* Step Bar */}
+        <div className="step-bar">
+          {STEPS.map((s, i) => (
+            <div key={i}
+              className={`step-item ${completedSteps.has(i) ? 'done' : ''} ${step === i && running ? 'current' : ''} ${step === i && !running ? 'active' : ''}`}
+              onClick={() => !running && setStep(i)}
+            >
+              {STEP_LABELS[i]}
+              {completedSteps.has(i) && ' â'}
+            </div>
+          ))}
+        </div>
+
+        {/* Error */}
+        {errorMsg && <div style={{padding:'8px 16px',background:'#f8d7da',color:'#721c24',borderRadius:8,marginBottom:12,fontSize:13}}>{errorMsg}</div>}
+
+        {/* Content area */}
+        <div style={{flex:1,overflow:'auto',display:'flex',flexDirection:'column',gap:16}}>
+
+          {/* ===== STEP 0: Source Input & Analysis ===== */}
+          {step === 0 && (
+            <div style={{display:'flex',flexDirection:'column',gap:16}}>
+              <div className="card">
+                <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+                  <button className="btn btn-primary" onClick={runFullPipeline} disabled={!sourceText.trim() || running}>
+                    {running ? 'ìì± ì¤...' : 'ì ì²´ ìë ìì±'}
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={()=>runSingleStep(0)} disabled={!sourceText.trim() || running}>Step 1ë§ ì¤í</button>
+                  {running && <button className="btn btn-danger btn-sm" onClick={()=>{abortRef.current=true;}}>ì¤ì§</button>}
+                  <div style={{marginLeft:'auto',display:'flex',gap:6}}>
+                    <button className="btn btn-outline btn-sm" onClick={()=>{setShowProjects(!showProjects);if(!showProjects)loadProjectList();}}>íë¡ì í¸</button>
+                    <button className="btn btn-outline btn-sm" onClick={saveProject} disabled={running}>ì ì¥</button>
+                  </div>
+                </div>
+
+                {showProjects && (
+                  <div style={{marginBottom:12,padding:12,background:'var(--surface2)',borderRadius:8}}>
+                    <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>ì ì¥ë íë¡ì í¸</div>
+                    {projectList.map(p => (
+                      <div key={p.id} style={{padding:'6px 0',borderBottom:'1px solid var(--border)',cursor:'pointer',fontSize:13}} onClick={()=>loadProject(p.id)}>
+                        {p.title || p.id}
+                      </div>
+                    ))}
+                    {projectList.length === 0 && <div style={{fontSize:12,color:'var(--text2)'}}>ì ì¥ë íë¡ì í¸ ìì</div>}
+                  </div>
+                )}
+
+                <textarea className="form-textarea" value={sourceText} onChange={e=>setSourceText(e.target.value)}
+                  placeholder="ì¹í°ì¼ë¡ ë§ë¤ ìì¤/ì¤í ë¦¬ íì¤í¸ë¥¼ ìë ¥íì¸ì. ì´ íì¤í¸ê° ì¹í° 1íë¡ ë³íë©ëë¤."
+                  style={{minHeight:250}} disabled={running} />
+                <div style={{textAlign:'right',fontSize:11,color:'var(--text2)',marginTop:4}}>{sourceText.length} chars</div>
+              </div>
+
+              {/* Analysis result preview */}
+              {analysis && (
+                <div className="card">
+                  <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>ë¶ì ê²°ê³¼: {analysis.title}</div>
+                  <div style={{fontSize:13,color:'var(--text2)',marginBottom:12}}>{analysis.synopsis}</div>
+                  <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
+                    <div>
+                      <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>ìºë¦­í° ({analysis.characters?.length})</div>
+                      {analysis.characters?.map(c => (
+                        <div key={c.id} style={{marginBottom:4}}><span className="tag tag-char">{c.role}</span> <strong>{c.name}</strong> â {c.personality}</div>
+                      ))}
+                    </div>
+                    <div>
+                      <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>ë°°ê²½ ({analysis.backgrounds?.length})</div>
+                      {analysis.backgrounds?.map(b => (
+                        <div key={b.id} style={{marginBottom:4}}><span className="tag tag-loc">{b.type}</span> {b.name}</div>
+                      ))}
+                    </div>
+                    <div>
+                      <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>íë¡¯ ({analysis.plotBeats?.length})</div>
+                      {analysis.plotBeats?.map(p => (
+                        <div key={p.beat} style={{marginBottom:4,fontSize:12}}><span className="tag tag-mood">{p.mood}</span> {p.summary}</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ===== STEP 1: Character/Background References ===== */}
+          {step === 1 && (
+            <div style={{display:'flex',flexDirection:'column',gap:16}}>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(1)} disabled={!analysis || running}>ë í¼ë°ì¤ ìì±</button>
+                {running && <span className="status-badge running">ìì± ì¤...</span>}
+              </div>
+
+              {!analysis && <div className="placeholder">ë¨¼ì  Step 1 (ì¤í ë¦¬ ë¶ì)ì ì¤ííì¸ì</div>}
+
+              {analysis && (
+                <div>
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>ìºë¦­í° ë í¼ë°ì¤</div>
+                  <div className="ref-grid">
+                    {analysis.characters?.map(c => (
+                      <div key={c.id} className="ref-card">
+                        {references.characters[c.id] ? (
+                          <img src={references.characters[c.id]} alt={c.name} />
+                        ) : (
+                          <div className="panel-placeholder">ë¯¸ìì±</div>
+                        )}
+                        <div className="ref-card-info">
+                          <div className="ref-card-name">{c.name} <span className="tag tag-char" style={{fontSize:10}}>{c.role}</span></div>
+                          <div className="ref-card-desc">{c.appearance}</div>
+                          <button className="btn btn-outline btn-sm" style={{marginTop:6,width:'100%',justifyContent:'center'}}
+                            onClick={()=>regenerateCharRef(c.id)} disabled={running}>ì¬ìì±</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{fontWeight:700,fontSize:14,marginTop:20,marginBottom:12}}>ë°°ê²½ ë í¼ë°ì¤</div>
+                  <div className="ref-grid" style={{gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))'}}>
+                    {analysis.backgrounds?.map(b => (
+                      <div key={b.id} className="ref-card">
+                        {references.backgrounds[b.id] ? (
+                          <img src={references.backgrounds[b.id]} alt={b.name} style={{aspectRatio:'16/9'}} />
+                        ) : (
+                          <div className="panel-placeholder" style={{aspectRatio:'16/9'}}>ë¯¸ìì±</div>
+                        )}
+                        <div className="ref-card-info">
+                          <div className="ref-card-name">{b.name}</div>
+                          <div className="ref-card-desc">{b.description}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ===== STEP 2: Storyboard ===== */}
+          {step === 2 && (
+            <div style={{display:'flex',flexDirection:'column',gap:16}}>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(2)} disabled={!analysis || running}>ì¤í ë¦¬ë³´ë ìì±</button>
+                {storyboard.length > 0 && <span style={{fontSize:12,color:'var(--text2)'}}>{storyboard.length}ê° í¨ë</span>}
+                {running && <span className="status-badge running">ìì± ì¤...</span>}
+              </div>
+
+              {storyboard.length === 0 && <div className="placeholder">ì¤í ë¦¬ë³´ëë¥¼ ìì±íë©´ í¨ëë³ êµ¬ì±ì´ íìë©ëë¤</div>}
+
+              {storyboard.length > 0 && (
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  {storyboard.map((panel, i) => (
+                    <div key={i} className="card" style={{padding:12,display:'flex',gap:12,alignItems:'flex-start'}}>
+                      <div style={{minWidth:36,height:36,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:14}}>
+                        {panel.panelNumber || i+1}
+                      </div>
+                      <div style={{flex:1}}>
+                        <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:4}}>
+                          <span className="tag tag-mood">{panel.type}</span>
+                          <span className="tag" style={{background:'#ffeaa7',color:'#636e72'}}>{panel.shotSize}</span>
+                          <span className="tag" style={{background:'#dfe6e9',color:'#636e72'}}>{panel.cameraAngle}</span>
+                          <span className="tag tag-mood">{panel.mood}</span>
+                        </div>
+                        <div style={{fontSize:13,marginBottom:4}}>{panel.description}</div>
+                        {panel.dialogue?.map((d, di) => (
+                          <div key={di} style={{fontSize:12,color:'var(--accent)',marginLeft:8}}>ð¬ {d.speaker}: "{d.text}"</div>
+                        ))}
+                        {panel.narration && <div style={{fontSize:12,color:'var(--text2)',fontStyle:'italic',marginLeft:8}}>ð {panel.narration}</div>}
+                        <details style={{marginTop:6}}>
+                          <summary style={{fontSize:11,color:'var(--text2)',cursor:'pointer'}}>ì´ë¯¸ì§ íë¡¬íí¸</summary>
+                          <div style={{fontSize:11,color:'var(--text2)',padding:'4px 0',lineHeight:1.5}}>{panel.imagePrompt}</div>
+                        </details>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
+          )}
 
-            {/* Pipeline Controls */}
-            <div style={{display: 'flex', gap: 12, alignItems: 'center', padding: 12, background: 'linear-gradient(135deg,#e8e8f4,#dde0f0)', borderRadius: 10, flexWrap: 'wrap'}}>
-              <span style={{color: 'var(--accent)', fontWeight: 700, fontSize: 14}}>LongForm Pipeline</span>
-              <select value={textProvider} onChange={e=>setTextProvider(e.target.value)} disabled={running} style={{padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12}}>
-                <option value="gemini">Text: Gemini</option>
-                <option value="grok">Text: Grok</option>
-              </select>
-              <select value={imageProvider} onChange={e=>setImageProvider(e.target.value)} disabled={running} style={{padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', fontSize: 12}}>
-                <option value="imagen4">Image: Imagen 4</option>
-                <option value="imagen4ultra">Image: Imagen 4 Ultra</option>
-                <option value="nanoBananaPro">Image: Nano Banana Pro</option>
-                <option value="grok">Image: Grok Aurora</option>
-              </select>
-              <label style={{display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer'}}>
-                <input type="checkbox" checked={enableWebtoon} onChange={e=>setEnableWebtoon(e.target.checked)} disabled={running} />
-                P5 웹툰확장
-              </label>
-              <span style={{marginLeft: 'auto', padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 600, background: phase==='COMPLETED'?'#238636':phase==='ERROR'?'#da3633':running?'#1f6feb':'#d0d0e0', color: '#fff'}}>
-                {PHASE_LABELS[phase]||phase}
-              </span>
-            </div>
-
-            {/* Progress Bar */}
-            <div style={{height: 32, background: 'var(--surface2)', borderRadius: 8, overflow: 'hidden', position: 'relative'}}>
-              <div style={{height: '100%', width: progressPct+'%', transition: 'width 0.5s ease', background: phase==='ERROR'?'linear-gradient(90deg,#da3633,#f85149)':'linear-gradient(90deg,var(--accent),var(--success))', borderRadius: 8}}></div>
-              <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 8px', fontSize: 10, fontWeight: 600}}>
-                {['P1 분석','씬c','P3 앵커','P4 영상','P5 웹툰'].map((label, i) => (
-                  <span key={i} style={{color: phaseNum > i ? '#fff' : '#999', textShadow: phaseNum > i ? '0 0 4px rgba(0,0,0,0.5)' : 'none'}}>
-                    {label}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Source Input Section */}
-            <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: 10, overflow: 'hidden'}}>
-              <input placeholder="Project Title" value={projectTitle} onChange={e=>setProjectTitle(e.target.value)} disabled={running} style={{padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13}} />
-              <textarea placeholder="Enter full story/web novel text here..." value={sourceText} onChange={e=>setSourceText(e.target.value)} disabled={running} style={{flex: 1, padding: 12, border: '1px solid var(--border)', borderRadius: 8, fontSize: 12, lineHeight: 1.6, resize: 'none', fontFamily: 'inherit'}} />
-              <div style={{fontSize: 11, color: 'var(--text2)', textAlign: 'right'}}>{sourceText.length.toLocaleString()} chars</div>
-
-              {/* Action Buttons */}
-              <div style={{display: 'flex', gap: 8, flexWrap: 'wrap'}}>
-                {!running && phase==='IDLE' && <button onClick={runFullPipeline} disabled={!sourceText.trim()} className="btn btn-primary btn-block">🚀 Full Pipeline Start</button>}
-                {!running && phase==='ERROR' && <button onClick={runFullPipeline} className="btn btn-primary btn-block">Retry Pipeline</button>}
-                {!running && phase==='COMPLETED' && <button onClick={()=>{setPhase('IDLE');setPhaseHistory([]);setGlobalAsset(null);lfScenesRef.current=[];setLfScenes([]);}} className="btn btn-success btn-block">New Project</button>}
-                {running && <button onClick={stopPipeline} className="btn btn-danger btn-block">⏹ Stop Pipeline</button>}
+          {/* ===== STEP 3: Panel Generation ===== */}
+          {step === 3 && (
+            <div style={{display:'flex',flexDirection:'column',gap:16}}>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(3)} disabled={storyboard.length===0 || running}>í¨ë ì´ë¯¸ì§ ìì±</button>
+                {panels.filter(Boolean).length > 0 && <span style={{fontSize:12,color:'var(--text2)'}}>{panels.filter(Boolean).length}/{storyboard.length} ìë£</span>}
+                {running && <span className="status-badge running">ìì± ì¤...</span>}
               </div>
 
-              {errorMsg && <div style={{padding: 12, background: '#3d1f1f', border: '1px solid var(--err)', borderRadius: 8, color: '#f85149', fontSize: 12, wordBreak: 'break-all'}}>{errorMsg}</div>}
-            </div>
-          </div>
-        )}
+              {storyboard.length === 0 && <div className="placeholder">ë¨¼ì  ì¤í ë¦¬ë³´ëë¥¼ ìì±íì¸ì</div>}
 
-        {activeTab === 'phase1' && (
-          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12}}>
-            <div style={{display: 'flex', gap: 8}}>
-              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase1();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={!sourceText.trim() || running} className="btn btn-primary btn-sm">P1 스토리분석 재실행</button>
-            </div>
-            {!globalAsset && <div className="placeholder">Phase 1을 실행하면 캐릭터와 배경이 추출됩니다</div>}
-            {globalAsset && (
-              <>
-                <div>
-                  <h3 style={{fontSize: 13, fontWeight: 700, marginBottom: 12}}>캐릭터 ({globalAsset.characters?.length||0})</h3>
-                  <div className="scene-grid">
-                    {(globalAsset.characters||[]).map((ch, i) => (
-                      <div key={i} className="char-card">
-                        {ch.referenceImageUrl && <img src={ch.referenceImageUrl} alt={ch.name} />}
-                        <div className="card-content">
-                          <div className="char-name">{ch.name}</div>
-                          <div className="char-role">{ch.role}</div>
-                          <div className="char-desc">{ch.appearance?.hair} | {ch.appearance?.build}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <h3 style={{fontSize: 13, fontWeight: 700, marginBottom: 12}}>배경 ({globalAsset.backgrounds?.length||0})</h3>
-                  <div className="scene-grid">
-                    {(globalAsset.backgrounds||[]).map((bg, i) => (
-                      <div key={i} className="bg-card">
-                        {bg.referenceImageUrl && <img src={bg.referenceImageUrl} alt={bg.name} />}
-                        <div className="card-content">
-                          <div className="bg-name">{bg.name}</div>
-                          <div className="bg-type">{bg.locationType}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'scenes' && (
-          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12}}>
-            <div style={{display: 'flex', gap: 8}}>
-              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase2();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={!sourceText.trim() || running} className="btn btn-primary btn-sm">씬 분할 재실행</button>
-            </div>
-            {lfScenes.length === 0 && <div className="placeholder">Phase 2를 실행하면 씬이 생성됩니다</div>}
-            {lfScenes.length > 0 && (
-              <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: 12}}>
-                {lfScenes.map((scene, i) => (
-                  <div key={i} className="scene-card">
-                    <h3>씬 #{scene.sceneNumber}</h3>
-                    <div className="scene-summary">{scene.summary}</div>
-                    <div style={{fontSize: 11, color: 'var(--text2)', marginBottom: 8}}>
-                      분위기: {scene.narrativeMood} | 소요시간: {scene.duration}초
-                    </div>
-                    {scene.compositionData && (
-                      <div className="scene-prompt">
-                        <strong>구도:</strong> {scene.compositionData.shotSize}<br/>
-                        <strong>조명:</strong> {scene.compositionData.lighting}<br/>
-                        <strong>카메라:</strong> {scene.compositionData.cameraAngle}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'images' && (
-          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12}}>
-            <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
-              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase3();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={lfScenes.length === 0 || running} className="btn btn-primary btn-sm">P3 이미지프롬프트 재실행</button>
-              {running && <span className="spinner" />}
-            </div>
-            {lfScenes.length === 0 && <div style={{textAlign:'center',padding:40,color:'var(--text2)'}}>Phase 3을 실행하면 이미지 프롬프트가 생성됩니다</div>}
-            {lfScenes.length > 0 && (
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:12}}>
-                {lfScenes.map((scene, i) => {
-                  const promptText = scene.imagePrompt ? (typeof scene.imagePrompt === 'object' ? scene.imagePrompt.prompt : scene.imagePrompt) : (scene.anchorImage?.prompt || '');
-                  return (
-                  <div key={i} className="card" style={{marginBottom:0}}>
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                      <span style={{width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:scene.anchorImage?'#238636':scene.imagePrompt?'var(--accent)':'var(--border)',color:'#fff',fontSize:12,fontWeight:700,flexShrink:0}}>{i+1}</span>
-                      <span style={{fontSize:13,fontWeight:600,flex:1}}>{scene.summary?.substring(0,60)}</span>
-                      <span style={{padding:'2px 8px',borderRadius:4,fontSize:10,background:scene.status==='generating_image'?'var(--warn)':scene.anchorImage?'#238636':'var(--border)',color:'#fff'}}>{scene.status||'pending'}</span>
-                    </div>
-                    {/* Image Prompt Section */}
-                    {promptText && (
-                      <div style={{background:'#fafaff',borderRadius:6,border:'1px solid #e0e0f0',padding:8,marginBottom:8}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-                          <span style={{fontSize:11,fontWeight:600,color:'var(--accent)'}}>🎨 이미지 프롬프트</span>
-                          {editingPromptIdx !== i && <button onClick={()=>{setEditingPromptIdx(i);setEditingPromptText(promptText);}} style={{padding:'2px 8px',fontSize:10,borderRadius:4,border:'1px solid var(--accent)',background:'transparent',color:'var(--accent)',cursor:'pointer'}}>✏️ 수정</button>}
-                        </div>
-                        {editingPromptIdx === i ? (
-                          <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                            <textarea value={editingPromptText} onChange={e=>setEditingPromptText(e.target.value)} style={{width:'100%',minHeight:80,padding:8,fontSize:11,border:'1px solid var(--accent)',borderRadius:6,resize:'vertical',fontFamily:'monospace',lineHeight:1.5,boxSizing:'border-box'}} />
-                            <div style={{display:'flex',gap:6,justifyContent:'flex-end'}}>
-                              <button onClick={()=>setEditingPromptIdx(-1)} className="btn btn-secondary btn-sm">취소</button>
-                              <button onClick={()=>{const scenes=lfScenesRef.current;const s=scenes[i];if(s.imagePrompt&&typeof s.imagePrompt==='object'){s.imagePrompt.prompt=editingPromptText;}else{s.imagePrompt={prompt:editingPromptText};}lfScenesRef.current=[...scenes];setLfScenes([...scenes]);setEditingPromptIdx(-1);}} style={{padding:'4px 12px',fontSize:11,borderRadius:4,border:'1px solid #f0883e',background:'transparent',color:'#f0883e',cursor:'pointer',fontWeight:600}}>💾 저장만</button>
-                              <button onClick={()=>regenerateSceneImageWithPrompt(i,editingPromptText)} disabled={running} className="btn btn-primary btn-sm">🔄 저장 & 재생성</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div style={{fontSize:10,color:'var(--text2)',lineHeight:1.5,maxHeight:60,overflow:'auto',fontFamily:'monospace',wordBreak:'break-all'}}>{promptText}</div>
-                        )}
-                      </div>
-                    )}
-                    {/* Anchor Image */}
-                    {scene.anchorImage?.url && <div style={{borderRadius:8,overflow:'hidden',border:'1px solid var(--border)',marginBottom:8}}><img src={scene.anchorImage.url} style={{width:'100%',display:'block'}} /></div>}
-                    {/* Action Buttons */}
-                    <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                      <button onClick={()=>generateSceneImage(i)} disabled={scene.status==='generating_image'||running} style={{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid var(--accent)',background:scene.status==='generating_image'?'var(--accent)':'transparent',color:scene.status==='generating_image'?'#fff':'var(--accent)',cursor:'pointer',fontWeight:600}}>{scene.status==='generating_image'?'생성 중...':'🖼️ 이미지 생성'}</button>
-                      {scene.anchorImage && <button onClick={()=>downloadMedia(scene.anchorImage.url,'scene_'+(i+1)+'_image.png')} style={{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid #238636',background:'transparent',color:'#238636',cursor:'pointer'}}>⬇ 저장</button>}
-                    </div>
-                  </div>
-                );})}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'videos' && (
-          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 12}}>
-            <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
-              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase4();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={lfScenes.length === 0 || running} className="btn btn-primary btn-sm">P4 영상프롬프트 재실행</button>
-              {running && <span className="spinner" />}
-            </div>
-            {lfScenes.length === 0 && <div style={{textAlign:'center',padding:40,color:'var(--text2)'}}>Phase 4를 실행하면 영상 프롬프트가 생성됩니다</div>}
-            {lfScenes.length > 0 && (
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:12}}>
-                {lfScenes.map((scene, i) => (
-                  <div key={i} className="card" style={{marginBottom:0}}>
-                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                      <span style={{width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:scene.video?'#238636':scene.videoPrompt?'var(--accent)':'var(--border)',color:'#fff',fontSize:12,fontWeight:700,flexShrink:0}}>{i+1}</span>
-                      <span style={{fontSize:13,fontWeight:600,flex:1}}>{scene.summary?.substring(0,60)}</span>
-                      <span style={{padding:'2px 8px',borderRadius:4,fontSize:10,background:scene.status==='generating_video'?'var(--warn)':scene.video?'#238636':'var(--border)',color:'#fff'}}>{scene.status||'pending'}</span>
-                    </div>
-                    {scene.videoPrompt && (
-                      <div style={{background:'#fafaff',borderRadius:6,border:'1px solid #e0e0f0',padding:8,marginBottom:8}}>
-                        <span style={{fontSize:11,fontWeight:600,color:'var(--romance)'}}>🎬 모션 프롬프트</span>
-                        <div style={{fontSize:10,color:'var(--text2)',lineHeight:1.5,marginTop:4,fontFamily:'monospace',wordBreak:'break-all'}}>{scene.videoPrompt.motionPrompt}</div>
-                      </div>
-                    )}
-                    {scene.anchorImage?.url && <div style={{borderRadius:8,overflow:'hidden',border:'1px solid var(--border)',marginBottom:8}}><img src={scene.anchorImage.url} style={{width:'100%',height:120,objectFit:'cover',display:'block'}} /></div>}
-                    {scene.video?.url && (
-                      <div style={{borderRadius:8,overflow:'hidden',border:'1px solid var(--border)',marginBottom:8}}>
-                        <video src={scene.video.url} controls muted style={{width:'100%',display:'block'}} />
-                      </div>
-                    )}
-                    <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                      <button onClick={()=>generateSceneVideo(i)} disabled={scene.status==='generating_video'||!scene.anchorImage||running} style={{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid var(--romance)',background:scene.status==='generating_video'?'var(--romance)':'transparent',color:scene.status==='generating_video'?'#fff':'var(--romance)',cursor:'pointer',fontWeight:600}}>{scene.status==='generating_video'?'생성 중...':'🎬 영상 생성'}</button>
-                      {scene.video?.url && <button onClick={()=>downloadMedia(scene.video.url,'scene_'+(i+1)+'_video.mp4')} style={{padding:'4px 10px',fontSize:11,borderRadius:6,border:'1px solid #238636',background:'transparent',color:'#238636',cursor:'pointer'}}>⬇ 저장</button>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'webtoon' && (
-          <div style={{flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 16}}>
-            <div style={{display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap'}}>
-              <button onClick={async()=>{setRunning(true);setErrorMsg('');try{await runPhase5();}catch(e){setErrorMsg(e.message);}finally{setRunning(false);}}} disabled={lfScenes.length === 0 || !enableWebtoon || running} className="btn btn-primary btn-sm">P5 웹툰 멀티패널 생성</button>
-              {running && phase === 'PHASE_5_EXPANDING' && <span className="status-badge running">패널 생성 중... 씬 {currentSceneIdx+1}/{lfScenes.length}</span>}
-              <span style={{fontSize:11,color:'var(--text2)'}}>씬 유형별 5~7장 자동 생성 + 캐릭터 레퍼런스 적용</span>
-            </div>
-            {!enableWebtoon && <div className="placeholder">Phase 5 웹툰확장을 활성화해주세요</div>}
-            {lfScenes.length === 0 && <div className="placeholder">전체 파이프라인을 실행하면 씬별 웹툰 패널을 자동 생성됩니다</div>}
-            {lfScenes.length > 0 && (
-              <div style={{display: 'flex', flexDirection: 'column', gap: 20}}>
-                {lfScenes.map((scene, i) => {
-                  const mood = scene.narrativeMood || 'calm';
-                  const config = getMoodPanelConfig(mood);
-                  const totalPanels = (scene.webtoonAssets||[]).length;
-                  return (
-                  <div key={i} className="card" style={{padding: 16}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-                      <div>
-                        <h3 style={{fontSize:15,fontWeight:700,margin:0}}>씬 #{scene.sceneNumber} <span style={{fontSize:12,fontWeight:400,color:'var(--text2)',marginLeft:8}}>{scene.summary}</span></h3>
-                        <div style={{display:'flex',gap:6,marginTop:4}}>
-                          <span className="status-badge" style={{background:'var(--accent)',color:'#fff',fontSize:10}}>{config.label}</span>
-                          <span className="status-badge" style={{fontSize:10}}>{mood}</span>
-                          {totalPanels > 0 && <span className="status-badge done" style={{fontSize:10}}>{totalPanels}장</span>}
-                        </div>
-                      </div>
-                    </div>
-                    {totalPanels > 0 ? (
-                      <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:8}}>
-                        {scene.webtoonAssets.map((asset, j) => (
-                          <div key={j} style={{minWidth:140,maxWidth:180,flex:'0 0 auto',borderRadius:8,overflow:'hidden',border:j===0?'2px solid var(--accent)':'1px solid var(--border)',background:'var(--surface2)',position:'relative'}}>
-                            {asset.url ? <img src={asset.url} alt={asset.templateId} style={{width:'100%',height:220,objectFit:'cover',display:'block'}} /> : <div style={{width:'100%',height:220,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text2)',fontSize:11}}>생성 중...</div>}
-                            <div style={{padding:'6px 8px',fontSize:10,color:'var(--text2)',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                              <span style={{fontWeight:600}}>{j===0?'앵커':('P'+(j))}</span>
-                              <span style={{maxWidth:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{asset.panelLabel||asset.templateId}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+              <div className="panel-grid">
+                {storyboard.map((panel, i) => (
+                  <div key={i} className="panel-card">
+                    <div className="panel-num">{i+1}</div>
+                    {panels[i] ? (
+                      <img src={panels[i]} alt={`Panel ${i+1}`} />
                     ) : (
-                      <div style={{padding:20,textAlign:'center',color:'var(--text2)',fontSize:13,background:'var(--surface2)',borderRadius:8}}>
-                        {scene.anchorImage ? '웹툰 패널 대기 중' : '앵커 이미지가 필요합니다 (P3/P4 먼저 실행)'}
-                      </div>
+                      <div className="panel-placeholder">{running ? 'ìì± ëê¸°...' : 'ë¯¸ìì±'}</div>
                     )}
+                    <div className="panel-info">
+                      <span className="tag tag-mood" style={{fontSize:10}}>{panel.type}</span> {panel.description?.substring(0, 40)}
+                      {panels[i] && (
+                        <div style={{marginTop:4}}>
+                          <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 8px'}} onClick={()=>regeneratePanel(i)} disabled={running}>ì¬ìì±</button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                );})}
+                ))}
               </div>
-            )}
+            </div>
+          )}
+
+          {/* ===== STEP 4: Webtoon Preview ===== */}
+          {step === 4 && (
+            <div style={{display:'flex',flexDirection:'column',gap:16}}>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <span style={{fontWeight:700,fontSize:15}}>ì¹í° ë¯¸ë¦¬ë³´ê¸°: {analysis?.title || ''}</span>
+                <span style={{fontSize:12,color:'var(--text2)'}}>({panels.filter(Boolean).length}ê° í¨ë)</span>
+              </div>
+
+              {panels.filter(Boolean).length === 0 && <div className="placeholder">í¨ë ì´ë¯¸ì§ë¥¼ ë¨¼ì  ìì±íì¸ì</div>}
+
+              <div className="webtoon-strip">
+                {storyboard.map((panel, i) => {
+                  if (!panels[i]) return null;
+                  return (
+                    <div key={i} style={{position:'relative'}}>
+                      <img src={panels[i]} alt={`Panel ${i+1}`} />
+                      {/* Dialogue overlay */}
+                      {panel.dialogue?.length > 0 && (
+                        <div style={{position:'absolute',bottom:8,left:8,right:8,display:'flex',flexDirection:'column',gap:4}}>
+                          {panel.dialogue.map((d, di) => (
+                            <div key={di} style={{background:'rgba(255,255,255,0.92)',padding:'6px 12px',borderRadius:16,fontSize:13,fontWeight:500,boxShadow:'0 2px 8px rgba(0,0,0,.15)',maxWidth:'80%',alignSelf:di%2===0?'flex-start':'flex-end'}}>
+                              <span style={{fontSize:10,color:'var(--accent)',fontWeight:700}}>{d.speaker}</span><br/>{d.text}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {panel.narration && (
+                        <div style={{position:'absolute',top:8,left:8,right:8,background:'rgba(0,0,0,0.7)',color:'#fff',padding:'6px 12px',borderRadius:8,fontSize:12,fontStyle:'italic'}}>
+                          {panel.narration}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Log Panel */}
+        <div style={{marginTop:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+            <span style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>ë¡ê·¸</span>
+            <button className="btn btn-outline" style={{padding:'2px 8px',fontSize:10}} onClick={()=>setLogs([])}>ì´ê¸°í</button>
           </div>
-        )}
+          <LogPanel logs={logs} />
+        </div>
       </div>
     </div>
   );
 }
-
-// ============================================================
-// RENDER APP
-// ============================================================
 
 ReactDOM.render(<App />, document.getElementById('root'));
 </script>
