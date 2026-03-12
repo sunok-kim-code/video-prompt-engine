@@ -32,7 +32,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .status-badge.running{background:#fff3cd;color:#856404;}
 .status-badge.done{background:#d4edda;color:#155724;}
 .status-badge.error{background:#f8d7da;color:#721c24;}
-.main-content{max-width:1400px;margin:0 auto;padding:20px;display:flex;flex-direction:column;height:calc(100vh - 64px);}
+.main-content{max-width:1400px;margin:0 auto;padding:20px;display:flex;flex-direction:column;height:calc(100vh - 140px);}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);}
 .btn{padding:10px 20px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px;}
 .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 2px 8px rgba(108,92,231,.3);}
@@ -137,6 +137,23 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .prompt-editor-box .btn-row{display:flex;gap:8px;justify-content:flex-end;}
 .prompt-badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;background:var(--surface2);color:var(--accent);cursor:pointer;border:1px solid var(--border);transition:all 0.2s;}
 .prompt-badge:hover{background:var(--accent);color:#fff;}
+/* Refactoring classes */
+.flex-row{display:flex;align-items:center;gap:8px;}
+.flex-col{display:flex;flex-direction:column;gap:16px;}
+.flex-wrap{flex-wrap:wrap;}
+.section-title{font-weight:700;font-size:14px;margin-bottom:12px;}
+.text-muted{font-size:12px;color:var(--text2);}
+.text-xs{font-size:11px;color:var(--text2);}
+.btn-xs{padding:2px 8px;font-size:10px;}
+.toolbar{background:var(--surface2);border-bottom:1px solid var(--border);padding:8px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.toolbar label{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;}
+.toolbar select,.toolbar input{padding:6px 10px;font-size:12px;}
+.log-toggle{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text2);}
+.log-toggle:hover{background:var(--surface3);}
+.action-bar{display:flex;gap:4px;margin-top:4px;}
+.gap-4{gap:4px;}.gap-8{gap:8px;}.gap-12{gap:12px;}.gap-16{gap:16px;}
+.mt-4{margin-top:4px;}.mt-8{margin-top:8px;}.mt-12{margin-top:12px;}
+.mb-4{margin-bottom:4px;}.mb-8{margin-bottom:8px;}.mb-12{margin-bottom:12px;}
 </style>
 </head>
 <body>
@@ -823,6 +840,7 @@ function ApiKeyModal({onClose}) {
 function App() {
   const [showApiModal, setShowApiModal] = useState(false);
   const [logs, setLogs] = useState([]);
+  const [logCollapsed, setLogCollapsed] = useState(true);
   const [step, setStep] = useState(0);
   const [running, setRunning] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -869,8 +887,8 @@ function App() {
   const [promptEditor, setPromptEditor] = useState(null);
   const [editedPrompt, setEditedPrompt] = useState('');
 
-  const openPromptEditor = (type, id, prompt, title, onSubmit) => {
-    setPromptEditor({type, id, title, onSubmit});
+  const openPromptEditor = (type, id, prompt, title, onSubmit, onSaveOnly) => {
+    setPromptEditor({type, id, title, onSubmit, onSaveOnly});
     setEditedPrompt(prompt);
   };
   const closePromptEditor = () => { setPromptEditor(null); setEditedPrompt(''); };
@@ -1773,12 +1791,20 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
             <textarea value={editedPrompt} onChange={e => setEditedPrompt(e.target.value)} placeholder="이미지 생성 프롬프트를 입력하세요..." />
             <div className="btn-row">
               <button className="btn btn-outline btn-sm" onClick={closePromptEditor}>취소</button>
+              {promptEditor.onSaveOnly && (
+                <button className="btn btn-outline btn-sm" onClick={() => {
+                  const p = editedPrompt.trim();
+                  if (!p) return;
+                  closePromptEditor();
+                  promptEditor.onSaveOnly(p);
+                }}>프롬프트만 저장</button>
+              )}
               <button className="btn btn-primary btn-sm" disabled={running} onClick={() => {
                 const p = editedPrompt.trim();
                 if (!p) return;
                 closePromptEditor();
                 promptEditor.onSubmit(p);
-              }}>이 프롬프트로 생성</button>
+              }}>저장 후 이미지 생성</button>
             </div>
           </div>
         </div>
@@ -1800,27 +1826,32 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
       {/* Header */}
       <div className="app-header">
         <div className="app-logo">웹툰 프로덕션</div>
-        <div className="nav-tabs">
-          <select className="form-select" style={{width:140,padding:'6px 10px',fontSize:12}} value={imageProvider} onChange={e=>setImageProvider(e.target.value)}>
-            <option value="falAI">FLUX + ControlNet (fal.ai)</option>
-            <option value="stableDiffusion">Stable Diffusion 3.5</option>
-            <option value="imagen4">Imagen 4 (고품질)</option>
-            <option value="nanoBanana">Gemini (레퍼런스 반영)</option>
-          </select>
-          <select className="form-select" style={{width:130,padding:'6px 10px',fontSize:12,background:'linear-gradient(135deg,#ffecd2,#fcb69f)',borderColor:'#f8a879'}} value={artStyle} onChange={e=>setArtStyle(e.target.value)}>
-            {Object.entries(ART_STYLES).map(([key, style]) => (
-              <option key={key} value={key}>{style.name}</option>
-            ))}
-          </select>
-          {artStyle === 'custom' && (
-            <div style={{position:'relative',display:'inline-flex',alignItems:'center'}}>
-              <input className="form-input" value={customStylePrompt} onChange={e=>setCustomStylePrompt(e.target.value)} placeholder="스타일 프롬프트 입력 (예: watercolor painting, soft pastel colors...)" style={{width:360,padding:'6px 10px',fontSize:12,borderColor:'#f8a879',background:'#fff8f0'}} />
-              {customStylePrompt && <span style={{position:'absolute',right:8,fontSize:10,color:'var(--success)',fontWeight:600}}>적용됨</span>}
-            </div>
-          )}
-        </div>
+        <div style={{flex:1}}></div>
         {projectId && <button className="api-key-btn" onClick={()=>setShowAssetLibrary(true)} style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',borderColor:'transparent'}}>에셋 라이브러리 ({Object.keys(sharedAssets.characters).length + Object.keys(sharedAssets.backgrounds).length + Object.keys(sharedAssets.props).length})</button>}
         <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API 설정</button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="toolbar">
+        <label>이미지 생성</label>
+        <select className="form-select" style={{width:160}} value={imageProvider} onChange={e=>setImageProvider(e.target.value)}>
+          <option value="falAI">FLUX + ControlNet (fal.ai)</option>
+          <option value="stableDiffusion">Stable Diffusion 3.5</option>
+          <option value="imagen4">Imagen 4 (고품질)</option>
+          <option value="nanoBanana">Gemini (레퍼런스 반영)</option>
+        </select>
+        <label style={{marginLeft:16}}>아트 스타일</label>
+        <select className="form-select" style={{width:150,background:'linear-gradient(135deg,#ffecd2,#fcb69f)',borderColor:'#f8a879'}} value={artStyle} onChange={e=>setArtStyle(e.target.value)}>
+          {Object.entries(ART_STYLES).map(([key, style]) => (
+            <option key={key} value={key}>{style.name}</option>
+          ))}
+        </select>
+        {artStyle === 'custom' && (
+          <div style={{position:'relative',display:'inline-flex',alignItems:'center'}}>
+            <input className="form-input" value={customStylePrompt} onChange={e=>setCustomStylePrompt(e.target.value)} placeholder="스타일 프롬프트 입력..." style={{width:280,borderColor:'#f8a879',background:'#fff8f0'}} />
+            {customStylePrompt && <span style={{position:'absolute',right:8,fontSize:10,color:'var(--success)',fontWeight:600}}>적용됨</span>}
+          </div>
+        )}
       </div>
 
       {showApiModal && <ApiKeyModal onClose={()=>setShowApiModal(false)} />}
@@ -1965,10 +1996,9 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
           {!projectId ? (
             // Project selection screen
-            <div style={{display:'flex',flexDirection:'column',gap:16}}>
+            <div className="flex-col">
               <div className="card">
-                <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
-                  <button className="btn btn-outline btn-sm" onClick={()=>{setShowProjects(!showProjects);if(!showProjects)loadProjectList();}}>프로젝트 목록</button>
+                <div className="flex-row flex-wrap gap-8 mb-12">
                   <button className="btn btn-primary btn-sm" onClick={async () => {
                     const newId = 'proj_' + Date.now();
                     const newTitle = '새로운 프로젝트';
@@ -1979,20 +2009,18 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                     setEpisodes([newEpisode]);
                     setCurrentEpisode(1);
                     log('새 프로젝트 생성됨', 'success');
-                  }}>새 프로젝트</button>
+                  }}>+ 새 프로젝트</button>
                 </div>
 
-                {showProjects && (
-                  <div style={{marginBottom:12,padding:12,background:'var(--surface2)',borderRadius:8}}>
-                    <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>저장된 프로젝트</div>
-                    {projectList.map(p => (
-                      <div key={p.id} style={{padding:'6px 0',borderBottom:'1px solid var(--border)',cursor:'pointer',fontSize:13}} onClick={()=>loadProject(p.id)}>
-                        {p.title || p.id}
-                      </div>
-                    ))}
-                    {projectList.length === 0 && <div style={{fontSize:12,color:'var(--text2)'}}>저장된 프로젝트 없음</div>}
-                  </div>
-                )}
+                <div style={{padding:12,background:'var(--surface2)',borderRadius:8}}>
+                  <div className="section-title">저장된 프로젝트</div>
+                  {projectList.map(p => (
+                    <div key={p.id} style={{padding:'8px 0',borderBottom:'1px solid var(--border)',cursor:'pointer'}} className="text-muted" onClick={()=>loadProject(p.id)}>
+                      {p.title || p.id}
+                    </div>
+                  ))}
+                  {projectList.length === 0 && <div className="text-muted">저장된 프로젝트가 없습니다. 새 프로젝트를 만들어 시작하세요.</div>}
+                </div>
               </div>
             </div>
           ) : (
@@ -2000,55 +2028,53 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
             <>
               {/* ===== STEP 0: Source Input & Analysis ===== */}
               {step === 0 && (
-                <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                <div className="flex-col">
                   <div className="card">
-                    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+                    <div className="flex-row flex-wrap gap-8 mb-12">
                       <button className="btn btn-primary" onClick={runFullPipeline} disabled={!sourceText.trim() || running}>
                         {running ? '생성 중...' : '전체 자동 생성'}
                       </button>
                       <button className="btn btn-outline btn-sm" onClick={()=>runSingleStep(0)} disabled={!sourceText.trim() || running}>Step 1만 실행</button>
                       {running && <button className="btn btn-danger btn-sm" onClick={()=>{abortRef.current=true;}}>중지</button>}
-                      <div style={{marginLeft:'auto',display:'flex',gap:6}}>
-                        <button className="btn btn-outline btn-sm" onClick={saveProject} disabled={running}>저장</button>
-                      </div>
+                      <button className="btn btn-outline btn-sm" style={{marginLeft:'auto'}} onClick={saveProject} disabled={running}>저장</button>
                     </div>
 
                     <textarea className="form-textarea" value={sourceText} onChange={e=>setSourceText(e.target.value)}
                       placeholder={`웹툰으로 만들 소설/스토리 텍스트를 입력하세요. 이 텍스트가 웹툰 ${currentEpisode || 1}화로 변환됩니다.`}
                       style={{minHeight:250}} disabled={running} />
-                    <div style={{textAlign:'right',fontSize:11,color:'var(--text2)',marginTop:4}}>{sourceText.length} chars</div>
+                    <div style={{textAlign:'right'}} className="text-xs mt-4">{sourceText.length} chars</div>
                   </div>
 
                   {/* Analysis result preview */}
                   {analysis && (
                     <div className="card">
-                      <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>분석 결과: {analysis.title}</div>
-                      <div style={{fontSize:13,color:'var(--text2)',marginBottom:12}}>{analysis.synopsis}</div>
+                      <div style={{fontSize:15}} className="section-title">분석 결과: {analysis.title}</div>
+                      <div className="text-muted mb-12">{analysis.synopsis}</div>
                       <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
                         <div>
-                          <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>캐릭터 ({analysis.characters?.length})</div>
+                          <div className="section-title">캐릭터 ({analysis.characters?.length})</div>
                           {analysis.characters?.map(c => (
-                            <div key={c.id} style={{marginBottom:4}}><span className="tag tag-char">{c.role}</span> <strong>{c.name}</strong> — {c.personality} {c.isExisting && <span className="outfit-tag">공유 에셋</span>}</div>
+                            <div key={c.id} className="mb-4"><span className="tag tag-char">{c.role}</span> <strong>{c.name}</strong> — {c.personality} {c.isExisting && <span className="outfit-tag">공유 에셋</span>}</div>
                           ))}
                         </div>
                         <div>
-                          <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>배경 ({analysis.backgrounds?.length})</div>
+                          <div className="section-title">배경 ({analysis.backgrounds?.length})</div>
                           {analysis.backgrounds?.map(b => (
-                            <div key={b.id} style={{marginBottom:4}}><span className="tag tag-loc">{b.type}</span> {b.name}</div>
+                            <div key={b.id} className="mb-4"><span className="tag tag-loc">{b.type}</span> {b.name}</div>
                           ))}
                         </div>
                         {analysis.props?.length > 0 && (
                           <div>
-                            <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>소품 ({analysis.props?.length})</div>
+                            <div className="section-title">소품 ({analysis.props?.length})</div>
                             {analysis.props?.map(p => (
-                              <div key={p.id} style={{marginBottom:4}}><span className="tag" style={{background:'#ffeaa7',color:'#636e72'}}>소품</span> {p.name} {p.isExisting && <span className="outfit-tag">공유</span>}</div>
+                              <div key={p.id} className="mb-4"><span className="tag" style={{background:'#ffeaa7',color:'#636e72'}}>소품</span> {p.name} {p.isExisting && <span className="outfit-tag">공유</span>}</div>
                             ))}
                           </div>
                         )}
                         <div>
-                          <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>플롯 ({analysis.plotBeats?.length})</div>
+                          <div className="section-title">플롯 ({analysis.plotBeats?.length})</div>
                           {analysis.plotBeats?.map(p => (
-                            <div key={p.beat} style={{marginBottom:4,fontSize:12}}>
+                            <div key={p.beat} className="mb-4 text-xs">
                               <span className="tag tag-mood">{p.mood}</span> {p.summary}
                               {p.outfitOverrides && Object.keys(p.outfitOverrides).length > 0 && <span className="outfit-tag">의상변경</span>}
                             </div>
@@ -2062,8 +2088,8 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
               {/* ===== STEP 1: Character/Background References ===== */}
               {step === 1 && (
-                <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <div className="flex-col">
+                  <div className="flex-row gap-8">
                     <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(1)} disabled={!analysis || running}>레퍼런스 생성</button>
                     {running && <span className="status-badge running">생성 중...</span>}
                   </div>
@@ -2072,7 +2098,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
                   {analysis && (
                     <div>
-                      <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>캐릭터 레퍼런스</div>
+                      <div className="section-title">캐릭터 레퍼런스</div>
                       <div className="ref-grid">
                         {analysis.characters?.map(c => (
                           <div key={c.id} className="ref-card">
@@ -2090,41 +2116,28 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                               <div className="ref-card-desc">{c.appearance}</div>
                               <details style={{marginTop:4}}>
                                 <summary className="prompt-badge">프롬프트</summary>
-                                <div style={{fontSize:10,color:'var(--text2)',padding:'4px 0',lineHeight:1.4,fontFamily:'monospace'}}>{c.refPrompt}</div>
+                                <div className="text-xs" style={{padding:'4px 0',lineHeight:1.4,fontFamily:'monospace'}}>{c.refPrompt}</div>
                               </details>
-                              <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap'}}>
-                                <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
-                                  onClick={() => openPromptEditor('charRef', c.id, c.refPrompt + getCharSuffix(), c.name, (p) => regenerateCharRef(c.id, p))} disabled={running}>프롬프트 수정</button>
-                                <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
+                              <div className="action-bar" style={{marginTop:6}}>
+                                <button className="btn btn-outline btn-xs"
+                                  onClick={() => openPromptEditor('charRef', c.id, c.refPrompt + getCharSuffix(), c.name, (p) => regenerateCharRef(c.id, p))} disabled={running}>수정</button>
+                                <button className="btn btn-outline btn-xs"
                                   onClick={()=>regenerateCharRef(c.id)} disabled={running}>재생성</button>
                               </div>
                               {/* LoRA Training Button */}
-                              {imageProvider === 'falAI' && references.characters[c.id] && (
-                                <div style={{marginTop:6}}>
-                                  {loraModels[c.id]?.status === 'ready' ? (
-                                    <div style={{fontSize:10,color:'#155724',background:'#d4edda',padding:'4px 8px',borderRadius:6,display:'flex',alignItems:'center',gap:4}}>
-                                      <span style={{fontWeight:700}}>LoRA 학습 완료</span>
-                                      <span style={{color:'var(--text2)'}}>— 패널 생성 시 자동 적용됩니다</span>
-                                    </div>
-                                  ) : loraModels[c.id]?.status === 'training' || loraModels[c.id]?.status === 'preparing' ? (
-                                    <div style={{fontSize:10,color:'#856404',background:'#fff3cd',padding:'4px 8px',borderRadius:6}}>
-                                      LoRA 학습 중... (5~10분 소요)
-                                    </div>
-                                  ) : (
-                                    <button className="btn btn-sm" style={{width:'100%',justifyContent:'center',fontSize:11,background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none'}}
-                                      onClick={() => trainCharacterLora(c.id, c.name, [references.characters[c.id]])}
-                                      disabled={running || loraModels[c.id]?.status === 'training'}>
-                                      LoRA 학습 (캐릭터 고정)
-                                    </button>
-                                  )}
-                                </div>
+                              {imageProvider === 'falAI' && references.characters[c.id] && !loraModels[c.id]?.status?.match(/ready|training|preparing/) && (
+                                <button className="btn btn-sm mt-8" style={{width:'100%',justifyContent:'center',background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none'}}
+                                  onClick={() => trainCharacterLora(c.id, c.name, [references.characters[c.id]])}
+                                  disabled={running}>
+                                  LoRA 학습
+                                </button>
                               )}
                             </div>
                           </div>
                         ))}
                       </div>
 
-                      <div style={{fontWeight:700,fontSize:14,marginTop:20,marginBottom:12}}>배경 레퍼런스</div>
+                      <div style={{marginTop:20}} className="section-title">배경 레퍼런스</div>
                       <div className="ref-grid" style={{gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))'}}>
                         {analysis.backgrounds?.map(b => (
                           <div key={b.id} className="ref-card">
@@ -2138,12 +2151,12 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                               <div className="ref-card-desc">{b.description}</div>
                               <details style={{marginTop:4}}>
                                 <summary className="prompt-badge">프롬프트</summary>
-                                <div style={{fontSize:10,color:'var(--text2)',padding:'4px 0',lineHeight:1.4,fontFamily:'monospace'}}>{b.refPrompt}</div>
+                                <div className="text-xs" style={{padding:'4px 0',lineHeight:1.4,fontFamily:'monospace'}}>{b.refPrompt}</div>
                               </details>
-                              <div style={{display:'flex',gap:4,marginTop:6}}>
-                                <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
-                                  onClick={() => openPromptEditor('bgRef', b.id, b.refPrompt + getBgSuffix(), b.name, (p) => regenerateAsset('backgrounds', b.id, p))} disabled={running}>프롬프트 수정</button>
-                                <button className="btn btn-outline btn-sm" style={{flex:1,justifyContent:'center',fontSize:11}}
+                              <div className="action-bar mt-8">
+                                <button className="btn btn-outline btn-xs"
+                                  onClick={() => openPromptEditor('bgRef', b.id, b.refPrompt + getBgSuffix(), b.name, (p) => regenerateAsset('backgrounds', b.id, p))} disabled={running}>수정</button>
+                                <button className="btn btn-outline btn-xs"
                                   onClick={()=>regenerateAsset('backgrounds', b.id)} disabled={running}>재생성</button>
                               </div>
                             </div>
@@ -2157,10 +2170,10 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
               {/* ===== STEP 2: Storyboard ===== */}
               {step === 2 && (
-                <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <div className="flex-col">
+                  <div className="flex-row gap-8">
                     <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(2)} disabled={!analysis || running}>스토리보드 생성</button>
-                    {storyboard.length > 0 && <span style={{fontSize:12,color:'var(--text2)'}}>{storyboard.length}개 패널</span>}
+                    {storyboard.length > 0 && <span className="text-muted">{storyboard.length}개 패널</span>}
                     {running && <span className="status-badge running">생성 중...</span>}
                   </div>
 
@@ -2188,12 +2201,21 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                             <details style={{marginTop:6}}>
                               <summary style={{fontSize:11,color:'var(--text2)',cursor:'pointer'}}>이미지 프롬프트</summary>
                               <div style={{fontSize:11,color:'var(--text2)',padding:'4px 0',lineHeight:1.5,fontFamily:'monospace'}}>{panel.imagePrompt}</div>
-                              <button className="btn btn-outline btn-sm" style={{fontSize:10,marginTop:4}} onClick={() => openPromptEditor('storyboard', i, panel.imagePrompt, `패널 ${i+1} 프롬프트`, (p) => {
-                                const newSb = [...storyboard];
-                                newSb[i] = {...newSb[i], imagePrompt: p};
-                                setStoryboard(newSb);
-                                log(`패널 ${i+1} 프롬프트 수정됨`, 'success');
-                              })}>프롬프트 수정</button>
+                              <button className="btn btn-outline btn-sm" style={{fontSize:10,marginTop:4}} onClick={() => openPromptEditor('storyboard', i, panel.imagePrompt, `패널 ${i+1} 프롬프트`,
+                                (p) => {
+                                  const newSb = [...storyboard];
+                                  newSb[i] = {...newSb[i], imagePrompt: p};
+                                  setStoryboard(newSb);
+                                  log(`패널 ${i+1} 프롬프트 수정 → 이미지 생성 시작`, 'info');
+                                  regeneratePanel(i, p);
+                                },
+                                (p) => {
+                                  const newSb = [...storyboard];
+                                  newSb[i] = {...newSb[i], imagePrompt: p};
+                                  setStoryboard(newSb);
+                                  log(`패널 ${i+1} 프롬프트 저장됨`, 'success');
+                                }
+                              )}>프롬프트 수정</button>
                             </details>
                           </div>
                         </div>
@@ -2205,10 +2227,10 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
               {/* ===== STEP 3: Panel Generation ===== */}
               {step === 3 && (
-                <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <div className="flex-col">
+                  <div className="flex-row gap-8">
                     <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(3)} disabled={storyboard.length===0 || running}>패널 이미지 생성</button>
-                    {panels.filter(Boolean).length > 0 && <span style={{fontSize:12,color:'var(--text2)'}}>{panels.filter(Boolean).length}/{storyboard.length} 완료</span>}
+                    {panels.filter(Boolean).length > 0 && <span className="text-muted">{panels.filter(Boolean).length}/{storyboard.length} 완료</span>}
                     {running && <span className="status-badge running">생성 중...</span>}
                   </div>
 
@@ -2224,19 +2246,22 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                           <div className="panel-placeholder">{running ? '생성 대기...' : '미생성'}</div>
                         )}
                         <div className="panel-info">
-                          <span className="tag tag-mood" style={{fontSize:10}}>{panel.type}</span> {panel.description?.substring(0, 40)}
+                          <span className="tag tag-mood" style={{fontSize:10}}>{panel.type}</span> <span className="text-xs">{panel.description?.substring(0, 40)}</span>
                           <details style={{marginTop:2}}>
                             <summary className="prompt-badge">프롬프트</summary>
-                            <div style={{fontSize:10,color:'var(--text2)',padding:'4px 0',lineHeight:1.4,fontFamily:'monospace',maxHeight:80,overflow:'auto'}}>{panel.imagePrompt?.substring(0,300)}</div>
+                            <div className="text-xs" style={{padding:'4px 0',lineHeight:1.4,fontFamily:'monospace',maxHeight:80,overflow:'auto'}}>{panel.imagePrompt?.substring(0,300)}</div>
                           </details>
-                          <div style={{display:'flex',gap:4,marginTop:4}}>
-                            <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 6px'}}
-                              onClick={() => openPromptEditor('panel', i, panel.imagePrompt, `패널 ${i+1}`, (p) => regeneratePanel(i, p))} disabled={running}>프롬프트 수정</button>
+                          <div className="action-bar">
+                            <button className="btn btn-outline btn-xs"
+                              onClick={() => openPromptEditor('panel', i, panel.imagePrompt, `패널 ${i+1}`,
+                                (p) => regeneratePanel(i, p),
+                                (p) => { const newSb=[...storyboard]; newSb[i]={...newSb[i],imagePrompt:p}; setStoryboard(newSb); log(`패널 ${i+1} 프롬프트 저장됨`,'success'); }
+                              )} disabled={running}>수정</button>
                             {panels[i] ? (<>
-                              <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
-                              <button className="btn btn-success btn-sm" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>savePanelImage(panels[i], `panel_${i+1}.png`)}>저장</button>
+                              <button className="btn btn-outline btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
+                              <button className="btn btn-success btn-xs" onClick={()=>savePanelImage(panels[i], `panel_${i+1}.png`)}>저장</button>
                             </>) : (
-                              <button className="btn btn-primary btn-sm" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>regeneratePanel(i)} disabled={running}>생성</button>
+                              <button className="btn btn-primary btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>생성</button>
                             )}
                           </div>
                         </div>
@@ -2248,10 +2273,10 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
               {/* ===== STEP 4: Webtoon Preview ===== */}
               {step === 4 && (
-                <div style={{display:'flex',flexDirection:'column',gap:16}}>
-                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <div className="flex-col">
+                  <div className="flex-row gap-8">
                     <span style={{fontWeight:700,fontSize:15}}>웹툰 미리보기: {analysis?.title || ''}</span>
-                    <span style={{fontSize:12,color:'var(--text2)'}}>({panels.filter(Boolean).length}개 패널)</span>
+                    <span className="text-muted">({panels.filter(Boolean).length}개 패널)</span>
                   </div>
 
                   {panels.filter(Boolean).length === 0 && <div className="placeholder">패널 이미지를 먼저 생성하세요</div>}
@@ -2290,11 +2315,12 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
         {/* Log Panel */}
         <div style={{marginTop:12}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-            <span style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>로그</span>
-            <button className="btn btn-outline" style={{padding:'2px 8px',fontSize:10}} onClick={()=>setLogs([])}>초기화</button>
+          <div className="log-toggle" onClick={() => setLogCollapsed(!logCollapsed)}>
+            <span>{logCollapsed ? '▶' : '▼'}</span>
+            <span>로그 ({logs.length})</span>
+            <button className="btn btn-xs" onClick={(e) => {e.stopPropagation(); setLogs([]);}} style={{marginLeft:'auto'}}>초기화</button>
           </div>
-          <LogPanel logs={logs} />
+          {!logCollapsed && <LogPanel logs={logs} />}
         </div>
       </div>
     </div>
