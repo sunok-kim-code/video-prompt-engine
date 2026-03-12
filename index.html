@@ -103,6 +103,25 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .project-title-bar{font-weight:700;font-size:14px;color:var(--text);margin-right:12px;display:flex;align-items:center;gap:8px;}
 .episode-delete{position:absolute;top:-4px;right:-4px;width:16px;height:16px;border-radius:50%;background:var(--err);color:#fff;border:none;font-size:10px;cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1;}
 .episode-pill:hover .episode-delete{display:flex;}
+/* Asset Library */
+.asset-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;display:flex;}
+.asset-panel{width:min(90vw,800px);margin:auto;background:var(--surface);border-radius:16px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:24px;}
+.asset-tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:8px;}
+.asset-tab{padding:6px 16px;border-radius:8px 8px 0 0;border:none;background:transparent;color:var(--text2);cursor:pointer;font-size:13px;font-weight:600;transition:all .2s;}
+.asset-tab.active{background:var(--accent);color:#fff;}
+.asset-item{display:flex;gap:12px;padding:12px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;align-items:flex-start;transition:all .2s;}
+.asset-item:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(108,92,231,.1);}
+.asset-item img{width:80px;height:80px;object-fit:cover;border-radius:8px;flex-shrink:0;}
+.asset-item-info{flex:1;min-width:0;}
+.asset-item-name{font-weight:700;font-size:14px;margin-bottom:2px;}
+.asset-item-desc{font-size:12px;color:var(--text2);line-height:1.4;max-height:36px;overflow:hidden;}
+.asset-item-meta{font-size:11px;color:var(--text2);margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;}
+.asset-item-actions{display:flex;gap:4px;flex-shrink:0;align-items:center;}
+.asset-badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;background:#e8f4e8;color:#1e8449;}
+.asset-badge.prop{background:#ffeaa7;color:#636e72;}
+.asset-badge.bg{background:#dfe6e9;color:#2d3436;}
+.asset-placeholder{width:80px;height:80px;background:var(--surface2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:11px;flex-shrink:0;}
+.outfit-tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;background:#fff3cd;color:#856404;margin-left:4px;}
 </style>
 </head>
 <body>
@@ -164,6 +183,47 @@ function restoreBase64(obj, map) {
   if (!obj || typeof obj !== 'object') { if (typeof obj === 'string' && obj.startsWith('[img:') && obj.endsWith(']')) return map[obj.slice(5,-1)] || obj; return obj; }
   if (Array.isArray(obj)) return obj.map(item => restoreBase64(item, map));
   const out = {}; for (const [k,v] of Object.entries(obj)) out[k] = restoreBase64(v, map); return out;
+}
+
+// ============================================================
+// Shared Asset CRUD (Project-level)
+// ============================================================
+async function fbSaveAsset(projectId, assetType, assetId, data) {
+  const db = getDb(); if (!db) return;
+  const docId = assetType + '_' + assetId;
+  const ref = db.collection('webtoon_projects').doc(projectId).collection('shared_assets').doc(docId);
+  const imgs = []; const safe = stripBase64({...data, type: assetType, assetId}, imgs);
+  await ref.set({...safe, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+  const imgColl = ref.collection('images');
+  const old = await imgColl.get(); if(old.docs.length>0){const b=db.batch();old.docs.forEach(d=>b.delete(d.ref));await b.commit();}
+  for(let i=0;i<imgs.length;i++){const b=db.batch();const im=imgs[i];
+    if(im.data.length>900000){const cs=800000,cn=Math.ceil(im.data.length/cs);b.set(imgColl.doc(im.id),{key:im.key,chunks:cn});for(let c=0;c<cn;c++)b.set(imgColl.doc(im.id+'_c'+c),{data:im.data.substring(c*cs,(c+1)*cs),idx:c});}
+    else b.set(imgColl.doc(im.id),{key:im.key,data:im.data});await b.commit();}
+}
+
+async function fbLoadAllAssets(projectId) {
+  const db = getDb(); if (!db) return {characters:{}, backgrounds:{}, props:{}};
+  const snap = await db.collection('webtoon_projects').doc(projectId).collection('shared_assets').get();
+  const result = {characters:{}, backgrounds:{}, props:{}};
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const imgSnap = await doc.ref.collection('images').get();
+    const map={}, cmeta={}, cdata={};
+    imgSnap.docs.forEach(s=>{const sd=s.data();if(s.id.includes('_c')){const pid=s.id.split('_c')[0];if(!cdata[pid])cdata[pid]={};cdata[pid][sd.idx]=sd.data;}else if(sd.chunks)cmeta[s.id]=sd;else if(sd.data)map[s.id]=sd.data;});
+    for(const [id,m] of Object.entries(cmeta)){let a='';for(let i=0;i<m.chunks;i++)a+=(cdata[id]?.[i]||'');if(a)map[id]=a;}
+    const restored = restoreBase64(d, map);
+    const t = restored.type || 'characters';
+    if (result[t]) result[t][restored.assetId] = restored;
+  }
+  return result;
+}
+
+async function fbDeleteAsset(projectId, assetType, assetId) {
+  const db = getDb(); if (!db) return;
+  const docId = assetType + '_' + assetId;
+  const ref = db.collection('webtoon_projects').doc(projectId).collection('shared_assets').doc(docId);
+  const imgs = await ref.collection('images').get();
+  const batch = db.batch(); imgs.docs.forEach(d => batch.delete(d.ref)); batch.delete(ref); await batch.commit();
 }
 
 async function autoLoadServerConfig() {
@@ -237,6 +297,12 @@ const STEP_LABELS = ['1. 스토리 분석','2. 캐릭터/배경 레퍼런스','3
 const PROMPTS = {
   ANALYZE_STORY: `You are a webtoon story analyst. Analyze this Korean story/novel text and extract structured data for webtoon production.
 
+CRITICAL RULES FOR SHARED ASSETS:
+- If a list of EXISTING project assets is provided, you MUST reuse those asset IDs for characters/backgrounds/props that match.
+- Only create NEW IDs for truly new characters/backgrounds/props not in the existing assets.
+- Character appearance, outfit, and visual descriptions must stay IDENTICAL to existing assets unless the story EXPLICITLY describes a change.
+- If a character's outfit changes in this episode (e.g., "그녀는 빨간 드레스를 입고 나타났다"), note it in outfitOverride. Otherwise, outfit stays as the existing asset's default.
+
 Return ONLY a valid JSON object (no markdown, no explanation):
 {
   "title": "episode title in Korean",
@@ -249,9 +315,10 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "age": "approximate age",
       "gender": "male|female",
       "appearance": "detailed physical description in English for image generation (hair color, style, eye color, skin tone, height, build, distinguishing features)",
-      "outfit": "default outfit description in English",
+      "outfit": "default outfit description in English - MUST match existing asset if reusing ID",
       "personality": "brief personality in Korean",
-      "refPrompt": "detailed English prompt for generating a consistent character reference sheet: full body portrait, front-facing, neutral background, anime/manhwa style, [all appearance details]"
+      "refPrompt": "detailed English prompt for generating a consistent character reference sheet: full body portrait, front-facing, neutral background, anime/manhwa style, [all appearance details]",
+      "isExisting": false
     }
   ],
   "backgrounds": [
@@ -260,19 +327,46 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "name": "location name in Korean",
       "type": "interior|exterior",
       "description": "detailed visual description in English for image generation",
-      "refPrompt": "detailed English prompt for generating background: [environment details], wide shot, no characters, manhwa background art style, detailed illustration"
+      "refPrompt": "detailed English prompt for generating background: [environment details], wide shot, no characters, manhwa background art style, detailed illustration",
+      "isExisting": false
+    }
+  ],
+  "props": [
+    {
+      "id": "prop_1",
+      "name": "prop name in Korean",
+      "description": "detailed visual description in English for image generation",
+      "refPrompt": "detailed English prompt for generating prop: [object details], centered, clean background, detailed illustration, manhwa style",
+      "isExisting": false
     }
   ],
   "plotBeats": [
-    {"beat": 1, "summary": "Korean summary of this plot beat", "characters": ["char_1"], "location": "bg_1", "mood": "calm|tense|action|emotional|comedic"}
+    {
+      "beat": 1,
+      "summary": "Korean summary of this plot beat",
+      "characters": ["char_1"],
+      "location": "bg_1",
+      "props": ["prop_1"],
+      "mood": "calm|tense|action|emotional|comedic",
+      "outfitOverrides": {"char_1": "only if story EXPLICITLY changes outfit in this beat, describe the new outfit in English"}
+    }
   ]
 }
 
-Extract ALL characters mentioned (even minor ones). Create 3-6 backgrounds for distinct locations. Break the story into 8-20 plot beats that cover the full narrative.`,
+Extract ALL characters mentioned (even minor ones). Create 3-6 backgrounds for distinct locations. Extract important props/objects that appear repeatedly. Break the story into 8-20 plot beats that cover the full narrative.
+For outfitOverrides: ONLY include if the story text explicitly describes a costume/clothing change. Normal scenes without clothing mentions = no override = character wears default outfit.`,
 
   CREATE_STORYBOARD: `You are a professional webtoon storyboard artist. Given the story analysis (characters, backgrounds, plot), create a panel-by-panel storyboard for a webtoon episode.
 
 IMPORTANT: This is a VERTICAL SCROLL webtoon. Create 20-40 panels that tell the complete story.
+
+CRITICAL VISUAL CONSISTENCY RULES:
+1. Each character MUST wear their DEFAULT OUTFIT in every panel unless an outfitOverride is specified for that plot beat.
+2. Character hair style, hair color, eye color, and physical features MUST remain identical across ALL panels.
+3. Props that appear in multiple panels must look identical each time.
+4. Background locations must be visually consistent when revisited.
+5. In imagePrompt, ALWAYS include the character's full appearance + current outfit details. Never use vague descriptions.
+6. If a plot beat has outfitOverrides for a character, use the override outfit ONLY for panels in that beat. Revert to default outfit in subsequent panels unless another override exists.
 
 Return ONLY a valid JSON array (no markdown):
 [
@@ -282,13 +376,14 @@ Return ONLY a valid JSON array (no markdown):
     "type": "establishing|dialogue|action|emotion|transition|closeup",
     "shotSize": "extreme_wide|wide|medium_wide|medium|medium_close|close_up|extreme_close",
     "cameraAngle": "eye_level|low_angle|high_angle|birds_eye|dutch_angle|over_shoulder",
-    "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"center"}],
+    "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"center","outfitOverride":"only if changed from default"}],
     "background": "bg_1",
+    "props": ["prop_1"],
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
-    "narration": "나레이션이 있으면 여기에",
+    "narration": "나레이션이 있으메 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens in this panel",
-    "imagePrompt": "Detailed English prompt for image generation: [shot size], [camera angle], [character descriptions with poses and expressions], [background/environment], [lighting and atmosphere], manhwa/webtoon style, detailed illustration, vibrant colors"
+    "imagePrompt": "Detailed English prompt for image generation: [shot size], [camera angle], [character descriptions WITH FULL appearance AND current outfit details], [background/environment], [props in scene], [lighting and atmosphere], manhwa/webtoon style, detailed illustration, vibrant colors. IMPORTANT: describe exact same outfit as character reference unless overridden."
   }
 ]
 
@@ -299,7 +394,8 @@ Rules:
 - Use wide shots for action and establishing scenes
 - Include at least one panel per plot beat
 - Add transition panels between major scene changes
-- Each imagePrompt must be self-contained (include full character appearance details, not just names)
+- Each imagePrompt must be self-contained (include full character appearance details, EXACT outfit, not just names)
+- Include prop descriptions in imagePrompt when props appear in scene
 - Dialogue should match the original story text`
 };
 
@@ -355,6 +451,11 @@ function App() {
   const [storyboard, setStoryboard] = useState([]);
   const [panels, setPanels] = useState([]);
   const [imageProvider, setImageProvider] = useState('imagen4');
+
+  // Shared assets (project-level)
+  const [sharedAssets, setSharedAssets] = useState({characters:{}, backgrounds:{}, props:{}});
+  const [showAssetLibrary, setShowAssetLibrary] = useState(false);
+  const [assetTab, setAssetTab] = useState('characters');
 
   // Project management
   const [projectId, setProjectId] = useState(null);
@@ -428,14 +529,14 @@ function App() {
       if (episodeDoc && episodeDoc.completedSteps) setCompletedSteps(new Set(episodeDoc.completedSteps));
       if (episodeDoc && episodeDoc.step !== undefined) setStep(episodeDoc.step);
       setCurrentEpisode(episodeNum);
-      log(`${episodeNum} 화 로드 완료`, 'success');
+      log(`${episodeNum}화 로드 완료`, 'success');
     } catch(e) { log(`${episodeNum}화 로드 실패: ${e.message}`, 'error'); }
   }, [projectId, episodes, log]);
 
   // Delete episode
   const deleteEpisode = useCallback(async (episodeNum) => {
     if (!projectId) return;
-    if (!confirm(`${episodeNum} 화를 삭제하시겠습니까? 이 작업은 뗨럌름 수 없습니다.`)) return;
+    if (!confirm(`${episodeNum}화를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
     try {
       log(`${episodeNum}화 삭제 중...`);
       await fbDeleteEpisode(projectId, episodeNum);
@@ -455,7 +556,7 @@ function App() {
           setStep(0);
         }
       }
-      log(`${episodeNum} 화 삭제 완료`, 'success');
+      log(`${episodeNum}화 삭제 완료`, 'success');
     } catch(e) { log(`삭제 실패: ${e.message}`, 'error'); }
   }, [projectId, episodes, currentEpisode, loadEpisode, log]);
 
@@ -463,51 +564,122 @@ function App() {
   const runStep1 = async () => {
     log('Step 1: 스토리 분석 시작...', 'info');
     setStep(0);
-    const result = await callText(PROMPTS.ANALYZE_STORY, sourceText);
+
+    // Build existing assets context for the AI
+    let existingAssetsContext = '';
+    const sa = sharedAssets;
+    const existingChars = Object.values(sa.characters);
+    const existingBgs = Object.values(sa.backgrounds);
+    const existingProps = Object.values(sa.props);
+    if (existingChars.length > 0 || existingBgs.length > 0 || existingProps.length > 0) {
+      existingAssetsContext = '\n\n--- EXISTING PROJECT ASSETS (reuse these IDs if the same character/background/prop appears) ---\n';
+      if (existingChars.length > 0) {
+        existingAssetsContext += 'Characters:\n' + existingChars.map(c => `  ${c.assetId}: ${c.name} (${c.role}) - appearance: ${c.appearance} - default outfit: ${c.outfit}`).join('\n') + '\n';
+      }
+      if (existingBgs.length > 0) {
+        existingAssetsContext += 'Backgrounds:\n' + existingBgs.map(b => `  ${b.assetId}: ${b.name} - ${b.description}`).join('\n') + '\n';
+      }
+      if (existingProps.length > 0) {
+        existingAssetsContext += 'Props:\n' + existingProps.map(p => `  ${p.assetId}: ${p.name} - ${p.description}`).join('\n') + '\n';
+      }
+      existingAssetsContext += '--- END EXISTING ASSETS ---\n';
+    }
+
+    const result = await callText(PROMPTS.ANALYZE_STORY, sourceText + existingAssetsContext);
     const parsed = parseJSON(result);
-    log(`분석 완료: 캐릭터 ${parsed.characters?.length || 0}명, 배경 ${parsed.backgrounds?.length || 0}개, 플롯 ${parsed.plotBeats?.length || 0}개`, 'success');
+    // Mark existing assets
+    if (parsed.characters) parsed.characters.forEach(c => { if (sa.characters[c.id]) c.isExisting = true; });
+    if (parsed.backgrounds) parsed.backgrounds.forEach(b => { if (sa.backgrounds[b.id]) b.isExisting = true; });
+    if (parsed.props) parsed.props?.forEach(p => { if (sa.props[p.id]) p.isExisting = true; });
+    log(`분석 완료: 캐릭터 ${parsed.characters?.length || 0}명 (기존 ${parsed.characters?.filter(c=>c.isExisting).length || 0}), 배경 ${parsed.backgrounds?.length || 0}개, 소품 ${parsed.props?.length || 0}개, 플롯 ${parsed.plotBeats?.length || 0}개`, 'success');
     setAnalysis(parsed);
     setCompletedSteps(prev => new Set([...prev, 0]));
     setStep(1);
     return parsed;
   };
 
-  // ======== STEP 2: Generate Reference Images ========
+  // ======== STEP 2: Generate Reference Images (uses shared assets) ========
   const runStep2 = async (analysisData) => {
     const data = analysisData || analysis;
     if (!data) throw new Error('분석 데이터 없음');
-    log('Step 2: 레퍼런스 이미지 생성 시작...', 'info');
+    log('Step 2: 레퍼런스 이미지 생성 시작 (공유 에셋 활용)...', 'info');
     setStep(1);
     const refs = {characters:{}, backgrounds:{}};
+    const sa = {...sharedAssets};
 
+    // Characters
     for (let i = 0; i < data.characters.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
       const char = data.characters[i];
+      // Check shared asset first
+      if (sa.characters[char.id]?.image) {
+        refs.characters[char.id] = sa.characters[char.id].image;
+        log(`${char.name} — 공유 에셋에서 로드 ✓`, 'success');
+        setReferences({...refs});
+        continue;
+      }
       log(`캐릭터 레퍼런스 생성 (${i+1}/${data.characters.length}): ${char.name}`);
       try {
         const images = await callImage(char.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality, detailed');
         refs.characters[char.id] = images[0];
-        log(`${char.name} 레퍼런스 완료`, 'success');
+        // Save to shared assets
+        const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
+        sa.characters[char.id] = {...assetData, assetId: char.id, type: 'characters'};
+        if (projectId) await fbSaveAsset(projectId, 'characters', char.id, assetData);
+        log(`${char.name} 레퍼런스 생성 → 공유 에셋 저장 완료`, 'success');
       } catch(e) {
         log(`${char.name} 레퍼런스 실패: ${e.message}`, 'error');
       }
       setReferences({...refs});
     }
 
+    // Backgrounds
     for (let i = 0; i < data.backgrounds.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
       const bg = data.backgrounds[i];
+      if (sa.backgrounds[bg.id]?.image) {
+        refs.backgrounds[bg.id] = sa.backgrounds[bg.id].image;
+        log(`${bg.name} — 공유 에셯에서 로드 ✓`, 'success');
+        setReferences({...refs});
+        continue;
+      }
       log(`배경 레퍼런스 생성 (${i+1}/${data.backgrounds.length}): ${bg.name}`);
       try {
         const images = await callImage(bg.refPrompt + ', no characters, manhwa background art, detailed environment, wide shot', {aspectRatio: '16:9'});
         refs.backgrounds[bg.id] = images[0];
-        log(`${bg.name} 배경 완료`, 'success');
+        const assetData = {name: bg.name, bgType: bg.type, description: bg.description, refPrompt: bg.refPrompt, image: images[0]};
+        sa.backgrounds[bg.id] = {...assetData, assetId: bg.id, type: 'backgrounds'};
+        if (projectId) await fbSaveAsset(projectId, 'backgrounds', bg.id, assetData);
+        log(`${bg.name} 배경 생성 → 공유 에셋 저장 완료`, 'success');
       } catch(e) {
         log(`${bg.name} 배경 실패: ${e.message}`, 'error');
       }
       setReferences({...refs});
     }
 
+    // Props
+    if (data.props?.length > 0) {
+      for (let i = 0; i < data.props.length; i++) {
+        if (abortRef.current) throw new Error('중단됨');
+        const prop = data.props[i];
+        if (sa.props[prop.id]?.image) {
+          log(`${prop.name} — 공유 에셯에서 로드 ✓`, 'success');
+          continue;
+        }
+        log(`소품 레퍼런스 생성 (${i+1}/${data.props.length}): ${prop.name}`);
+        try {
+          const images = await callImage(prop.refPrompt + ', single object, centered, clean white background, detailed illustration, manhwa style', {aspectRatio: '1:1'});
+          const assetData = {name: prop.name, description: prop.description, refPrompt: prop.refPrompt, image: images[0]};
+          sa.props[prop.id] = {...assetData, assetId: prop.id, type: 'props'};
+          if (projectId) await fbSaveAsset(projectId, 'props', prop.id, assetData);
+          log(`${prop.name} 소품 생성 → 공유 에셋 저장 완료`, 'success');
+        } catch(e) {
+          log(`${prop.name} 소품 실패: ${e.message}`, 'error');
+        }
+      }
+    }
+
+    setSharedAssets({...sa});
     setCompletedSteps(prev => new Set([...prev, 1]));
     setStep(2);
     return refs;
@@ -520,9 +692,15 @@ function App() {
     log('Step 3: 스토리보드 생성 시작...', 'info');
     setStep(2);
 
-    const charContext = data.characters.map(c => `${c.id}: ${c.name} (${c.role}) - ${c.appearance}`).join('\n');
+    const charContext = data.characters.map(c => `${c.id}: ${c.name} (${c.role}) - appearance: ${c.appearance} - DEFAULT OUTFIT: ${c.outfit}`).join('\n');
     const bgContext = data.backgrounds.map(b => `${b.id}: ${b.name} - ${b.description}`).join('\n');
-    const plotContext = data.plotBeats.map(p => `Beat ${p.beat}: ${p.summary} [mood: ${p.mood}, chars: ${p.characters.join(',')}, loc: ${p.location}]`).join('\n');
+    const propContext = (data.props||[]).map(p => `${p.id}: ${p.name} - ${p.description}`).join('\n');
+    const plotContext = data.plotBeats.map(p => {
+      let s = `Beat ${p.beat}: ${p.summary} [mood: ${p.mood}, chars: ${p.characters.join(',')}, loc: ${p.location}`;
+      if (p.props?.length) s += `, props: ${p.props.join(',')}`;
+      if (p.outfitOverrides && Object.keys(p.outfitOverrides).length > 0) s += `, OUTFIT CHANGES: ${JSON.stringify(p.outfitOverrides)}`;
+      return s + ']';
+    }).join('\n');
 
     const userPrompt = `Story title: ${data.title}
 Synopsis: ${data.synopsis}
@@ -533,13 +711,17 @@ ${charContext}
 Backgrounds:
 ${bgContext}
 
+Props/Objects:
+${propContext || '(none)'}
+
 Plot beats:
 ${plotContext}
 
 Original story text:
 ${sourceText.substring(0, 6000)}
 
-Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt must include FULL character appearance descriptions (not just IDs).`;
+Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details (not just IDs).
+CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is explicitly specified in the plot beat. Include prop descriptions when they appear in a scene.`;
 
     const result = await callText(PROMPTS.CREATE_STORYBOARD, userPrompt);
     const parsed = parseJSON(result);
@@ -563,22 +745,35 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
 
     for (let i = 0; i < sb.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
-      if (newPanels[i]) { log(`패널 ${i+1} 이미 생성됨, 건너뜀`); continue; }
+      if (newPanels[i]) { log(`패널 ${i+1} 이미 생성됨, 건너뜌`); continue; }
 
       const panel = sb[i];
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
 
       const refImages = [];
+      const sa = sharedAssets;
       if (panel.characters && analysis) {
         for (const pc of panel.characters) {
           const charId = pc.id || pc;
-          if (refs.characters[charId]) {
+          // Prefer shared asset image, fall back to episode refs
+          const charImg = sa.characters[charId]?.image || refs.characters[charId];
+          if (charImg) {
             const charInfo = analysis.characters.find(c => c.id === charId);
-            refImages.push({image: refs.characters[charId], description: charInfo?.appearance || charInfo?.name || charId});
+            const outfitDesc = pc.outfitOverride || charInfo?.outfit || '';
+            refImages.push({image: charImg, description: (charInfo?.appearance || charId) + (outfitDesc ? ', wearing: ' + outfitDesc : '')});
           }
         }
-        if (panel.background && refs.backgrounds[panel.background]) {
-          refImages.push({image: refs.backgrounds[panel.background], description: 'background environment'});
+        if (panel.background) {
+          const bgImg = sa.backgrounds[panel.background]?.image || refs.backgrounds[panel.background];
+          if (bgImg) refImages.push({image: bgImg, description: 'background environment'});
+        }
+        // Include prop references
+        if (panel.props) {
+          for (const propId of panel.props) {
+            if (sa.props[propId]?.image) {
+              refImages.push({image: sa.props[propId].image, description: sa.props[propId].name + ': ' + (sa.props[propId].description || '')});
+            }
+          }
         }
       }
 
@@ -645,12 +840,23 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
     try {
       const panel = storyboard[idx];
       const refImages = [];
+      const sa = sharedAssets;
       if (panel.characters && analysis) {
         for (const pc of panel.characters) {
           const charId = pc.id || pc;
-          if (references.characters[charId]) {
+          const charImg = sa.characters[charId]?.image || references.characters[charId];
+          if (charImg) {
             const charInfo = analysis.characters.find(c => c.id === charId);
-            refImages.push({image: references.characters[charId], description: charInfo?.appearance || ''});
+            refImages.push({image: charImg, description: charInfo?.appearance || ''});
+          }
+        }
+        if (panel.background) {
+          const bgImg = sa.backgrounds[panel.background]?.image || references.backgrounds[panel.background];
+          if (bgImg) refImages.push({image: bgImg, description: 'background'});
+        }
+        if (panel.props) {
+          for (const propId of panel.props) {
+            if (sa.props[propId]?.image) refImages.push({image: sa.props[propId].image, description: sa.props[propId].name});
           }
         }
       }
@@ -664,7 +870,7 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
     finally { setRunning(false); }
   };
 
-  // ======== Regenerate single character reference ========
+  // ======== Regenerate single character reference (updates shared asset) ========
   const regenerateCharRef = async (charId) => {
     if (!analysis) return;
     const char = analysis.characters.find(c => c.id === charId);
@@ -674,8 +880,34 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
       log(`${char.name} 레퍼런스 재생성 중...`);
       const images = await callImage(char.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality');
       setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
-      log(`${char.name} 레퍼런스 재생성 완료`, 'success');
+      // Update shared asset
+      const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
+      setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: {...assetData, assetId: charId, type: 'characters'}}}));
+      if (projectId) await fbSaveAsset(projectId, 'characters', charId, assetData);
+      log(`${char.name} 레퍼런스 재생성 → 공유 에셋 업데이트 완료`, 'success');
     } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
+    finally { setRunning(false); }
+  };
+
+  // ======== Regenerate single asset from library ========
+  const regenerateAsset = async (assetType, assetId) => {
+    const asset = sharedAssets[assetType]?.[assetId];
+    if (!asset) return;
+    setRunning(true);
+    try {
+      log(`${asset.name} 에셋 재생성 중...`);
+      let suffix = '', opts = {};
+      if (assetType === 'characters') suffix = ', character reference sheet, full body, front view, clean background, manhwa art style, high quality';
+      else if (assetType === 'backgrounds') { suffix = ', no characters, manhwa background art, detailed environment, wide shot'; opts.aspectRatio = '16:9'; }
+      else if (assetType === 'props') { suffix = ', single object, centered, clean white background, detailed illustration, manhwa style'; opts.aspectRatio = '1:1'; }
+      const images = await callImage(asset.refPrompt + suffix, opts);
+      const updated = {...asset, image: images[0]};
+      setSharedAssets(prev => ({...prev, [assetType]: {...prev[assetType], [assetId]: updated}}));
+      if (assetType === 'characters') setReferences(prev => ({...prev, characters: {...prev.characters, [assetId]: images[0]}}));
+      if (assetType === 'backgrounds') setReferences(prev => ({...prev, backgrounds: {...prev.backgrounds, [assetId]: images[0]}}));
+      if (projectId) await fbSaveAsset(projectId, assetType, assetId, updated);
+      log(`${asset.name} 에셋 재생성 완료`, 'success');
+    } catch(e) { log(`에셋 재생성 실패: ${e.message}`, 'error'); }
     finally { setRunning(false); }
   };
 
@@ -729,6 +961,14 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
       setProjectId(pid);
       setProjectTitle(proj.title || '');
 
+      // Load shared assets
+      try {
+        const assets = await fbLoadAllAssets(pid);
+        setSharedAssets(assets);
+        const totalAssets = Object.keys(assets.characters).length + Object.keys(assets.backgrounds).length + Object.keys(assets.props).length;
+        if (totalAssets > 0) log(`공유 에셋 ${totalAssets}개 로드 완료`, 'success');
+      } catch(e) { log('공유 에셋 로드 실패: ' + e.message, 'error'); }
+
       // Load episodes
       const episodeList = await fbListEpisodes(pid);
       setEpisodes(episodeList);
@@ -763,10 +1003,72 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
             <option value="nanoBanana">Gemini Image</option>
           </select>
         </div>
+        {projectId && <button className="api-key-btn" onClick={()=>setShowAssetLibrary(true)} style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',borderColor:'transparent'}}>에셋 라이브러리 ({Object.keys(sharedAssets.characters).length + Object.keys(sharedAssets.backgrounds).length + Object.keys(sharedAssets.props).length})</button>}
         <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API 설정</button>
       </div>
 
       {showApiModal && <ApiKeyModal onClose={()=>setShowApiModal(false)} />}
+
+      {/* Asset Library Modal */}
+      {showAssetLibrary && (
+        <div className="asset-overlay" onClick={()=>setShowAssetLibrary(false)}>
+          <div className="asset-panel" onClick={e=>e.stopPropagation()}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+              <div style={{fontWeight:700,fontSize:18}}>에셋 라이브러리</div>
+              <button className="btn-cancel" onClick={()=>setShowAssetLibrary(false)}>닫기</button>
+            </div>
+            <div style={{fontSize:13,color:'var(--text2)',marginBottom:16}}>프로젝트 전체에서 공유되는 캐릭터, 배경, 소품 에셋입니다. 혔가 바뀌어도 동일한 이미지가 사용됩니다.</div>
+
+            <div className="asset-tabs">
+              <button className={`asset-tab ${assetTab==='characters'?'active':''}`} onClick={()=>setAssetTab('characters')}>캐릭터 ({Object.keys(sharedAssets.characters).length})</button>
+              <button className={`asset-tab ${assetTab==='backgrounds'?'active':''}`} onClick={()=>setAssetTab('backgrounds')}>배경 ({Object.keys(sharedAssets.backgrounds).length})</button>
+              <button className={`asset-tab ${assetTab==='props'?'active':''}`} onClick={()=>setAssetTab('props')}>소품 ({Object.keys(sharedAssets.props).length})</button>
+            </div>
+
+            {Object.keys(sharedAssets[assetTab]).length === 0 && (
+              <div className="placeholder">등록된 {assetTab === 'characters' ? '캐릭터' : assetTab === 'backgrounds' ? '배경' : '소품'} 에셯이 없습니다. 스토리 분석 후 레퍼런스를 생성하면 자동으로 등록됩니다.</div>
+            )}
+
+            {Object.entries(sharedAssets[assetTab]).map(([id, asset]) => (
+              <div key={id} className="asset-item">
+                {asset.image ? (
+                  <img src={asset.image} alt={asset.name} style={assetTab==='backgrounds'?{width:120,height:80,aspectRatio:'16/9'}:assetTab==='props'?{width:80,height:80,aspectRatio:'1/1'}:{}} />
+                ) : (
+                  <div className="asset-placeholder">미생성</div>
+                )}
+                <div className="asset-item-info">
+                  <div className="asset-item-name">
+                    {asset.name}
+                    {assetTab === 'characters' && asset.role && <span className="asset-badge" style={{marginLeft:6}}>{asset.role}</span>}
+                    {assetTab === 'backgrounds' && <span className="asset-badge bg">{asset.bgType || 'scene'}</span>}
+                    {assetTab === 'props' && <span className="asset-badge prop">소품</span>}
+                  </div>
+                  <div className="asset-item-desc">
+                    {assetTab === 'characters' ? asset.appearance : asset.description}
+                  </div>
+                  {assetTab === 'characters' && asset.outfit && (
+                    <div className="asset-item-meta">
+                      <span>기본 의상: {asset.outfit}</span>
+                    </div>
+                  )}
+                  <div className="asset-item-meta">
+                    <span>ID: {id}</span>
+                  </div>
+                </div>
+                <div className="asset-item-actions">
+                  <button className="btn btn-outline btn-sm" onClick={()=>regenerateAsset(assetTab, id)} disabled={running}>재생성</button>
+                  <button className="btn btn-outline btn-sm" style={{color:'var(--err)',borderColor:'var(--err)'}} onClick={async ()=>{
+                    if(!confirm(`${asset.name} 에셋을 삭제하시겠습니까?`)) return;
+                    if(projectId) await fbDeleteAsset(projectId, assetTab, id);
+                    setSharedAssets(prev => {const n={...prev};const t={...n[assetTab]};delete t[id];n[assetTab]=t;return n;});
+                    log(`${asset.name} 에셋 삭제됨`, 'success');
+                  }}>삭제</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="main-content">
         {/* Episode Bar */}
@@ -866,7 +1168,7 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
                     </div>
 
                     <textarea className="form-textarea" value={sourceText} onChange={e=>setSourceText(e.target.value)}
-                      placeholder={`웹툰으로 만들 소설/스토리 텍스트를 입력하세요. 이 텍스트가 웹툰 ${currentEpisode || 1}화로 변환됩니다.`}
+                      placeholder={`囹툰으로 만들 소설/스토리 텍스튼를 입력하세요. 이 텍스트가 웹툸 ${currentEpisode || 1}화로 변환됩니다.`}
                       style={{minHeight:250}} disabled={running} />
                     <div style={{textAlign:'right',fontSize:11,color:'var(--text2)',marginTop:4}}>{sourceText.length} chars</div>
                   </div>
@@ -878,9 +1180,9 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
                       <div style={{fontSize:13,color:'var(--text2)',marginBottom:12}}>{analysis.synopsis}</div>
                       <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
                         <div>
-                          <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>ܺ�릭터 ({analysis.characters?.length})</div>
+                          <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>캐릭터 ({analysis.characters?.length})</div>
                           {analysis.characters?.map(c => (
-                            <div key={c.id} style={{marginBottom:4}}><span className="tag tag-char">{c.role}</span> <strong>{c.name}</strong> — {c.personality}</div>
+                            <div key={c.id} style={{marginBottom:4}}><span className="tag tag-char">{c.role}</span> <strong>{c.name}</strong> — {c.personality} {c.isExisting && <span className="outfit-tag">공유 에셋</span>}</div>
                           ))}
                         </div>
                         <div>
@@ -889,10 +1191,21 @@ Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt
                             <div key={b.id} style={{marginBottom:4}}><span className="tag tag-loc">{b.type}</span> {b.name}</div>
                           ))}
                         </div>
+                        {analysis.props?.length > 0 && (
+                          <div>
+                            <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>소품 ({analysis.props?.length})</div>
+                            {analysis.props?.map(p => (
+                              <div key={p.id} style={{marginBottom:4}}><span className="tag" style={{background:'#ffeaa7',color:'#636e72'}}>소품</span> {p.name} {p.isExisting && <span className="outfit-tag">공유</span>}</div>
+                            ))}
+                          </div>
+                        )}
                         <div>
                           <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>플롯 ({analysis.plotBeats?.length})</div>
                           {analysis.plotBeats?.map(p => (
-                            <div key={p.beat} style={{marginBottom:4,fontSize:12}}><span className="tag tag-mood">{p.mood}</span> {p.summary}</div>
+                            <div key={p.beat} style={{marginBottom:4,fontSize:12}}>
+                              <span className="tag tag-mood">{p.mood}</span> {p.summary}
+                              {p.outfitOverrides && Object.keys(p.outfitOverrides).length > 0 && <span className="outfit-tag">의상변경</span>}
+                            </div>
                           ))}
                         </div>
                       </div>
