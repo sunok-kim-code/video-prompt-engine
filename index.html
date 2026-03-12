@@ -380,7 +380,7 @@ Return ONLY a valid JSON array (no markdown):
     "background": "bg_1",
     "props": ["prop_1"],
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
-    "narration": "나레이션이 있으메 여기에",
+    "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens in this panel",
     "imagePrompt": "Detailed English prompt for image generation: [shot size], [camera angle], [character descriptions WITH FULL appearance AND current outfit details], [background/environment], [props in scene], [lighting and atmosphere], manhwa/webtoon style, detailed illustration, vibrant colors. IMPORTANT: describe exact same outfit as character reference unless overridden."
@@ -639,7 +639,7 @@ function App() {
       const bg = data.backgrounds[i];
       if (sa.backgrounds[bg.id]?.image) {
         refs.backgrounds[bg.id] = sa.backgrounds[bg.id].image;
-        log(`${bg.name} — 공유 에셯에서 로드 ✓`, 'success');
+        log(`${bg.name} — 공유 에셋에서 로드 ✓`, 'success');
         setReferences({...refs});
         continue;
       }
@@ -663,7 +663,7 @@ function App() {
         if (abortRef.current) throw new Error('중단됨');
         const prop = data.props[i];
         if (sa.props[prop.id]?.image) {
-          log(`${prop.name} — 공유 에셯에서 로드 ✓`, 'success');
+          log(`${prop.name} — 공유 에셋에서 로드 ✓`, 'success');
           continue;
         }
         log(`소품 레퍼런스 생성 (${i+1}/${data.props.length}): ${prop.name}`);
@@ -745,7 +745,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
     for (let i = 0; i < sb.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
-      if (newPanels[i]) { log(`패널 ${i+1} 이미 생성됨, 건너뜌`); continue; }
+      if (newPanels[i]) { log(`패널 ${i+1} 이미 생성됨, 건너뜀`); continue; }
 
       const panel = sb[i];
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
@@ -1017,7 +1017,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
               <div style={{fontWeight:700,fontSize:18}}>에셋 라이브러리</div>
               <button className="btn-cancel" onClick={()=>setShowAssetLibrary(false)}>닫기</button>
             </div>
-            <div style={{fontSize:13,color:'var(--text2)',marginBottom:16}}>프로젝트 전체에서 공유되는 캐릭터, 배경, 소품 에셋입니다. 혔가 바뀌어도 동일한 이미지가 사용됩니다.</div>
+            <div style={{fontSize:13,color:'var(--text2)',marginBottom:16}}>프로젝트 전체에서 공유되는 캐릭터, 배경, 소품 에셋입니다. 화가 바뀌어도 동일한 이미지가 사용됩니다.</div>
 
             <div className="asset-tabs">
               <button className={`asset-tab ${assetTab==='characters'?'active':''}`} onClick={()=>setAssetTab('characters')}>캐릭터 ({Object.keys(sharedAssets.characters).length})</button>
@@ -1026,7 +1026,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
             </div>
 
             {Object.keys(sharedAssets[assetTab]).length === 0 && (
-              <div className="placeholder">등록된 {assetTab === 'characters' ? '캐릭터' : assetTab === 'backgrounds' ? '배경' : '소품'} 에셯이 없습니다. 스토리 분석 후 레퍼런스를 생성하면 자동으로 등록됩니다.</div>
+              <div className="placeholder">등록된 {assetTab === 'characters' ? '캐릭터' : assetTab === 'backgrounds' ? '배경' : '소품'} 에셋이 없습니다. 스토리 분석 후 레퍼런스를 생성하면 자동으로 등록됩니다.</div>
             )}
 
             {Object.entries(sharedAssets[assetTab]).map(([id, asset]) => (
@@ -1168,7 +1168,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                     </div>
 
                     <textarea className="form-textarea" value={sourceText} onChange={e=>setSourceText(e.target.value)}
-                      placeholder={`囹툰으로 만들 소설/스토리 텍스튼를 입력하세요. 이 텍스트가 웹툸 ${currentEpisode || 1}화로 변환됩니다.`}
+                      placeholder={`웹툰으로 만들 소설/스토리 텍스트를 입력하세요. 이 텍스트가 웹툰 ${currentEpisode || 1}화로 변환됩니다.`}
                       style={{minHeight:250}} disabled={running} />
                     <div style={{textAlign:'right',fontSize:11,color:'var(--text2)',marginTop:4}}>{sourceText.length} chars</div>
                   </div>
