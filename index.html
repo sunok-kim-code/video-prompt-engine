@@ -1687,6 +1687,16 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
     try { setProjectList(await fbListProjects()); } catch(e) { log('목록 로드 실패: ' + e.message, 'error'); }
   };
 
+  // ======== Save Panel Image ========
+  const savePanelImage = (dataUrl, filename) => {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename || 'panel.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   // ======== RENDER ========
   const showPreview = (src, title) => { setPreviewImage(src); setPreviewTitle(title || ''); };
 
@@ -1729,7 +1739,10 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
           <div className="img-modal-content" onClick={e => e.stopPropagation()}>
             <button className="img-modal-close" onClick={() => setPreviewImage(null)}>×</button>
             <img src={previewImage} alt={previewTitle} />
-            {previewTitle && <div className="img-modal-title">{previewTitle}</div>}
+            <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:12,padding:'8px 0'}}>
+              {previewTitle && <span className="img-modal-title" style={{padding:0,margin:0}}>{previewTitle}</span>}
+              <button onClick={()=>savePanelImage(previewImage, (previewTitle || 'image').replace(/[^a-zA-Z0-9가-힣]/g,'_') + '.png')} style={{background:'#27ae60',color:'#fff',border:'none',borderRadius:8,padding:'6px 16px',fontSize:13,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>💾 이미지 저장</button>
+            </div>
           </div>
         </div>
       )}
@@ -2162,9 +2175,10 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                           <div style={{display:'flex',gap:4,marginTop:4}}>
                             <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 6px'}}
                               onClick={() => openPromptEditor('panel', i, panel.imagePrompt, `패널 ${i+1}`, (p) => regeneratePanel(i, p))} disabled={running}>프롬프트 수정</button>
-                            {panels[i] ? (
+                            {panels[i] ? (<>
                               <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
-                            ) : (
+                              <button className="btn btn-success btn-sm" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>savePanelImage(panels[i], `panel_${i+1}.png`)}>저장</button>
+                            </>) : (
                               <button className="btn btn-primary btn-sm" style={{fontSize:10,padding:'2px 6px'}} onClick={()=>regeneratePanel(i)} disabled={running}>생성</button>
                             )}
                           </div>
@@ -2191,6 +2205,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                       return (
                         <div key={i} style={{position:'relative'}}>
                           <img className="clickable-img" src={panels[i]} alt={`Panel ${i+1}`} onClick={() => showPreview(panels[i], `\ud328\ub110 ${i+1}: ${panel.description?.substring(0,60) || ""}`)} />
+                          <button onClick={()=>savePanelImage(panels[i], `${analysis?.title || 'webtoon'}_panel_${i+1}.png`)} style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,0.7)',color:'#fff',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:4,transition:'background 0.2s'}} onMouseOver={e=>e.currentTarget.style.background='rgba(39,174,96,0.9)'} onMouseOut={e=>e.currentTarget.style.background='rgba(0,0,0,0.7)'}>💾 저장</button>
                           {/* Dialogue overlay */}
                           {panel.dialogue?.length > 0 && (
                             <div style={{position:'absolute',bottom:8,left:8,right:8,display:'flex',flexDirection:'column',gap:4}}>
