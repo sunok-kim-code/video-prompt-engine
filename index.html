@@ -285,7 +285,7 @@ Return ONLY a valid JSON array (no markdown):
     "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"center"}],
     "background": "bg_1",
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
-    "narration": "나레이션이 있으메 여기에",
+    "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens in this panel",
     "imagePrompt": "Detailed English prompt for image generation: [shot size], [camera angle], [character descriptions with poses and expressions], [background/environment], [lighting and atmosphere], manhwa/webtoon style, detailed illustration, vibrant colors"
@@ -428,16 +428,16 @@ function App() {
       if (episodeDoc && episodeDoc.completedSteps) setCompletedSteps(new Set(episodeDoc.completedSteps));
       if (episodeDoc && episodeDoc.step !== undefined) setStep(episodeDoc.step);
       setCurrentEpisode(episodeNum);
-      log(`${episodeNum}４로드 완료`, 'success');
-    } catch(e) { log(`${episodeNum}４로드 실패: ${e.message}`, 'error'); }
+      log(`${episodeNum} 화 로드 완료`, 'success');
+    } catch(e) { log(`${episodeNum}화 로드 실패: ${e.message}`, 'error'); }
   }, [projectId, episodes, log]);
 
   // Delete episode
   const deleteEpisode = useCallback(async (episodeNum) => {
     if (!projectId) return;
-    if (!confirm(`${episodeNum}４를 삭제하시겠습니까? 이 작은 되됌를 수 없습니다.`)) return;
+    if (!confirm(`${episodeNum} 화를 삭제하시겠습니까? 이 작업은 뗨럌름 수 없습니다.`)) return;
     try {
-      log(`${episodeNum}４ 삭제 중...`);
+      log(`${episodeNum}화 삭제 중...`);
       await fbDeleteEpisode(projectId, episodeNum);
       setEpisodes(prev => prev.filter(e => e.number !== episodeNum));
       if (currentEpisode === episodeNum) {
@@ -455,7 +455,7 @@ function App() {
           setStep(0);
         }
       }
-      log(`${episodeNum}화 삭제 완료`, 'success');
+      log(`${episodeNum} 화 삭제 완료`, 'success');
     } catch(e) { log(`삭제 실패: ${e.message}`, 'error'); }
   }, [projectId, episodes, currentEpisode, loadEpisode, log]);
 
@@ -465,7 +465,7 @@ function App() {
     setStep(0);
     const result = await callText(PROMPTS.ANALYZE_STORY, sourceText);
     const parsed = parseJSON(result);
-    log(`분석 완료: 캐릭터 ${parsed.characters?.length || 0}팅, 배경 ${parsed.backgrounds?.length || 0}개, 플롯 ${parsed.plotBeats?.length || 0}개`, 'success');
+    log(`분석 완료: 캐릭터 ${parsed.characters?.length || 0}명, 배경 ${parsed.backgrounds?.length || 0}개, 플롯 ${parsed.plotBeats?.length || 0}개`, 'success');
     setAnalysis(parsed);
     setCompletedSteps(prev => new Set([...prev, 0]));
     setStep(1);
@@ -514,10 +514,576 @@ function App() {
   };
 
   // ======== STEP 3: Create Storyboard ========
-  const runStep3 = async (analysisData) =>��6��7BFF��Ǘ6�4FF���Ǘ6�3���b�FF�F�&�r�WrW'&�"�~�hN�I�����N�K�xn���r�����r�u7FW3�ȪN�j�jλ;N�9��9��Kȹ������r�v��f�r���6WE7FW�"����6��7B6�$6��FW�B�FF�6�&7FW'2���2��G�2�GӢG�2���W��G�2�&��WҒ�G�2�V&�6W������u��r���6��7B&t6��FW�B�FF�&6�w&�V�G2���"��G�"�GӢG�"���W��G�"�FW67&�F���������u��r���6��7B��D6��FW�B�FF���D&VG2�����&VBG��&VGӢG��7V��'������C�G�����G��6�'3�G��6�&7FW'2����r�r�����3�G����6F����������u��r����6��7BW6W%&��B�7F�'�F�F�S�G�FF�F�F�WХ7���6�3�G�FF�7���6�7Р�6�&7FW'3��G�6�$6��FW�GР�&6�w&�V�G3��G�&t6��FW�GР���B&VG3��G���D6��FW�GР��&�v���7F�'�FW�C��G�6�W&6UFW�B�7V'7G&��r��c�Р�7&VFR6���WFRvV'F���7F�'�&�&Bv�F�#�C�V�2�V6��V�w2��vU&��B�W7B��6�VFReT��6�&7FW"V&�6RFW67&�F���2���B�W7B�G2�����6��7B&W7V�B�v�B6��FW�B�$��E2�5$TDU�5D�%�$�$B�W6W%&��B���6��7B'6VB�'6T�4��&W7V�B�����r�ȪN�j�jλ;N�9�ɘN�8âG�'6VB��V�wF�ޫ	��ʎ�I�w7V66W72r���6WE7F�'�&�&B�'6VB���6WE�V�2��Wr'&��'6VB��V�wF���f���V����6WD6���WFVE7FW2�&Wb���Wr6WB�����&Wb�%Ғ���6WE7FW�2���&WGW&�'6VC��Ӱ������������5DUC�vV�W&FR�V���vW2�������Т6��7B'V�7FWB�7��2�7F�'�&�&DFF�&Vg4FF�����6��7B6"�7F�'�&�&DFF��7F�'�&�&C��6��7B&Vg2�&Vg4FF��&VfW&V�6W3���b�6"��V�wF��F�&�r�WrW'&�"�~ȪN�j�jλ;N�9��xn���r�����r�u7FWC��ʎ�I��N����x�9��Kȹ������r�v��f�r���6WE7FW�2����6��7B�Wu�V�2������V�2��V�wF����6"��V�wF���V�2��Wr'&��6"��V�wF���f���V��Ӱ��f�"��WB�����6"��V�wF���������b�&�'E&Vb�7W'&V�B�F�&�r�WrW'&�"�~�I����
-�r����b��Wu�V�5��Ғ���r��ʎ�IG������N����9��K�
-���N�H�����6��F��VS�Р�6��7B�V��6%��Ӱ���r��ʎ�IG�����G�6"��V�wF���9��K�I����G��V��G�W��G��V��6��E6��WҖ����6��7B&Vd��vW2��Ӱ��b��V��6�&7FW'2bb�Ǘ6�2���f�"�6��7B2�b�V��6�&7FW'2���6��7B6�$�B�2�B��3���b�&Vg2�6�&7FW'5�6�$�EҒ��6��7B6�$��f���Ǘ6�2�6�&7FW'2�f��B�2��2�B���6�$�B���&Vd��vW2�W6�����vS�&Vg2�6�&7FW'5�6�$�E��FW67&�F���6�$��f���V&�6R��6�$��f�����R��6�$�Gғ��ТТ�b��V��&6�w&�V�Bbb&Vg2�&6�w&�V�G5��V��&6�w&�V�EҒ��&Vd��vW2�W6�����vS�&Vg2�&6�w&�V�G5��V��&6�w&�V�E��FW67&�F���v&6�w&�V�BV�f�&���V�Bwғ��ТР�G'���6��7B��vW2�v�B6�Ė�vR��V���vU&��B��&VfW&V�6T��vW3�&Vd��vW2�7V7E&F��s3�Bwғ���Wu�V�5������vW5�Ӱ���r��ʎ�IG����ɘN�8��w7V66W72r����6F6��R�����r��ʎ�IG����ȺN�ʃ�G�R��W76vW��vW'&�"r���G'���6��7B��vW2�v�B6�Ė�vR��V���vU&��B��7V7E&F��s3�Bwғ���Wu�V�5������vW5�Ӱ���r��ʎ�IG��������ι�ȪB�xn��B����9��KɘN�8��w7V66W72r����6F6��S"�����r��ʎ�IG�����Y��(RȺN�ʃ�G�S"��W76vW��vW'&�"r���ТТ6WE�V�2������Wu�V�5ғ��Р�6WD6���WFVE7FW2�&Wb���Wr6WB�����&Wb�5Ғ���6WE7FW�B���&WGW&��Wu�V�3��Ӱ������������gV���VƖ�R�������Т6��7B'V�gV���VƖ�R�7��2������6WE'V���r�G'VR��6WDW'&�$�6r�rr��&�'E&Vb�7W'&V�B�f�6S��G'���6��7B�v�B'V�7FW�����b�&�'E&Vb�7W'&V�B�&WGW&㰢6��7B"�v�B'V�7FW"�����b�&�'E&Vb�7W'&V�B�&WGW&㰢6��7B2�v�B'V�7FW2�����b�&�'E&Vb�7W'&V�B�&WGW&㰢v�B'V�7FWB�2�"���6WD6���WFVE7FW2�&Wb���Wr6WB�����&Wb�EҒ�����r�ɻ�؋G�7W'&V�DW�6�FR���ٙB�9��KɘN�8��w7V66W72r����6F6��R���6WDW'&�$�6r�R��W76vR�����r�~ɊN�Y��r�R��W76vR�vW'&�"r����f���ǒ�6WE'V���r�f�6R��ТӰ������������'V�6��v�R7FW�������Т6��7B'V�6��v�U7FW�7��2�7FW�G������6WE'V���r�G'VR��6WDW'&�$�6r�rr��&�'E&Vb�7W'&V�B�f�6S��G'����b�7FW�G�����v�B'V�7FW����V�6R�b�7FW�G�����v�B'V�7FW"����V�6R�b�7FW�G����"�v�B'V�7FW2����V�6R�b�7FW�G����2�v�B'V�7FWB����V�6R�b�7FW�G����B��6WE7FW�B��6WD6���WFVE7FW2�&Wb���Wr6WB�����&Wb�EҒ��Т�6F6��R���6WDW'&�$�6r�R��W76vR�����r�~ɊN�Y��r�R��W76vR�vW'&�"r����f���ǒ�6WE'V���r�f�6R��ТӰ������������&VvV�W&FR6��v�R�V��������Т6��7B&VvV�W&FU�V��7��2��G�������b�7F�'�&�&E��G�Ғ&WGW&㰢6WE'V���r�G'VR���G'���6��7B�V��7F�'�&�&E��G�Ӱ�6��7B&Vd��vW2��Ӱ��b��V��6�&7FW'2bb�Ǘ6�2���f�"�6��7B2�b�V��6�&7FW'2���6��7B6�$�B�2�B��3���b�&VfW&V�6W2�6�&7FW'5�6�$�EҒ��6��7B6�$��f���Ǘ6�2�6�&7FW'2�f��B�2��2�B���6�$�B���&Vd��vW2�W6�����vS�&VfW&V�6W2�6�&7FW'5�6�$�E��FW67&�F���6�$��f���V&�6R��rwғ��ТТТ��r��ʎ�IG��G�������9��K�I������6��7B��vW2�v�B6�Ė�vR��V���vU&��B��&VfW&V�6T��vW3�&Vd��vW2�7V7E&F��s3�Bwғ��6��7B�Wu�V�2������V�5Ӱ��Wu�V�5��G�����vW5�Ӱ�6WE�V�2��Wu�V�2�����r��ʎ�IG��G�������9��KɘN�8��w7V66W72r����6F6��R����r�����9��KȺN�ʃ�G�R��W76vW��vW'&�"r��Тf���ǒ�6WE'V���r�f�6R��ТӰ������������&VvV�W&FR6��v�R6�&7FW"&VfW&V�6R�������Т6��7B&VvV�W&FT6�%&Vb�7��2�6�$�B������b��Ǘ6�2�&WGW&㰢6��7B6�"��Ǘ6�2�6�&7FW'2�f��B�2��2�B���6�$�B����b�6�"�&WGW&㰢6WE'V���r�G'VR���G'�����r�G�6�"���W�����ι�ȪB����9��K�I������6��7B��vW2�v�B6�Ė�vR�6�"�&Ve&��B�r�6�&7FW"&VfW&V�6R6�VWB�gV��&�G��g&��Bf�Wr�6�V�&6�w&�V�B���v'B7G��R���v�VƗG�r���6WE&VfW&V�6W2�&Wb�������&Wb�6�&7FW'3�����&Wb�6�&7FW'2��6�$�EӢ��vW5���Ғ�����r�G�6�"���W�����ι�ȪB����9��KɘN�8��w7V66W72r����6F6��R����r�����9��KȺN�ʃ�G�R��W76vW��vW'&�"r��Тf���ǒ�6WE'V���r�f�6R��ТӰ����6fR&��V7BbW�6�FW0�6��7B6fU&��V7B�7��2������G'����b�&��V7D�B��&��V7EF�F�R���6��7B�B�&��V7D�B��w&���r�FFR���r�����b�&��V7D�B�6WE&��V7D�B��B���v�Bf%6fU&��V7B��B��F�F�S�&��V7EF�F�R��~��N�	�wғ��Р����b��W�6�FR6V�V7FVB�7&VFRf�'7B��P��b�7W'&V�DW�6�FR���v�B7&VFT�WtW�6�FR����&WGW&㰢Р���6fRW�6�FR�WFFF�6��7BW�6�FUF�F�R��Ǘ6�3��F�F�R��G�7W'&V�DW�6�FW���F��6��7BW�6�FTFF���F�F�S�W�6�FUF�F�R���V�&W#�7W'&V�DW�6�FR��7FW��6���WFVE7FW3�����6���WFVE7FW5���7&VFVDC�W�6�FW2�f��B�R��R��V�&W"���7W'&V�DW�6�FR���7&VFVDB���WrFFR���F��4�7G&��r����Ӱ�v�Bf%6fTW�6�FR�&��V7D�B�7W'&V�DW�6�FR�W�6�FTFF������6fR�6W0��b��Ǘ6�2�v�Bf%6fU�6R�&��V7D�B�7W'&V�DW�6�FR�w7FW��Ǘ6�2r���Ǘ6�2�6�W&6UFW�Gғ���b��&�V7B�W�2�&VfW&V�6W2�6�&7FW'2���V�wF���v�Bf%6fU�6R�&��V7D�B�7W'&V�DW�6�FR�w7FW%�&VfW&V�6W2r�&VfW&V�6W2����b�7F�'�&�&B��V�wF���v�Bf%6fU�6R�&��V7D�B�7W'&V�DW�6�FR�w7FW5�7F�'�&�&Br��7F�'�&�&Gғ���b��V�2�6��R�����v�Bf%6fU�6R�&��V7D�B�7W'&V�DW�6�FR�w7FWE��V�2r���V�7ғ�����WFFRW�6�FW27FFRv�F�6fVB��f�6WDW�6�FW2�&Wb��&Wb���R��R��V�&W"���7W'&V�DW�6�FP������R�F�F�S�W�6�FUF�F�R�7FW�6���WFVE7FW3�����6���WFVE7FW5�Т�P��������r�~�HN���	�ث����RɘN�8�r�w7V66W72r����6F6��R����r�~���RȺN�ʃ�r�R��W76vR�vW'&�"r��ТӰ��6��7B��E&��V7B�7��2��B�����G'�����r�~�HN���	�ث��ι9��I���r���6��7B&���v�Bf$��E&��V7B��B���6WE&��V7D�B��B���6WE&��V7EF�F�R�&���F�F�R��rr��������BW�6�FW0�6��7BW�6�FTƗ7B�v�Bf$Ɨ7DW�6�FW2��B���6WDW�6�FW2�W�6�FTƗ7B�����b�W�6�FTƗ7B��V�wF�����v�B��DW�6�FR�W�6�FTƗ7E����V�&W"����V�6R����7&VFRf�'7BW�6�FR�b���RW��7@�6��7B�WtW�6�FR���V�&W#��F�F�S�sٙBr�7&VFVDC��WrFFR���F��4�7G&��r��Ӱ�6WDW�6�FW2���WtW�6�FUғ��6WD7W'&V�DW�6�FR����Р�6WE6��u&��V7G2�f�6R�����r�~�HN���	�ث��ι9�ɘN�8�r�w7V66W72r����6F6��R����r�~�ι9�ȺN�ʃ�r�R��W76vR�vW'&�"r��ТӰ��6��7B��E&��V7DƗ7B�7��2������G'��6WE&��V7DƗ7B�v�Bf$Ɨ7E&��V7G2�����6F6��R����r�~������ι9�ȺN�ʃ�r�R��W76vR�vW'&�"r��ТӰ������������$T�DU"�������Т&WGW&����F�c����VFW"��Т�F�b6�74��S�&ֆVFW"#��F�b6�74��S�&���v�#�ɻ�؋�HN�θ�^�Y���F�c��F�b6�74��S�&�b�F'2#��6V�V7B6�74��S�&f�&��6V�V7B"7G��S׷�v�GF��C�FF��s�sg��r�f��E6��S�'��f�VS׶��vU&�f�FW'���6��vS׶S��6WD��vU&�f�FW"�R�F&vWB�f�VR�����F���f�VS�&��vV�B#��vV�C���F������F���f�VS�&���&��#�vV֖���vS���F������6V�V7C���F�c��'WGF��6�74��S�&�ֶW��'F�"��6Ɩ6�ײ����6WE6��t���FG'VR�����JN�	S��'WGF�����F�cࠢ�6��t���F�bb���W���F���6��6Sײ����6WE6��t���Ff�6R����Р��F�b6�74��S�&����6��FV�B#���W�6�FR&"��Т�&��V7D�Bbb���F�b6�74��S�&W�6�FR�&"#��7�6�74��S�'&��V7B�F�F�R�&"#�&��V7EF�F�W���7���W�6�FW2���W����6��7B�47F�fR�W��V�&W"���7W'&V�DW�6�FS��6��7B�46���WFR�W�6���WFVE7FW2bbW�6���WFVE7FW2��V�wF����S��&WGW&����F�`��W�׶W��V�&W'Т6�74��S׶W�6�FR����G��47F�fR�v7F�fRr�rw�G��46���WFR�v6���WFRr�rw�Т��6Ɩ6�ײ������DW�6�FR�W��V�&W"�Т��W��V�&W'�ٙB��46���WFRbb~)�2wТ�'WGF��6�74��S�&W�6�FR�FV�WFR ���6Ɩ6�ײ�R����R�7F�&�vF��ₓ�FV�WFTW�6�FR�W��V�&W"���Т�9p���'WGF�����F�c����җТ�'WGF��6�74��S�&W�6�FR�FB"��6Ɩ6�׶7&VFT�WtW�6�FW���8�ٙC��'WGF�����F�c��Р���7FW&"��Т�F�b6�74��S�'7FW�&"#��5DU2����2��������F�b�W�׶�Т6�74��S׶7FW֗FV�G�6���WFVE7FW2�2����vF��Rr�rw�G�7FW����bb'V���r�v7W'&V�Br�rw�G�7FW����bb'V���r�v7F�fRr�rw�Т��6Ɩ6�ײ����'V���rbb6WE7FW���Т��5DU��$T�5���Т�6���WFVE7FW2�2���bbr)�2wТ��F�c���Т��F�cࠢ��W'&�"��Т�W'&�$�6rbb�F�b7G��S׷�FF��s�s��g�r�&6�w&�V�C�r6c�CvFr�6���#�r3s#3#Br�&�&FW%&F�W3����&v��&�GF�ӣ"�f��E6��S�7���W'&�$�6w���F�c�Р���6��FV�B&V��Т�F�b7G��S׷�f�W����fW&f��s�vWF�r�F�7���vf�W�r�f�W�F�&V7F���v6��V��r�v�g��ࠢ�&��V7D�B�����&��V7B6V�V7F���67&VV��F�b7G��S׷�F�7���vf�W�r�f�W�F�&V7F���v6��V��r�v�g����F�b6�74��S�&6&B#��F�b7G��S׷�F�7���vf�W�r�v���Ɩv�FV�3�v6V�FW"r��&v��&�GF�ӣ"�f�W�w&�ww&w����'WGF��6�74��S�&'F�'F���WFƖ�R'F��6�"��6Ɩ6�ײ����6WE6��u&��V7G2�6��u&��V7G2���b�6��u&��V7G2���E&��V7DƗ7B�������HN���	�ث��������'WGF����'WGF��6�74��S�&'F�'F��&��'�'F��6�"��6Ɩ6�׶7��2������6��7B�Wt�B�w&���r�FFR���r����6��7B�WuF�F�R�~�8���ɫB�HN���	�ث�s��v�Bf%6fU&��V7B��Wt�B��F�F�S��WuF�F�Wғ��6WE&��V7D�B��Wt�B���6WE&��V7EF�F�R��WuF�F�R���6��7B�WtW�6�FR���V�&W#��F�F�S�sٙBr�7&VFVDC��WrFFR���F��4�7G&��r��Ӱ�6WDW�6�FW2���WtW�6�FUғ��6WD7W'&V�DW�6�FR������r�~�8��HN���	�ث��9��K�
-�r�w7V66W72r�������8��HN���	�ث���'WGF�����F�cࠢ�6��u&��V7G2bb���F�b7G��S׷��&v��&�GF�ӣ"�FF��s�"�&6�w&�V�C�wf"���7W&f6S"�r�&�&FW%&F�W3������F�b7G��S׷�f��EvV�v�C�s�f��E6��S�2��&v��&�GF�ӣ�������^�	��HN���	�ث���F�c��&��V7DƗ7B��������F�b�W�׷�G�7G��S׷�FF��s�sg�r�&�&FW$&�GF�Ӣs�6�ƖBf"���&�&FW"�r�7W'6�#�w���FW"r�f��E6��S�7����6Ɩ6�ײ������E&��V7B��B�����F�F�R���GТ��F�c���Т�&��V7DƗ7B��V�wF����bb�F�b7G��S׷�f��E6��S�"�6���#�wf"���FW�C"�w������^�	��HN���	�ث��xn�����F�c�Т��F�c��Т��F�c���F�c�������&�GV7F���v�&�f��p����������5DU�6�W&6R��WBb�Ǘ6�2�������Т�7FW���bb���F�b7G��S׷�F�7���vf�W�r�f�W�F�&V7F���v6��V��r�v�g����F�b6�74��S�&6&B#��F�b7G��S׷�F�7���vf�W�r�v���Ɩv�FV�3�v6V�FW"r��&v��&�GF�ӣ"�f�W�w&�ww&w����'WGF��6�74��S�&'F�'F��&��'�"��6Ɩ6�׷'V�gV���VƖ�W�F�6&�VCײ6�W&6UFW�B�G&�҂���'V���w���'V���r�~�9��K�I���r�~�N�+B������9��KwТ��'WGF����'WGF��6�74��S�&'F�'F���WFƖ�R'F��6�"��6Ɩ6�ײ����'V�6��v�U7FW���F�6&�VCײ6�W&6UFW�B�G&�҂���'V���w��7FW�x�ȺN�h���'WGF����'V���rbb�'WGF��6�74��S�&'F�'F��F�vW"'F��6�"��6Ɩ6�ײ����&�'E&Vb�7W'&V�C�G'VS�����I�x��'WGF���Т�F�b7G��S׷��&v���VgC�vWF�r�F�7���vf�W�r�v�g����'WGF��6�74��S�&'F�'F���WFƖ�R'F��6�"��6Ɩ6�׷6fU&��V7G�F�6&�VC׷'V���w�����S��'WGF�����F�c���F�cࠢ�FW�F&V6�74��S�&f�&��FW�F&V"f�VS׷6�W&6UFW�G���6��vS׶S��6WE6�W&6UFW�B�R�F&vWB�f�VR�Т�6V���FW#׶ɻ�؋��κ��xι:B�h��JB�ȪN�j�j��X�ȪNث��[���^�
-^�Y��K�ɩB���B�X�ȪNث��ɻ�؋G�7W'&V�DW�6�FR���ٙN���8ٙ��
-������B�Т7G��S׷�֖�V�v�C�#S��F�6&�VC׷'V���w����F�b7G��S׷�FW�DƖv�w&�v�Br�f��E6��S��6���#�wf"���FW�C"�r��&v��F��G���6�W&6UFW�B��V�wF��6�'3��F�c���F�cࠢ���Ǘ6�2&W7V�B&Wf�Wr��Т��Ǘ6�2bb���F�b6�74��S�&6&B#��F�b7G��S׷�f��EvV�v�C�s�f��E6��S�R��&v��&�GF�ӣ'���hN�I��+�;â��Ǘ6�2�F�F�W���F�c��F�b7G��S׷�f��E6��S�2�6���#�wf"���FW�C"�r��&v��&�GF�ӣ'����Ǘ6�2�7���6�7���F�c��F�b7G��S׷�F�7���vf�W�r�v�b�f�W�w&�ww&w����F�c��F�b7G��S׷�f��EvV�v�C�c�f��E6��S�"�6���#�wf"���FW�C"�r��&v��&�GF�ӣg���˩�j��K���Ǘ6�2�6�&7FW'3���V�wF�ғ��F�c���Ǘ6�2�6�&7FW'3����2�����F�b�W�׶2�G�7G��S׷��&v��&�GF�ӣG����7�6�74��S�'FrFr�6�"#�2�&��W���7���7G&��s�2���W���7G&��s�(	B�2�W'6��ƗG����F�c���Т��F�c��F�c��F�b7G��S׷�f��EvV�v�C�c�f��E6��S�"�6���#�wf"���FW�C"�r��&v��&�GF�ӣg����+����Ǘ6�2�&6�w&�V�G3���V�wF�ғ��F�c���Ǘ6�2�&6�w&�V�G3����"�����F�b�W�׶"�G�7G��S׷��&v��&�GF�ӣG����7�6�74��S�'FrFr���2#�"�G�W���7���"���W���F�c���Т��F�c��F�c��F�b7G��S׷�f��EvV�v�C�c�f��E6��S�"�6���#�wf"���FW�C"�r��&v��&�GF�ӣg����Hκ����Ǘ6�2���D&VG3���V�wF�ғ��F�c���Ǘ6�2���D&VG3���������F�b�W�׷�&VG�7G��S׷��&v��&�GF�ӣB�f��E6��S�'����7�6�74��S�'FrFr����B#�����G���7����7V��'����F�c���Т��F�c���F�c���F�c��Т��F�c��Р��������5DU�6�&7FW"�&6�w&�V�B&VfW&V�6W2�������Т�7FW���bb���F�b7G��S׷�F�7���vf�W�r�f�W�F�&V7F���v6��V��r�v�g����F�b7G��S׷�F�7���vf�W�r�v���Ɩv�FV�3�v6V�FW"w����'WGF��6�74��S�&'F�'F��&��'�'F��6�"��6Ɩ6�ײ����'V�6��v�U7FW���F�6&�VCײ�Ǘ6�2��'V���w�����ι�ȪB�9��K��'WGF����'V���rbb�7�6�74��S�'7FGW2�&FvR'V���r#��9��K�I�����7��Т��F�cࠢ��Ǘ6�2bb�F�b6�74��S�'�6V���FW"#��7FW�ȪN�j�j��hN�IҞ��BȺN�h��Y��K�ɩC��F�c�Р���Ǘ6�2bb���F�c��F�b7G��S׷�f��EvV�v�C�s�f��E6��S�B��&v��&�GF�ӣ'���˩�j��K����ι�ȪC��F�c��F�b6�74��S�'&Vb�w&�B#���Ǘ6�2�6�&7FW'3����2�����F�b�W�׶2�G�6�74��S�'&Vb�6&B#��&VfW&V�6W2�6�&7FW'5�2�E����Ɩ�r7&3׷&VfW&V�6W2�6�&7FW'5�2�E���C׶2���W��������F�b6�74��S�'�V���6V���FW"#����9��K��F�c��Т�F�b6�74��S�'&Vb�6&B֖�f�#��F�b6�74��S�'&Vb�6&B���R#�2���W��7�6�74��S�'FrFr�6�""7G��S׷�f��E6��S����2�&��W���7����F�c��F�b6�74��S�'&Vb�6&B�FW62#�2�V&�6W���F�c��'WGF��6�74��S�&'F�'F���WFƖ�R'F��6�"7G��S׷��&v��F��b�v�GF��sRrƧW7F�g�6��FV�C�v6V�FW"w�Т��6Ɩ6�ײ����&VvV�W&FT6�%&Vb�2�B��F�6&�VC׷'V���w������9��K��'WGF�����F�c���F�c���Т��F�cࠢ�F�b7G��S׷�f��EvV�v�C�s�f��E6��S�B��&v��F��#��&v��&�GF�ӣ'����+�����ι�ȪC��F�c��F�b6�74��S�'&Vb�w&�B"7G��S׷�w&�EFV��FT6��V��3�w&WVB�WF��f����֖����#S��g"��w�����Ǘ6�2�&6�w&�V�G3����"�����F�b�W�׶"�G�6�74��S�'&Vb�6&B#��&VfW&V�6W2�&6�w&�V�G5�"�E����Ɩ�r7&3׷&VfW&V�6W2�&6�w&�V�G5�"�E���C׶"���W�7G��S׷�7V7E&F��sb�w���������F�b6�74��S�'�V���6V���FW""7G��S׷�7V7E&F��sb�w������9��K��F�c��Т�F�b6�74��S�'&Vb�6&B֖�f�#��F�b6�74��S�'&Vb�6&B���R#�"���W���F�c��F�b6�74��S�'&Vb�6&B�FW62#�"�FW67&�F������F�c���F�c���F�c���Т��F�c���F�c��Т��F�c��Р��������5DU#�7F�'�&�&B�������Т�7FW���"bb���F�b7G��S׷�F�7���vf�W�r�f�W�F�&V7F���v6��V��r�v�g����F�b7G��S׷�F�7���vf�W�r�v���Ɩv�FV�3�v6V�FW"w����'WGF��6�74��S�&'F�'F��&��'�'F��6�"��6Ɩ6�ײ����'V�6��v�U7FW�"��F�6&�VCײ�Ǘ6�2��'V���w��ȪN�j�jλ;N�9��9��K��'WGF����7F�'�&�&B��V�wF��bb�7�7G��S׷�f��E6��S�"�6���#�wf"���FW�C"�w���7F�'�&�&B��V�wF�ޫ	��ʎ�I��7��Т�'V���rbb�7�6�74��S�'7FGW2�&FvR'V���r#��9��K�I�����7��Т��F�cࠢ�7F�'�&�&B��V�wF����bb�F�b6�74��S�'�6V���FW"#�ȪN�j�jλ;N�9κ[��9��K�Y���B�ʎ�I�8B�Z��K��B��ȹι
-������C��F�c�Р��7F�'�&�&B��V�wF��bb���F�b7G��S׷�F�7���vf�W�r�f�W�F�&V7F���v6��V��r�v������7F�'�&�&B�����V���������F�b�W�׶��6�74��S�&6&B"7G��S׷�FF��s�"�F�7���vf�W�r�v�"�Ɩv�FV�3�vf�W��7F'Bw����F�b7G��S׷�֖�v�GF��3bƆV�v�C�3b�&�&FW%&F�W3�sSRr�&6�w&�V�C�wf"���66V�B�r�6���#�r6ffbr�F�7���vf�W�r�Ɩv�FV�3�v6V�FW"rƧW7F�g�6��FV�C�v6V�FW"r�f��EvV�v�C�s�f��E6��S�G�����V���V��V�&W"����Т��F�c��F�b7G��S׷�f�W������F�b7G��S׷�F�7���vf�W�r�v�B�f�W�w&�ww&r��&v��&�GF�ӣG����7�6�74��S�'FrFr����B#��V��G�W���7���7�6�74��S�'Fr"7G��S׷�&6�w&�V�C�r6ffVrr�6���#�r3c3fSs"w����V��6��E6��W���7���7�6�74��S�'Fr"7G��S׷�&6�w&�V�C�r6FfSfS�r�6���#�r3c3fSs"w����V��6�W&�v�W���7���7�6�74��S�'FrFr����B#��V�����G���7����F�c��F�b7G��S׷�f��E6��S�2��&v��&�GF�ӣG����V��FW67&�F������F�c���V��F���wVS�����B�F�������F�b�W�׶F��7G��S׷�f��E6��S�"�6���#�wf"���66V�B�r��&v���VgC�����	�*��B�7V�W'Ӣ'�B�FW�G�#��F�c���Т��V���'&F���bb�F�b7G��S׷�f��E6��S�"�6���#�wf"���FW�C"�r�f��E7G��S�v�FƖ2r��&v���VgC�����	�9���V���'&F������F�c�Т�FWF��27G��S׷��&v��F��g����7V��'�7G��S׷�f��E6��S��6���#�wf"���FW�C"�r�7W'6�#�w���FW"w�����N����x�HN���HNث���7V��'���F�b7G��S׷�f��E6��S��6���#�wf"���FW�C"�r�FF��s�sG�r�Ɩ�T�V�v�C��W����V���vU&��G���F�c���FWF��3���F�c���F�c���Т��F�c��Т��F�c��Р��������5DU3��V�vV�W&F����������Т�7FW���2bb���F�b7G��S׷�F�7���vf�W�r�f�W�F�&V7F���v6��V��r�v�g����F�b7G��S׷�F�7���vf�W�r�v���Ɩv�FV�3�v6V�FW"w����'WGF��6�74��S�&'F�'F��&��'�'F��6�"��6Ɩ6�ײ����'V�6��v�U7FW�2��F�6&�VC׷7F�'�&�&B��V�wF������'V���w���ʎ�I��N����x�9��K��'WGF�����V�2�f��FW"�&���V���V�wF��bb�7�7G��S׷�f��E6��S�"�6���#�wf"���FW�C"�w����V�2�f��FW"�&���V���V�wF����7F�'�&�&B��V�wF��ɘN�8���7��Т�'V���rbb�7�6�74��S�'7FGW2�&FvR'V���r#��9��K�I�����7��Т��F�cࠢ�7F�'�&�&B��V�wF����bb�F�b6�74��S�'�6V���FW"#��ȪN�j�jλ;N�9κ[��9��K�Y��K�ɩC��F�c�Р��F�b6�74��S�'�V��w&�B#��7F�'�&�&B�����V���������F�b�W�׶��6�74��S�'�V��6&B#��F�b6�74��S�'�V���V�#綒����F�c���V�5������Ɩ�r7&3׷�V�5�����C׶�V�G������������F�b6�74��S�'�V���6V���FW"#�'V���r�~�9��K�������r�~����9��Kw���F�c��Т�F�b6�74��S�'�V�֖�f�#��7�6�74��S�'FrFr����B"7G��S׷�f��E6��S�����V��G�W���7����V��FW67&�F�����7V'7G&��r��C�Т��V�5���bb���F�b7G��S׷��&v��F��G����'WGF��6�74��S�&'F�'F���WFƖ�R'F��6�"7G��S׷�f��E6��S��FF��s�s'���w����6Ɩ6�ײ����&VvV�W&FU�V���F�6&�VC׷'V���w������9��K��'WGF�����F�c��Т��F�c���F�c���Т��F�c���F�c��Р��������5DUC�vV'F���&Wf�Wr�������Т�7FW���Bbb���F�b7G��S׷�F�7���vf�W�r�f�W�F�&V7F���v6��V��r�v�g����F�b7G��S׷�F�7���vf�W�r�v���Ɩv�FV�3�v6V�FW"w����7�7G��S׷�f��EvV�v�C�s�f��E6��S�W���ɻ�؋����jλ;N�����Ǘ6�3��F�F�R��rw���7���7�7G��S׷�f��E6��S�"�6���#�wf"���FW�C"�w��⇷�V�2�f��FW"�&���V���V�wF�ޫ	��ʎ�I���7����F�cࠢ��V�2�f��FW"�&���V���V�wF����bb�F�b6�74��S�'�6V���FW"#��ʎ�I��N����x�[������9��K�Y��K�ɩC��F�c�Р��F�b6�74��S�'vV'F����7G&�#��7F�'�&�&B�����V���������b��V�5��Ғ&WGW&��V�ð�&WGW&����F�b�W�׶��7G��S׷��6�F���w&V�F�fRw���Ɩ�r7&3׷�V�5�����C׶�V�G���������F���wVR�fW&����Т��V��F���wVS���V�wF��bb���F�b7G��S׷��6�F���v'6��WFRr�&�GF�ӣ���VgC���&�v�C���F�7���vf�W�r�f�W�F�&V7F���v6��V��r�v�G�����V��F���wVR����B�F�������F�b�W�׶F��7G��S׷�&6�w&�V�C�w&v&�#SR�#SR�#SR��"�r�FF��s�sg�'�r�&�&FW%&F�W3�b�f��E6��S�2�f��EvV�v�C�S�&��6�F�s�s'���&v&�����R�r���v�GF��s�Rr�Ɩv�6V�c�F�S#����vf�W��7F'Bs�vf�W��V�Bw����7�7G��S׷�f��E6��S��6���#�wf"���66V�B�r�f��EvV�v�C�s���B�7V�W'���7���'"��B�FW�GТ��F�c���Т��F�c��Т��V���'&F���bb���F�b7G��S׷��6�F���v'6��WFRr�F�����VgC���&�v�C���&6�w&�V�C�w&v&�����r�r�6���#�r6ffbr�FF��s�sg�'�r�&�&FW%&F�W3���f��E6��S�"�f��E7G��S�v�FƖ2w�����V���'&F���Т��F�c��Т��F�c����җТ��F�c���F�c��Т����Т��F�cࠢ����r�V���Т�F�b7G��S׷��&v��F��'����F�b7G��S׷�F�7���vf�W�rƧW7F�g�6��FV�C�w76R�&WGvVV�r�Ɩv�FV�3�v6V�FW"r��&v��&�GF�ӣG����7�7G��S׷�f��E6��S�"�f��EvV�v�C�c�6���#�wf"���FW�C"�w���Ϋ{���7���'WGF��6�74��S�&'F�'F���WFƖ�R"7G��S׷�FF��s�s'���r�f��E6��S�����6Ɩ6�ײ����6WD��w2��җ���H���ٙC��'WGF�����F�c����u�V���w3׶��w7�����F�c���F�c���F�c����Р�&V7DD���&V�FW"�����F�7V�V�B�vWDV�V�V�D'��B�w&��Br������67&�C���&�G�����F���
+  const runStep3 = async (analysisData) => {
+    const data = analysisData || analysis;
+    if (!data) throw new Error('분석 데이터 없음');
+    log('Step 3: 스토리보드 생성 시작...', 'info');
+    setStep(2);
+
+    const charContext = data.characters.map(c => `${c.id}: ${c.name} (${c.role}) - ${c.appearance}`).join('\n');
+    const bgContext = data.backgrounds.map(b => `${b.id}: ${b.name} - ${b.description}`).join('\n');
+    const plotContext = data.plotBeats.map(p => `Beat ${p.beat}: ${p.summary} [mood: ${p.mood}, chars: ${p.characters.join(',')}, loc: ${p.location}]`).join('\n');
+
+    const userPrompt = `Story title: ${data.title}
+Synopsis: ${data.synopsis}
+
+Characters:
+${charContext}
+
+Backgrounds:
+${bgContext}
+
+Plot beats:
+${plotContext}
+
+Original story text:
+${sourceText.substring(0, 6000)}
+
+Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt must include FULL character appearance descriptions (not just IDs).`;
+
+    const result = await callText(PROMPTS.CREATE_STORYBOARD, userPrompt);
+    const parsed = parseJSON(result);
+    log(`스토리보드 완료: ${parsed.length}개 패널`, 'success');
+    setStoryboard(parsed);
+    setPanels(new Array(parsed.length).fill(null));
+    setCompletedSteps(prev => new Set([...prev, 2]));
+    setStep(3);
+    return parsed;
+  };
+
+  // ======== STEP 4: Generate Panel Images ========
+  const runStep4 = async (storyboardData, refsData) => {
+    const sb = storyboardData || storyboard;
+    const refs = refsData || references;
+    if (!sb.length) throw new Error('스토리보드 없음');
+    log('Step 4: 패널 이미지 생성 시작...', 'info');
+    setStep(3);
+
+    const newPanels = [...(panels.length === sb.length ? panels : new Array(sb.length).fill(null))];
+
+    for (let i = 0; i < sb.length; i++) {
+      if (abortRef.current) throw new Error('중단됨');
+      if (newPanels[i]) { log(`패널 ${i+1} 이미 생성됨, 건너뜀`); continue; }
+
+      const panel = sb[i];
+      log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
+
+      const refImages = [];
+      if (panel.characters && analysis) {
+        for (const pc of panel.characters) {
+          const charId = pc.id || pc;
+          if (refs.characters[charId]) {
+            const charInfo = analysis.characters.find(c => c.id === charId);
+            refImages.push({image: refs.characters[charId], description: charInfo?.appearance || charInfo?.name || charId});
+          }
+        }
+        if (panel.background && refs.backgrounds[panel.background]) {
+          refImages.push({image: refs.backgrounds[panel.background], description: 'background environment'});
+        }
+      }
+
+      try {
+        const images = await callImage(panel.imagePrompt, {referenceImages: refImages, aspectRatio: '3:4'});
+        newPanels[i] = images[0];
+        log(`패널 ${i+1} 완료`, 'success');
+      } catch(e) {
+        log(`패널 ${i+1} 실패: ${e.message}`, 'error');
+        try {
+          const images = await callImage(panel.imagePrompt, {aspectRatio: '3:4'});
+          newPanels[i] = images[0];
+          log(`패널 ${i+1} 레퍼런스 없이 재생성 완료`, 'success');
+        } catch(e2) {
+          log(`패널 ${i+1} 최종 실패: ${e2.message}`, 'error');
+        }
+      }
+      setPanels([...newPanels]);
+    }
+
+    setCompletedSteps(prev => new Set([...prev, 3]));
+    setStep(4);
+    return newPanels;
+  };
+
+  // ======== Full Pipeline ========
+  const runFullPipeline = async () => {
+    setRunning(true); setErrorMsg(''); abortRef.current = false;
+    try {
+      const a = await runStep1();
+      if (abortRef.current) return;
+      const r = await runStep2(a);
+      if (abortRef.current) return;
+      const s = await runStep3(a);
+      if (abortRef.current) return;
+      await runStep4(s, r);
+      setCompletedSteps(prev => new Set([...prev, 4]));
+      log(`웹툰 ${currentEpisode || 1}화 생성 완료!`, 'success');
+    } catch(e) {
+      setErrorMsg(e.message);
+      log('오류: ' + e.message, 'error');
+    } finally { setRunning(false); }
+  };
+
+  // ======== Run Single Step ========
+  const runSingleStep = async (stepIdx) => {
+    setRunning(true); setErrorMsg(''); abortRef.current = false;
+    try {
+      if (stepIdx === 0) await runStep1();
+      else if (stepIdx === 1) await runStep2();
+      else if (stepIdx === 2) await runStep3();
+      else if (stepIdx === 3) await runStep4();
+      else if (stepIdx === 4) { setStep(4); setCompletedSteps(prev => new Set([...prev, 4])); }
+    } catch(e) {
+      setErrorMsg(e.message);
+      log('오류: ' + e.message, 'error');
+    } finally { setRunning(false); }
+  };
+
+  // ======== Regenerate single panel ========
+  const regeneratePanel = async (idx) => {
+    if (!storyboard[idx]) return;
+    setRunning(true);
+    try {
+      const panel = storyboard[idx];
+      const refImages = [];
+      if (panel.characters && analysis) {
+        for (const pc of panel.characters) {
+          const charId = pc.id || pc;
+          if (references.characters[charId]) {
+            const charInfo = analysis.characters.find(c => c.id === charId);
+            refImages.push({image: references.characters[charId], description: charInfo?.appearance || ''});
+          }
+        }
+      }
+      log(`패널 ${idx+1} 재생성 중...`);
+      const images = await callImage(panel.imagePrompt, {referenceImages: refImages, aspectRatio: '3:4'});
+      const newPanels = [...panels];
+      newPanels[idx] = images[0];
+      setPanels(newPanels);
+      log(`패널 ${idx+1} 재생성 완료`, 'success');
+    } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
+    finally { setRunning(false); }
+  };
+
+  // ======== Regenerate single character reference ========
+  const regenerateCharRef = async (charId) => {
+    if (!analysis) return;
+    const char = analysis.characters.find(c => c.id === charId);
+    if (!char) return;
+    setRunning(true);
+    try {
+      log(`${char.name} 레퍼런스 재생성 중...`);
+      const images = await callImage(char.refPrompt + ', character reference sheet, full body, front view, clean background, manhwa art style, high quality');
+      setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
+      log(`${char.name} 레퍼런스 재생성 완료`, 'success');
+    } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
+    finally { setRunning(false); }
+  };
+
+  // Save Project & Episodes
+  const saveProject = async () => {
+    try {
+      if (!projectId || !projectTitle) {
+        const id = projectId || 'proj_' + Date.now();
+        if (!projectId) setProjectId(id);
+        await fbSaveProject(id, {title: projectTitle || '무제'});
+      }
+
+      // If no episode selected, create first one
+      if (!currentEpisode) {
+        await createNewEpisode();
+        return;
+      }
+
+      // Save episode metadata
+      const episodeTitle = analysis?.title || `${currentEpisode}화`;
+      const episodeData = {
+        title: episodeTitle,
+        number: currentEpisode,
+        step,
+        completedSteps: [...completedSteps],
+        createdAt: episodes.find(e => e.number === currentEpisode)?.createdAt || new Date().toISOString(),
+      };
+      await fbSaveEpisode(projectId, currentEpisode, episodeData);
+
+      // Save phases
+      if (analysis) await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis, sourceText});
+      if (Object.keys(references.characters).length > 0) await fbSavePhase(projectId, currentEpisode, 'step2_references', references);
+      if (storyboard.length > 0) await fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard});
+      if (panels.some(p => p)) await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels});
+
+      // Update episodes state with saved info
+      setEpisodes(prev => prev.map(e =>
+        e.number === currentEpisode
+          ? {...e, title: episodeTitle, step, completedSteps: [...completedSteps]}
+          : e
+      ));
+
+      log('프로젝트 저장 완료', 'success');
+    } catch(e) { log('저장 실패: ' + e.message, 'error'); }
+  };
+
+  const loadProject = async (pid) => {
+    try {
+      log('프로젝트 로드 중...');
+      const proj = await fbLoadProject(pid);
+      setProjectId(pid);
+      setProjectTitle(proj.title || '');
+
+      // Load episodes
+      const episodeList = await fbListEpisodes(pid);
+      setEpisodes(episodeList);
+
+      if (episodeList.length > 0) {
+        await loadEpisode(episodeList[0].number);
+      } else {
+        // Create first episode if none exist
+        const newEpisode = {number: 1, title: '1화', createdAt: new Date().toISOString()};
+        setEpisodes([newEpisode]);
+        setCurrentEpisode(1);
+      }
+
+      setShowProjects(false);
+      log('프로젝트 로드 완료', 'success');
+    } catch(e) { log('로드 실패: ' + e.message, 'error'); }
+  };
+
+  const loadProjectList = async () => {
+    try { setProjectList(await fbListProjects()); } catch(e) { log('목록 로드 실패: ' + e.message, 'error'); }
+  };
+
+  // ======== RENDER ========
+  return (
+    <div>
+      {/* Header */}
+      <div className="app-header">
+        <div className="app-logo">웹툰 프로덕션</div>
+        <div className="nav-tabs">
+          <select className="form-select" style={{width:140,padding:'6px 10px',fontSize:12}} value={imageProvider} onChange={e=>setImageProvider(e.target.value)}>
+            <option value="imagen4">Imagen 4</option>
+            <option value="nanoBanana">Gemini Image</option>
+          </select>
+        </div>
+        <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API 설정</button>
+      </div>
+
+      {showApiModal && <ApiKeyModal onClose={()=>setShowApiModal(false)} />}
+
+      <div className="main-content">
+        {/* Episode Bar */}
+        {projectId && (
+          <div className="episode-bar">
+            <span className="project-title-bar">{projectTitle}</span>
+            {episodes.map(ep => {
+              const isActive = ep.number === currentEpisode;
+              const isComplete = ep.completedSteps && ep.completedSteps.length === 5;
+              return (
+                <div
+                  key={ep.number}
+                  className={`episode-pill ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}
+                  onClick={() => loadEpisode(ep.number)}
+                >
+                  {ep.number}화 {isComplete && '✓'}
+                  <button
+                    className="episode-delete"
+                    onClick={(e) => { e.stopPropagation(); deleteEpisode(ep.number); }}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+            <button className="episode-add" onClick={createNewEpisode}>+ 새 화</button>
+          </div>
+        )}
+
+        {/* Step Bar */}
+        <div className="step-bar">
+          {STEPS.map((s, i) => (
+            <div key={i}
+              className={`step-item ${completedSteps.has(i) ? 'done' : ''} ${step === i && running ? 'current' : ''} ${step === i && !running ? 'active' : ''}`}
+              onClick={() => !running && setStep(i)}
+            >
+              {STEP_LABELS[i]}
+              {completedSteps.has(i) && ' ✓'}
+            </div>
+          ))}
+        </div>
+
+        {/* Error */}
+        {errorMsg && <div style={{padding:'8px 16px',background:'#f8d7da',color:'#721c24',borderRadius:8,marginBottom:12,fontSize:13}}>{errorMsg}</div>}
+
+        {/* Content area */}
+        <div style={{flex:1,overflow:'auto',display:'flex',flexDirection:'column',gap:16}}>
+
+          {!projectId ? (
+            // Project selection screen
+            <div style={{display:'flex',flexDirection:'column',gap:16}}>
+              <div className="card">
+                <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+                  <button className="btn btn-outline btn-sm" onClick={()=>{setShowProjects(!showProjects);if(!showProjects)loadProjectList();}}>프로젝트 목록</button>
+                  <button className="btn btn-primary btn-sm" onClick={async () => {
+                    const newId = 'proj_' + Date.now();
+                    const newTitle = '새로운 프로젝트';
+                    await fbSaveProject(newId, {title: newTitle});
+                    setProjectId(newId);
+                    setProjectTitle(newTitle);
+                    const newEpisode = {number: 1, title: '1화', createdAt: new Date().toISOString()};
+                    setEpisodes([newEpisode]);
+                    setCurrentEpisode(1);
+                    log('새 프로젝트 생성됨', 'success');
+                  }}>새 프로젝트</button>
+                </div>
+
+                {showProjects && (
+                  <div style={{marginBottom:12,padding:12,background:'var(--surface2)',borderRadius:8}}>
+                    <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>저장된 프로젝트</div>
+                    {projectList.map(p => (
+                      <div key={p.id} style={{padding:'6px 0',borderBottom:'1px solid var(--border)',cursor:'pointer',fontSize:13}} onClick={()=>loadProject(p.id)}>
+                        {p.title || p.id}
+                      </div>
+                    ))}
+                    {projectList.length === 0 && <div style={{fontSize:12,color:'var(--text2)'}}>저장된 프로젝트 없음</div>}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            // Production workflow
+            <>
+              {/* ===== STEP 0: Source Input & Analysis ===== */}
+              {step === 0 && (
+                <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                  <div className="card">
+                    <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+                      <button className="btn btn-primary" onClick={runFullPipeline} disabled={!sourceText.trim() || running}>
+                        {running ? '생성 중...' : '전체 자동 생성'}
+                      </button>
+                      <button className="btn btn-outline btn-sm" onClick={()=>runSingleStep(0)} disabled={!sourceText.trim() || running}>Step 1만 실행</button>
+                      {running && <button className="btn btn-danger btn-sm" onClick={()=>{abortRef.current=true;}}>중지</button>}
+                      <div style={{marginLeft:'auto',display:'flex',gap:6}}>
+                        <button className="btn btn-outline btn-sm" onClick={saveProject} disabled={running}>저장</button>
+                      </div>
+                    </div>
+
+                    <textarea className="form-textarea" value={sourceText} onChange={e=>setSourceText(e.target.value)}
+                      placeholder={`웹툰으로 만들 소설/스토리 텍스트를 입력하세요. 이 텍스트가 웹툰 ${currentEpisode || 1}화로 변환됩니다.`}
+                      style={{minHeight:250}} disabled={running} />
+                    <div style={{textAlign:'right',fontSize:11,color:'var(--text2)',marginTop:4}}>{sourceText.length} chars</div>
+                  </div>
+
+                  {/* Analysis result preview */}
+                  {analysis && (
+                    <div className="card">
+                      <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>분석 결과: {analysis.title}</div>
+                      <div style={{fontSize:13,color:'var(--text2)',marginBottom:12}}>{analysis.synopsis}</div>
+                      <div style={{display:'flex',gap:16,flexWrap:'wrap'}}>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>ܺ�릭터 ({analysis.characters?.length})</div>
+                          {analysis.characters?.map(c => (
+                            <div key={c.id} style={{marginBottom:4}}><span className="tag tag-char">{c.role}</span> <strong>{c.name}</strong> — {c.personality}</div>
+                          ))}
+                        </div>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>배경 ({analysis.backgrounds?.length})</div>
+                          {analysis.backgrounds?.map(b => (
+                            <div key={b.id} style={{marginBottom:4}}><span className="tag tag-loc">{b.type}</span> {b.name}</div>
+                          ))}
+                        </div>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:12,color:'var(--text2)',marginBottom:6}}>플롯 ({analysis.plotBeats?.length})</div>
+                          {analysis.plotBeats?.map(p => (
+                            <div key={p.beat} style={{marginBottom:4,fontSize:12}}><span className="tag tag-mood">{p.mood}</span> {p.summary}</div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ===== STEP 1: Character/Background References ===== */}
+              {step === 1 && (
+                <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(1)} disabled={!analysis || running}>레퍼런스 생성</button>
+                    {running && <span className="status-badge running">생성 중...</span>}
+                  </div>
+
+                  {!analysis && <div className="placeholder">먼저 Step 1 (스토리 분석)을 실행하세요</div>}
+
+                  {analysis && (
+                    <div>
+                      <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>캐릭터 레퍼런스</div>
+                      <div className="ref-grid">
+                        {analysis.characters?.map(c => (
+                          <div key={c.id} className="ref-card">
+                            {references.characters[c.id] ? (
+                              <img src={references.characters[c.id]} alt={c.name} />
+                            ) : (
+                              <div className="panel-placeholder">미생성</div>
+                            )}
+                            <div className="ref-card-info">
+                              <div className="ref-card-name">{c.name} <span className="tag tag-char" style={{fontSize:10}}>{c.role}</span></div>
+                              <div className="ref-card-desc">{c.appearance}</div>
+                              <button className="btn btn-outline btn-sm" style={{marginTop:6,width:'100%',justifyContent:'center'}}
+                                onClick={()=>regenerateCharRef(c.id)} disabled={running}>재생성</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div style={{fontWeight:700,fontSize:14,marginTop:20,marginBottom:12}}>배경 레퍼런스</div>
+                      <div className="ref-grid" style={{gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))'}}>
+                        {analysis.backgrounds?.map(b => (
+                          <div key={b.id} className="ref-card">
+                            {references.backgrounds[b.id] ? (
+                              <img src={references.backgrounds[b.id]} alt={b.name} style={{aspectRatio:'16/9'}} />
+                            ) : (
+                              <div className="panel-placeholder" style={{aspectRatio:'16/9'}}>미생성</div>
+                            )}
+                            <div className="ref-card-info">
+                              <div className="ref-card-name">{b.name}</div>
+                              <div className="ref-card-desc">{b.description}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ===== STEP 2: Storyboard ===== */}
+              {step === 2 && (
+                <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(2)} disabled={!analysis || running}>스토리보드 생성</button>
+                    {storyboard.length > 0 && <span style={{fontSize:12,color:'var(--text2)'}}>{storyboard.length}개 패널</span>}
+                    {running && <span className="status-badge running">생성 중...</span>}
+                  </div>
+
+                  {storyboard.length === 0 && <div className="placeholder">스토리보드를 생성하면 패널별 구성이 표시됩니다</div>}
+
+                  {storyboard.length > 0 && (
+                    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                      {storyboard.map((panel, i) => (
+                        <div key={i} className="card" style={{padding:12,display:'flex',gap:12,alignItems:'flex-start'}}>
+                          <div style={{minWidth:36,height:36,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:14}}>
+                            {panel.panelNumber || i+1}
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:4}}>
+                              <span className="tag tag-mood">{panel.type}</span>
+                              <span className="tag" style={{background:'#ffeaa7',color:'#636e72'}}>{panel.shotSize}</span>
+                              <span className="tag" style={{background:'#dfe6e9',color:'#636e72'}}>{panel.cameraAngle}</span>
+                              <span className="tag tag-mood">{panel.mood}</span>
+                            </div>
+                            <div style={{fontSize:13,marginBottom:4}}>{panel.description}</div>
+                            {panel.dialogue?.map((d, di) => (
+                              <div key={di} style={{fontSize:12,color:'var(--accent)',marginLeft:8}}>💬 {d.speaker}: "{d.text}"</div>
+                            ))}
+                            {panel.narration && <div style={{fontSize:12,color:'var(--text2)',fontStyle:'italic',marginLeft:8}}>📝 {panel.narration}</div>}
+                            <details style={{marginTop:6}}>
+                              <summary style={{fontSize:11,color:'var(--text2)',cursor:'pointer'}}>이미지 프롬프트</summary>
+                              <div style={{fontSize:11,color:'var(--text2)',padding:'4px 0',lineHeight:1.5}}>{panel.imagePrompt}</div>
+                            </details>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ===== STEP 3: Panel Generation ===== */}
+              {step === 3 && (
+                <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(3)} disabled={storyboard.length===0 || running}>패널 이미지 생성</button>
+                    {panels.filter(Boolean).length > 0 && <span style={{fontSize:12,color:'var(--text2)'}}>{panels.filter(Boolean).length}/{storyboard.length} 완료</span>}
+                    {running && <span className="status-badge running">생성 중...</span>}
+                  </div>
+
+                  {storyboard.length === 0 && <div className="placeholder">먼저 스토리보드를 생성하세요</div>}
+
+                  <div className="panel-grid">
+                    {storyboard.map((panel, i) => (
+                      <div key={i} className="panel-card">
+                        <div className="panel-num">{i+1}</div>
+                        {panels[i] ? (
+                          <img src={panels[i]} alt={`Panel ${i+1}`} />
+                        ) : (
+                          <div className="panel-placeholder">{running ? '생성 대기...' : '미생성'}</div>
+                        )}
+                        <div className="panel-info">
+                          <span className="tag tag-mood" style={{fontSize:10}}>{panel.type}</span> {panel.description?.substring(0, 40)}
+                          {panels[i] && (
+                            <div style={{marginTop:4}}>
+                              <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 8px'}} onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ===== STEP 4: Webtoon Preview ===== */}
+              {step === 4 && (
+                <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                  <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                    <span style={{fontWeight:700,fontSize:15}}>웹툰 미리보기: {analysis?.title || ''}</span>
+                    <span style={{fontSize:12,color:'var(--text2)'}}>({panels.filter(Boolean).length}개 패널)</span>
+                  </div>
+
+                  {panels.filter(Boolean).length === 0 && <div className="placeholder">패널 이미지를 먼저 생성하세요</div>}
+
+                  <div className="webtoon-strip">
+                    {storyboard.map((panel, i) => {
+                      if (!panels[i]) return null;
+                      return (
+                        <div key={i} style={{position:'relative'}}>
+                          <img src={panels[i]} alt={`Panel ${i+1}`} />
+                          {/* Dialogue overlay */}
+                          {panel.dialogue?.length > 0 && (
+                            <div style={{position:'absolute',bottom:8,left:8,right:8,display:'flex',flexDirection:'column',gap:4}}>
+                              {panel.dialogue.map((d, di) => (
+                                <div key={di} style={{background:'rgba(255,255,255,0.92)',padding:'6px 12px',borderRadius:16,fontSize:13,fontWeight:500,boxShadow:'0 2px 8px rgba(0,0,0,.15)',maxWidth:'80%',alignSelf:di%2===0?'flex-start':'flex-end'}}>
+                                  <span style={{fontSize:10,color:'var(--accent)',fontWeight:700}}>{d.speaker}</span><br/>{d.text}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {panel.narration && (
+                            <div style={{position:'absolute',top:8,left:8,right:8,background:'rgba(0,0,0,0.7)',color:'#fff',padding:'6px 12px',borderRadius:8,fontSize:12,fontStyle:'italic'}}>
+                              {panel.narration}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Log Panel */}
+        <div style={{marginTop:12}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+            <span style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>로그</span>
+            <button className="btn btn-outline" style={{padding:'2px 8px',fontSize:10}} onClick={()=>setLogs([])}>초기화</button>
+          </div>
+          <LogPanel logs={logs} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
