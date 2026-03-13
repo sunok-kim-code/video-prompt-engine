@@ -736,17 +736,23 @@ const STEP_LABELS = ['1. 스토리 분석','2. 캐릭터/배경 레퍼런스','3
 
 // Art Style Presets
 const ART_STYLES = {
-  ridiWebtoon: {
-    name: '리디 웹툰',
-    prefix: 'Korean webtoon style illustration, romance genre, beautifully detailed eyes with long eyelashes, smooth digital painting with cel shading, subtle pink and lavender color palette, delicate linework, sparkle and petal effects, semi-realistic anime art style, high-quality cover illustration, glossy finish, clean background with soft gradient, cinematic composition. ',
-    charSuffix: ', soft warm lighting, beautifully detailed eyes with long eyelashes, semi-realistic anime art style, glossy finish, high quality',
-    bgSuffix: ', soft warm lighting with bokeh, subtle pink and lavender palette, cinematic composition, high quality',
+  naverWebtoon: {
+    name: '네이버 웹툰',
+    prefix: 'Korean Naver webtoon style, clean bold linework, flat cel-shaded coloring, natural color palette matching the scene mood, expressive character faces with distinct features, solid backgrounds with moderate detail, professional digital illustration, vertical-scroll webtoon format. ',
+    charSuffix: ', clean linework, distinct facial features, expressive eyes, natural proportions, solid colors, webtoon character design, high quality',
+    bgSuffix: ', clean digital background, natural lighting, moderate detail, webtoon background art',
   },
   manhwa: {
     name: '만화 스타일',
     prefix: 'Korean manhwa webtoon art style, clean line art, cel shading, vibrant colors, comic panel illustration. ',
     charSuffix: ', manhwa art style, high quality, detailed',
     bgSuffix: ', manhwa background art, detailed environment',
+  },
+  romanceWebtoon: {
+    name: '로맨스 웹툰',
+    prefix: 'Korean romance webtoon style, semi-realistic anime art, beautifully detailed eyes, smooth digital painting, soft warm lighting, delicate linework, high-quality illustration. ',
+    charSuffix: ', soft lighting, beautifully detailed eyes, semi-realistic anime style, high quality',
+    bgSuffix: ', soft warm lighting, cinematic composition, high quality',
   },
   realistic: {
     name: '사실적 (Realistic)',
@@ -759,6 +765,12 @@ const ART_STYLES = {
     prefix: 'Dark fantasy webtoon art style, dramatic shadows, rich deep colors, intricate details, gothic atmosphere, painterly style. ',
     charSuffix: ', dark fantasy art style, dramatic lighting, intricate details',
     bgSuffix: ', dark fantasy atmosphere, dramatic lighting, detailed environment',
+  },
+  actionWebtoon: {
+    name: '액션 웹툰',
+    prefix: 'Korean action webtoon style, dynamic bold linework, high contrast shading, intense dramatic lighting, speed lines, impactful composition, sharp details, vivid saturated colors. ',
+    charSuffix: ', dynamic pose, bold linework, sharp details, intense expression, action webtoon style',
+    bgSuffix: ', dramatic atmosphere, high contrast lighting, dynamic perspective, action webtoon background',
   },
   custom: {
     name: '사용자 정의',
@@ -974,7 +986,7 @@ function App() {
   const [loraModels, setLoraModels] = useState({});
 
   // Art style selection
-  const [artStyle, setArtStyle] = useState('ridiWebtoon');
+  const [artStyle, setArtStyle] = useState('naverWebtoon');
   const [customStylePrompt, setCustomStylePrompt] = useState('');
 
   // Project management
@@ -1061,12 +1073,12 @@ function App() {
   // Helper: get style prefix for current art style selection
   const getStylePrefix = useCallback(() => {
     if (artStyle === 'custom') return customStylePrompt ? customStylePrompt.trim() + '. ' : '';
-    return (ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).prefix;
+    return (ART_STYLES[artStyle] || ART_STYLES.naverWebtoon).prefix;
   }, [artStyle, customStylePrompt]);
 
   const callImage = useCallback(async (prompt, opts={}) => {
     const stylePrefix = getStylePrefix();
-    const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name;
+    const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.naverWebtoon).name;
 
     // Build asset-enriched prompt: always append asset descriptions to ensure consistency
     const assetSuffix = opts.assetDescriptions?.length > 0
@@ -1940,9 +1952,9 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   const showPreview = (src, title) => { setPreviewImage(src); setPreviewTitle(title || ''); };
 
   // Helper: get full prompt for asset type (uses current art style)
-  const getCharSuffix = () => ', character reference sheet, full body, front view, clean background' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).charSuffix || ''));
-  const getBgSuffix = () => ', no characters, detailed environment, wide shot' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).bgSuffix || ''));
-  const getPropSuffix = () => ', single object, centered, clean white background, detailed illustration' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.ridiWebtoon).charSuffix || ''));
+  const getCharSuffix = () => ', character reference sheet, full body, front view, clean background' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.naverWebtoon).charSuffix || ''));
+  const getBgSuffix = () => ', no characters, detailed environment, wide shot' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.naverWebtoon).bgSuffix || ''));
+  const getPropSuffix = () => ', single object, centered, clean white background, detailed illustration' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.naverWebtoon).charSuffix || ''));
 
   const getAssetFullPrompt = (assetType, refPrompt) => {
     if (assetType === 'characters') return refPrompt + getCharSuffix();
