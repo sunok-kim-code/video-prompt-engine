@@ -2022,6 +2022,27 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
     document.body.removeChild(a);
   };
 
+  // Firebase에 전체 패널 명시적 저장
+  const savePanelsToFirebase = async () => {
+    if (!projectId || !currentEpisode) { log('프로젝트/에피소드를 먼저 선택하세요', 'error'); return; }
+    const count = panels.filter(Boolean).length;
+    if (count === 0) { log('저장할 패널 이미지가 없습니다', 'error'); return; }
+    try {
+      setRunning(true);
+      log(`패널 ${count}개 Firebase 저장 중...`, 'info');
+      await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels});
+      // 스토리보드도 함께 저장 (프롬프트 수정사항 포함)
+      if (storyboard.length > 0) {
+        await fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard});
+      }
+      const cs = [...new Set([...completedSteps, 0, 1, 2, 3])];
+      await fbSaveEpisode(projectId, currentEpisode, {step: 4, completedSteps: cs});
+      updateEpisodeState(4, cs);
+      log(`✓ 패널 ${count}개 Firebase 저장 완료! 다시 불러올 수 있습니다.`, 'success');
+    } catch(e) { log(`Firebase 저장 실패: ${e.message}`, 'error'); }
+    finally { setRunning(false); }
+  };
+
   // ======== RENDER ========
   const showPreview = (src, title) => { setPreviewImage(src); setPreviewTitle(title || ''); };
 
@@ -2498,7 +2519,10 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                 <div className="flex-col">
                   <div className="flex-row gap-8">
                     <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(3)} disabled={storyboard.length===0 || running}>패널 이미지 생성</button>
-                    {panels.filter(Boolean).length > 0 && <span className="text-muted">{panels.filter(Boolean).length}/{storyboard.length} 완료</span>}
+                    {panels.filter(Boolean).length > 0 && <>
+                      <span className="text-muted">{panels.filter(Boolean).length}/{storyboard.length} 완료</span>
+                      <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
+                    </>}
                     {running && <span className="status-badge running">생성 중...</span>}
                   </div>
 
@@ -2545,6 +2569,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                   <div className="flex-row gap-8">
                     <span style={{fontWeight:700,fontSize:15}}>웹툰 미리보기: {analysis?.title || ''}</span>
                     <span className="text-muted">({panels.filter(Boolean).length}개 패널)</span>
+                    {panels.filter(Boolean).length > 0 && <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>}
                   </div>
 
                   {panels.filter(Boolean).length === 0 && <div className="placeholder">패널 이미지를 먼저 생성하세요</div>}
