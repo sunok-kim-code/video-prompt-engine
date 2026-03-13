@@ -500,10 +500,8 @@ async function callFalAI(prompt, opts={}) {
   });
   const hasRefImages = validRefImages.length > 0;
 
-  // Use image-to-image endpoint when we have reference images
-  const endpoint = hasRefImages
-    ? 'https://fal.run/fal-ai/flux-general/image-to-image'
-    : 'https://fal.run/fal-ai/flux-general';
+  // Always use text-to-image; IP-Adapter handles reference image guidance
+  const endpoint = 'https://fal.run/fal-ai/flux-general';
 
   // Build request body
   const body = {
@@ -524,23 +522,16 @@ async function callFalAI(prompt, opts={}) {
     }));
   }
 
-  // Reference images: image-to-image base + IP-Adapter v2 for style consistency
+  // IP-Adapter v2: reference images guide style/character consistency (text-to-image base)
   if (hasRefImages) {
-    // First image → image-to-image base
-    const firstUrl = validRefImages[0].url || validRefImages[0];
-    body.image_url = firstUrl;
-    body.strength = 0.75; // 0=identical to reference, 1=ignore reference
-    console.log(`[callFalAI] image-to-image 모드: base image URL: ${firstUrl.substring(0, 80)}`);
-
-    // All images → IP-Adapter v2 for style/character consistency
     body.ip_adapters = validRefImages.map(img => ({
       path: 'XLabs-AI/flux-ip-adapter-v2',
       weight_name: 'ip_adapter.safetensors',
       image_encoder_path: 'openai/clip-vit-large-patch14',
       image_url: img.url || img,
-      scale: 0.8
+      scale: 0.6
     }));
-    console.log(`[callFalAI] IP-Adapter v2: ${validRefImages.length}개 레퍼런스 이미지 사용`);
+    console.log(`[callFalAI] IP-Adapter v2 (text-to-image): ${validRefImages.length}개 레퍼런스, scale=0.6`);
   }
 
   // ControlNet (OpenPose) — for dynamic poses
@@ -574,16 +565,10 @@ async function callFalAI(prompt, opts={}) {
       const e = await res.text();
       console.error('[callFalAI] Error response:', e.substring(0, 500));
       // 422 fallback: step 1) remove IP-Adapter, keep image-to-image
+      // 422 fallback: remove IP-Adapter, retry as pure text-to-image
       if (res.status === 422 && body.ip_adapters) {
-        console.warn('[callFalAI] 422 with IP-Adapter v2, retrying without ip_adapters (image-to-image only)...');
+        console.warn('[callFalAI] 422 with IP-Adapter v2, retrying text-only (no ip_adapters)...');
         delete body.ip_adapters;
-        continue;
-      }
-      // 422 fallback: step 2) remove image-to-image too, go text-only
-      if (res.status === 422 && body.image_url) {
-        console.warn('[callFalAI] 422 with image-to-image, retrying text-only...');
-        delete body.image_url;
-        delete body.strength;
         continue;
       }
       throw new Error('fal.ai ' + res.status + ': ' + e.substring(0, 300));
