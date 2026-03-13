@@ -765,24 +765,33 @@ const STEP_LABELS = ['1. 스토리 분석','2. 캐릭터/배경 레퍼런스','3
 const ART_STYLES = {
   naverWebtoon: {
     name: '네이버 웹툰',
-    prefix: 'Korean Naver webtoon style, clean bold linework, flat cel-shaded coloring, natural color palette matching the scene mood, professional digital illustration. ',
+    prefix: 'Korean Naver webtoon style, cartoon, clean bold linework, flat cel-shaded coloring, natural color palette matching the scene mood, professional digital illustration. ',
     charSuffix: ', clean bold linework, distinct facial features, expressive eyes, natural body proportions, flat cel-shaded coloring, webtoon character design, high quality',
     bgSuffix: ', clean digital painting, scene-appropriate lighting, moderate detail, Korean webtoon background style',
     propSuffix: ', clean linework, flat coloring, simple shading, webtoon object illustration',
+    loras: [
+      {path: 'https://civitai.com/api/download/models/801859?type=Model&format=SafeTensor', scale: 0.85},
+    ],
   },
   manhwa: {
     name: '만화 스타일',
-    prefix: 'Korean manhwa art style, precise ink-like linework, cel shading with vivid colors, dynamic panel composition, detailed expressions. ',
+    prefix: 'Korean manhwa art style, cartoon, precise ink-like linework, cel shading with vivid colors, dynamic panel composition, detailed expressions. ',
     charSuffix: ', precise linework, detailed face and hair rendering, vivid cel shading, manhwa character style, high quality',
     bgSuffix: ', detailed environment art, depth and perspective, manhwa background style',
     propSuffix: ', precise linework, detailed shading, manhwa object illustration',
+    loras: [
+      {path: 'https://civitai.com/api/download/models/801859?type=Model&format=SafeTensor', scale: 0.8},
+    ],
   },
   romanceWebtoon: {
     name: '로맨스 웹툰',
-    prefix: 'Korean romance webtoon style, semi-realistic anime art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition. ',
+    prefix: 'Korean romance webtoon style, cartoon, semi-realistic anime art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition. ',
     charSuffix: ', beautifully detailed eyes and hair, semi-realistic anime proportions, smooth skin rendering, elegant character design, high quality',
     bgSuffix: ', atmospheric mood lighting matching the scene emotion, cinematic depth of field, elegant composition, high quality',
     propSuffix: ', delicate rendering, soft shading, elegant illustration style',
+    loras: [
+      {path: 'https://civitai.com/api/download/models/801859?type=Model&format=SafeTensor', scale: 0.7},
+    ],
   },
   realistic: {
     name: '사실적 (Realistic)',
@@ -800,17 +809,23 @@ const ART_STYLES = {
   },
   actionWebtoon: {
     name: '액션 웹툰',
-    prefix: 'Korean action webtoon style, bold confident linework, high contrast shading, intense dramatic lighting, impactful composition, sharp details, vivid saturated colors. ',
+    prefix: 'Korean action webtoon style, cartoon, bold confident linework, high contrast shading, intense dramatic lighting, impactful composition, sharp details, vivid saturated colors. ',
     charSuffix: ', bold confident linework, sharp detailed features, strong physique rendering, intense eyes, action webtoon character design, high quality',
     bgSuffix: ', high contrast dramatic lighting, dynamic perspective, detailed destruction or environmental effects where appropriate',
     propSuffix: ', bold linework, sharp metallic or weapon-like rendering, high contrast shading',
+    loras: [
+      {path: 'https://civitai.com/api/download/models/801859?type=Model&format=SafeTensor', scale: 0.85},
+    ],
   },
   murimWebtoon: {
     name: '무협 웹툰 (태존비록)',
-    prefix: 'High-resolution modern Korean webtoon (manhwa) style, clean precise linework with rich gradient soft shading (not flat cel-shading), refined slightly idealized yet realistic character proportions, deep muted color palette with dark greens browns and grays, scene-adaptive realistic lighting with emotional color filters, cinematic panel composition. ',
+    prefix: 'High-resolution modern Korean webtoon (manhwa) style, cartoon, clean precise linework with rich gradient soft shading (not flat cel-shading), refined slightly idealized yet realistic character proportions, deep muted color palette with dark greens browns and grays, scene-adaptive realistic lighting with emotional color filters, cinematic panel composition. ',
     charSuffix: ', expressive deep emotional eyes with fine under-eye shadows and detailed iris texture, sharp nose and jawline, realistic fabric wrinkles and material texture on clothing, natural hair highlights, refined slightly idealized realistic proportions, distinct individual character design, high quality',
     bgSuffix: ', deep muted sophisticated color tones, scene-mood-adaptive realistic lighting, emotional color filter when appropriate (red tint for anger, gray tone for sorrow), natural highlights on metallic objects, detailed but grounded atmosphere',
     propSuffix: ', realistic material texture rendering, natural light highlights on metal and reflective surfaces, rich gradient shading, detailed craftsmanship, energy glow or impact effects when appropriate',
+    loras: [
+      {path: 'https://civitai.com/api/download/models/801859?type=Model&format=SafeTensor', scale: 0.85},
+    ],
   },
   custom: {
     name: '사용자 정의',
@@ -1172,10 +1187,20 @@ function App() {
         imageSize: opts.aspectRatio === '16:9' ? {width:1024,height:576} : opts.aspectRatio === '1:1' ? {width:768,height:768} : {width:768,height:1024}
       };
 
-      // Auto-apply trained LoRAs for characters in this panel
+      // Auto-apply LoRAs: art style LoRA + character LoRAs (max 3 total for fal.ai)
       const activeLoras = [];
+
+      // 1) Art style LoRA from ART_STYLES
+      const curStyle = ART_STYLES[artStyle] || ART_STYLES.naverWebtoon;
+      if (curStyle.loras?.length > 0) {
+        curStyle.loras.forEach(l => activeLoras.push({path: l.path, scale: l.scale || 0.8}));
+        log(`fal.ai: 스타일 LoRA ${curStyle.loras.length}개 적용 (${curStyle.name})`, 'info');
+      }
+
+      // 2) Character-specific trained LoRAs
       if (opts.characterIds?.length > 0) {
         for (const cid of opts.characterIds) {
+          if (activeLoras.length >= 3) break; // fal.ai max 3 LoRAs
           const lora = loraModels[cid];
           if (lora?.status === 'ready' && lora.url) {
             activeLoras.push({path: lora.url, scale: 0.8});
@@ -1187,7 +1212,7 @@ function App() {
       }
       if (activeLoras.length > 0) {
         falOpts.loras = activeLoras;
-        log(`fal.ai: LoRA ${activeLoras.length}개 자동 적용 (캐릭터 고정)`, 'info');
+        log(`fal.ai: LoRA 총 ${activeLoras.length}개 적용 (스타일+캐릭터)`, 'info');
       }
 
       // Upload reference images to fal CDN and use as IP-Adapter inputs (up to 4)
