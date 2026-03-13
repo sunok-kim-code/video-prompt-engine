@@ -492,8 +492,15 @@ function hasFalKey() { return !!localStorage.getItem('FAL_API_KEY'); }
 
 async function callFalAI(prompt, opts={}) {
   const apiKey = getFalKey();
-  // Use fal-ai/flux-general for ControlNet + LoRA + IP-Adapter support
-  const endpoint = 'https://fal.run/fal-ai/flux-general';
+
+  // Determine endpoint: use image-to-image when reference images are available
+  const hasRefImages = opts.ipAdapterImages?.some(img => {
+    const url = img.url || img;
+    return typeof url === 'string' && !url.startsWith('data:');
+  });
+  const endpoint = hasRefImages
+    ? 'https://fal.run/fal-ai/flux-general/image-to-image'
+    : 'https://fal.run/fal-ai/flux-general';
 
   // Build request body
   const body = {
@@ -514,28 +521,16 @@ async function callFalAI(prompt, opts={}) {
     }));
   }
 
-  // IP-Adapter — for visual consistency using reference asset images (requires CDN URLs)
-  // flux-general requires: path, image_encoder_path, image_url, scale
-  if (opts.ipAdapterImages?.length > 0) {
-    const validImages = opts.ipAdapterImages.slice(0, 2).filter(img => {
+  // Image-to-image mode: use first reference image as base, rest as prompt context
+  if (hasRefImages) {
+    const validImages = opts.ipAdapterImages.filter(img => {
       const url = img.url || img;
-      if (typeof url === 'string' && url.startsWith('data:')) {
-        console.warn('[callFalAI] IP-Adapter: data URL 스킵 (CDN URL 필요)');
-        return false;
-      }
-      return true;
+      return typeof url === 'string' && !url.startsWith('data:');
     });
-    if (validImages.length > 0) {
-      body.ip_adapters = validImages.map(img => ({
-        path: 'https://huggingface.co/XLabs-AI/flux-ip-adapter/resolve/main/ip_adapter.safetensors',
-        image_encoder_path: 'openai/clip-vit-large-patch14',
-        image_url: img.url || img,
-        scale: img.scale || 0.6
-      }));
-      console.log(`[callFalAI] IP-Adapter ${body.ip_adapters.length}개 적용:`, validImages.map(i => (i.url||i).substring(0, 80)));
-    } else {
-      console.warn('[callFalAI] IP-Adapter: 유효한 CDN URL 없음, 프롬프트만으로 생성');
-    }
+    // Use first image as the reference base image
+    body.image_url = validImages[0].url || validImages[0];
+    body.strength = 0.75; // How much to deviate from reference (0=identical, 1=ignore)
+    console.log(`[callFalAI] image-to-image 모드: 레퍼런스 이미지 사용, strength=0.75, URL: ${body.image_url.substring(0, 80)}`);
   }
 
   // ControlNet (OpenPose) — for dynamic poses
@@ -547,7 +542,7 @@ async function callFalAI(prompt, opts={}) {
     }];
   }
 
-  console.log('[callFalAI] Request body keys:', Object.keys(body), body.ip_adapters ? 'ip_adapters:' + JSON.stringify(body.ip_adapters.map(a => ({...a, ip_adapter_image_url: a.ip_adapter_image_url?.substring(0,60)}))) : 'no ip_adapters');
+  console.log(`[callFalAI] Endpoint: ${endpoint.split('/').pop()}, body keys:`, Object.keys(body));
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(endpoint, {
@@ -568,10 +563,11 @@ async function callFalAI(prompt, opts={}) {
     if (!res.ok) {
       const e = await res.text();
       console.error('[callFalAI] Error response:', e.substring(0, 500));
-      // If 422 with ip_adapters, retry without them
-      if (res.status === 422 && body.ip_adapters) {
-        console.warn('[callFalAI] 422 with IP-Adapter, retrying without ip_adapters...');
-        delete body.ip_adapters;
+      // If 422 with image-to-image, retry as text-only
+      if (res.status === 422 && body.image_url) {
+        console.warn('[callFalAI] 422 with image-to-image, retrying text-only...');
+        delete body.image_url;
+        delete body.strength;
         continue;
       }
       throw new Error('fal.ai ' + res.status + ': ' + e.substring(0, 300));
