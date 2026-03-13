@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -2197,6 +2198,81 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
     finally { setRunning(false); }
   };
 
+  // PDF 내보내기
+  const exportWebtoonPDF = async () => {
+    const validPanels = storyboard.map((sb, i) => panels[i] ? {img: panels[i], sb, idx: i} : null).filter(Boolean);
+    if (validPanels.length === 0) { log('내보낼 패널 이미지가 없습니다', 'error'); return; }
+    try {
+      setRunning(true);
+      log(`PDF 내보내기 시작... (${validPanels.length}개 패널)`, 'info');
+      const { jsPDF } = window.jspdf;
+      // 웹툰은 세로 스크롤이므로 portrait A4
+      const pdf = new jsPDF({orientation: 'portrait', unit: 'mm', format: 'a4'});
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 5;
+      const contentW = pageW - margin * 2;
+
+      for (let i = 0; i < validPanels.length; i++) {
+        if (i > 0) pdf.addPage();
+        const {img, sb, idx} = validPanels[i];
+
+        // 이미지를 캔버스에 로드하여 크기 파악
+        const image = await new Promise((resolve, reject) => {
+          const im = new Image();
+          im.crossOrigin = 'anonymous';
+          im.onload = () => resolve(im);
+          im.onerror = reject;
+          im.src = img;
+        });
+
+        const imgRatio = image.width / image.height;
+        let drawW = contentW;
+        let drawH = drawW / imgRatio;
+        // 페이지 높이 초과 시 높이 기준으로 맞춤
+        const maxH = pageH - margin * 2 - 15; // 상단 여백 + 하단 텍스트 공간
+        if (drawH > maxH) {
+          drawH = maxH;
+          drawW = drawH * imgRatio;
+        }
+        const x = (pageW - drawW) / 2;
+        const y = margin + 2;
+
+        // 패널 번호 헤더
+        pdf.setFontSize(9);
+        pdf.setTextColor(120, 120, 120);
+        pdf.text(`Panel ${idx + 1}`, margin, margin + 1);
+
+        // 이미지 추가
+        const format = img.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+        pdf.addImage(img, format, x, y, drawW, drawH);
+
+        // 대사 텍스트 (이미지 아래)
+        if (sb.dialogue?.length > 0) {
+          let textY = y + drawH + 4;
+          pdf.setFontSize(8);
+          pdf.setTextColor(60, 60, 60);
+          for (const d of sb.dialogue) {
+            if (textY > pageH - margin) break;
+            const line = `${d.speaker}: ${d.text}`;
+            pdf.text(line, margin, textY, {maxWidth: contentW});
+            textY += 4;
+          }
+        }
+
+        log(`패널 ${idx + 1}/${validPanels.length} 추가 완료`, 'info');
+      }
+
+      const title = analysis?.title || 'webtoon';
+      const epLabel = currentEpisode ? `_ep${currentEpisode}` : '';
+      pdf.save(`${title}${epLabel}.pdf`);
+      log(`✓ PDF 내보내기 완료! (${validPanels.length}개 패널)`, 'success');
+    } catch(e) {
+      log(`PDF 내보내기 실패: ${e.message}`, 'error');
+      console.error('PDF export error:', e);
+    } finally { setRunning(false); }
+  };
+
   // ======== RENDER ========
   const showPreview = (src, title) => { setPreviewImage(src); setPreviewTitle(title || ''); };
 
@@ -2677,6 +2753,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                       <span className="text-muted">{panels.filter(Boolean).length}/{storyboard.length} 완료</span>
                       <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
                       {projectId && currentEpisode && <button className="btn btn-outline btn-sm" onClick={() => window.open(`/viewer.html?project=${encodeURIComponent(projectId)}&episode=${currentEpisode}`, '_blank')} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>}
+                      <button className="btn btn-outline btn-sm" onClick={exportWebtoonPDF} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>📄 PDF 내보내기</button>
                     </>}
                     {running && <span className="status-badge running">생성 중...</span>}
                   </div>
@@ -2727,6 +2804,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                     {panels.filter(Boolean).length > 0 && <>
                       <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
                       {projectId && currentEpisode && <button className="btn btn-outline btn-sm" onClick={() => window.open(`/viewer.html?project=${encodeURIComponent(projectId)}&episode=${currentEpisode}`, '_blank')} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>}
+                      <button className="btn btn-outline btn-sm" onClick={exportWebtoonPDF} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>📄 PDF 내보내기</button>
                     </>}
                   </div>
 

@@ -143,6 +143,7 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 
 <script>
 // ============================================================
@@ -296,6 +297,7 @@ async function loadProjectInfo(projectId) {
         <span class="meta">EP${epNum} · ${panelCount}컷</span>
         <button id="toggleDialogue" class="${showDialogue ? 'toggle-active' : ''}" title="대사 표시/숨기기">💬</button>
         <button id="shareBtn" title="공유">🔗 공유</button>
+        <button id="pdfBtn" title="PDF 내보내기">📄 PDF</button>
       </div>
 
       <div class="webtoon-container">
@@ -355,6 +357,70 @@ async function loadProjectInfo(projectId) {
     document.getElementById('shareBtn')?.addEventListener('click', () => {
       showShareModal = true;
       render();
+    });
+
+    document.getElementById('pdfBtn')?.addEventListener('click', async () => {
+      const btn = document.getElementById('pdfBtn');
+      if (!btn || btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = '⏳ 생성중...';
+      try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({orientation: 'portrait', unit: 'mm', format: 'a4'});
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const margin = 5;
+        const contentW = pageW - margin * 2;
+        let first = true;
+
+        for (let i = 0; i < storyboard.length; i++) {
+          if (!panels[i]) continue;
+          if (!first) pdf.addPage();
+          first = false;
+
+          const image = await new Promise((resolve, reject) => {
+            const im = new Image();
+            im.crossOrigin = 'anonymous';
+            im.onload = () => resolve(im);
+            im.onerror = reject;
+            im.src = panels[i];
+          });
+
+          const imgRatio = image.width / image.height;
+          let drawW = contentW;
+          let drawH = drawW / imgRatio;
+          const maxH = pageH - margin * 2 - 15;
+          if (drawH > maxH) { drawH = maxH; drawW = drawH * imgRatio; }
+          const x = (pageW - drawW) / 2;
+          const y = margin + 2;
+
+          pdf.setFontSize(9);
+          pdf.setTextColor(120, 120, 120);
+          pdf.text('Panel ' + (i + 1), margin, margin + 1);
+
+          const format = panels[i].startsWith('data:image/png') ? 'PNG' : 'JPEG';
+          pdf.addImage(panels[i], format, x, y, drawW, drawH);
+
+          if (storyboard[i]?.dialogue?.length > 0) {
+            let textY = y + drawH + 4;
+            pdf.setFontSize(8);
+            pdf.setTextColor(60, 60, 60);
+            for (const d of storyboard[i].dialogue) {
+              if (textY > pageH - margin) break;
+              pdf.text((d.speaker || '') + ': ' + (d.text || ''), margin, textY, {maxWidth: contentW});
+              textY += 4;
+            }
+          }
+        }
+
+        pdf.save(title + '_EP' + epNum + '.pdf');
+        btn.textContent = '✓ 완료!';
+        setTimeout(() => { try { btn.textContent = '📄 PDF'; btn.disabled = false; } catch(e){} }, 2000);
+      } catch(e) {
+        console.error('PDF export error:', e);
+        btn.textContent = '❌ 실패';
+        setTimeout(() => { try { btn.textContent = '📄 PDF'; btn.disabled = false; } catch(e){} }, 2000);
+      }
     });
 
     document.getElementById('closeShare')?.addEventListener('click', () => {
