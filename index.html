@@ -566,10 +566,19 @@ async function callFalAI(prompt, opts={}) {
       console.error('[callFalAI] Error response:', e.substring(0, 500));
       // 422 fallback: step 1) remove IP-Adapter, keep image-to-image
       // 422 fallback: remove IP-Adapter, retry as pure text-to-image
-      if (res.status === 422 && body.ip_adapters) {
-        console.warn('[callFalAI] 422 with IP-Adapter v2, retrying text-only (no ip_adapters)...');
-        delete body.ip_adapters;
-        continue;
+      if (res.status === 422) {
+        // Step 1: remove IP-Adapter
+        if (body.ip_adapters) {
+          console.warn('[callFalAI] 422 — IP-Adapter 제거 후 재시도...');
+          delete body.ip_adapters;
+          continue;
+        }
+        // Step 2: remove LoRAs
+        if (body.loras) {
+          console.warn('[callFalAI] 422 — LoRA 제거 후 재시도...');
+          delete body.loras;
+          continue;
+        }
       }
       throw new Error('fal.ai ' + res.status + ': ' + e.substring(0, 300));
     }
@@ -770,7 +779,7 @@ const ART_STYLES = {
     bgSuffix: ', clean digital painting, scene-appropriate lighting, moderate detail, Korean webtoon background style',
     propSuffix: ', clean linework, flat coloring, simple shading, webtoon object illustration',
     loras: [
-      {path: 'https://civitai.com/api/download/models/801859?type=Model&format=SafeTensor', scale: 0.85},
+      {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.85},
     ],
   },
   manhwa: {
@@ -780,7 +789,7 @@ const ART_STYLES = {
     bgSuffix: ', detailed environment art, depth and perspective, manhwa background style',
     propSuffix: ', precise linework, detailed shading, manhwa object illustration',
     loras: [
-      {path: 'https://civitai.com/api/download/models/801859?type=Model&format=SafeTensor', scale: 0.8},
+      {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.8},
     ],
   },
   romanceWebtoon: {
@@ -790,7 +799,7 @@ const ART_STYLES = {
     bgSuffix: ', atmospheric mood lighting matching the scene emotion, cinematic depth of field, elegant composition, high quality',
     propSuffix: ', delicate rendering, soft shading, elegant illustration style',
     loras: [
-      {path: 'https://civitai.com/api/download/models/801859?type=Model&format=SafeTensor', scale: 0.7},
+      {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.7},
     ],
   },
   realistic: {
@@ -814,7 +823,7 @@ const ART_STYLES = {
     bgSuffix: ', high contrast dramatic lighting, dynamic perspective, detailed destruction or environmental effects where appropriate',
     propSuffix: ', bold linework, sharp metallic or weapon-like rendering, high contrast shading',
     loras: [
-      {path: 'https://civitai.com/api/download/models/801859?type=Model&format=SafeTensor', scale: 0.85},
+      {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.85},
     ],
   },
   murimWebtoon: {
@@ -824,7 +833,7 @@ const ART_STYLES = {
     bgSuffix: ', deep muted sophisticated color tones, scene-mood-adaptive realistic lighting, emotional color filter when appropriate (red tint for anger, gray tone for sorrow), natural highlights on metallic objects, detailed but grounded atmosphere',
     propSuffix: ', realistic material texture rendering, natural light highlights on metal and reflective surfaces, rich gradient shading, detailed craftsmanship, energy glow or impact effects when appropriate',
     loras: [
-      {path: 'https://civitai.com/api/download/models/801859?type=Model&format=SafeTensor', scale: 0.85},
+      {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.85},
     ],
   },
   custom: {
