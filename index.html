@@ -514,14 +514,25 @@ async function callFalAI(prompt, opts={}) {
     }));
   }
 
-  // IP-Adapter — for art style consistency using reference images
-  // Pass data URLs directly — fal.ai accepts base64 data URLs for image inputs
+  // IP-Adapter — for art style consistency using reference images (requires CDN URLs)
   if (opts.ipAdapterImages?.length > 0) {
-    body.ip_adapters = opts.ipAdapterImages.slice(0, 2).map(img => ({
-      ip_adapter_image_url: img.url || img,
-      scale: img.scale || 0.6
-    }));
-    console.log(`[callFalAI] IP-Adapter ${body.ip_adapters.length}개 적용 (data URL 직접 전달)`);
+    const validImages = opts.ipAdapterImages.slice(0, 2).filter(img => {
+      const url = img.url || img;
+      if (typeof url === 'string' && url.startsWith('data:')) {
+        console.warn('[callFalAI] IP-Adapter: data URL 스킵 (CDN URL 필요)');
+        return false;
+      }
+      return true;
+    });
+    if (validImages.length > 0) {
+      body.ip_adapters = validImages.map(img => ({
+        ip_adapter_image_url: img.url || img,
+        scale: img.scale || 0.6
+      }));
+      console.log(`[callFalAI] IP-Adapter ${body.ip_adapters.length}개 적용:`, validImages.map(i => (i.url||i).substring(0, 80)));
+    } else {
+      console.warn('[callFalAI] IP-Adapter: 유효한 CDN URL 없음, 프롬프트만으로 생성');
+    }
   }
 
   // ControlNet (OpenPose) — for dynamic poses
@@ -1176,13 +1187,25 @@ function App() {
         log(`fal.ai: LoRA ${activeLoras.length}개 자동 적용 (캐릭터 고정)`, 'info');
       }
 
-      // Pass reference images as IP-Adapter inputs (up to 4)
-      // Try data URL directly first; fal.ai FLUX accepts data URLs for ip_adapter_image_url
+      // Upload reference images to fal CDN and use as IP-Adapter inputs (up to 4)
       if (refs.length > 0) {
+        log(`fal.ai: 레퍼런스 이미지 ${Math.min(refs.length, 4)}개 업로드 중 (IP-Adapter)...`, 'info');
         const ipImages = [];
         for (const ref of refs.slice(0, 4)) {
-          if (ref.image) {
-            // Use data URL directly — fal.ai queue API supports inline base64
+          if (ref.image?.startsWith('data:')) {
+            try {
+              const url = await uploadToFalCDN(ref.image);
+              if (url && !url.startsWith('data:')) {
+                ipImages.push({url, scale: 0.85});
+                log(`  ✓ 업로드 성공: ${url.substring(0, 60)}...`, 'info');
+              } else {
+                log(`  ✗ 업로드 실패 (data URL 반환됨)`, 'error');
+              }
+            } catch(e) {
+              log(`  ✗ 업로드 오류: ${e.message}`, 'error');
+            }
+          } else if (ref.image) {
+            // Already a URL
             ipImages.push({url: ref.image, scale: 0.85});
           }
         }
