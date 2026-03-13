@@ -393,7 +393,17 @@ async function callNanoBanana(prompt, opts={}) {
   const model=opts.model||'gemini-2.0-flash-preview-image-generation';
   const url=`https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
   const parts=[];
-  if(opts.referenceImages?.length>0){parts.push({text:'REFERENCE IMAGES — You MUST replicate these characters/backgrounds EXACTLY as shown. Maintain identical facial features, hairstyle, hair color, eye color, outfit, and proportions:'});for(const ref of opts.referenceImages.slice(0,5)){const b=extractBase64(ref.image);if(b){parts.push({inlineData:{mimeType:'image/png',data:b}});if(ref.description)parts.push({text:'[Asset: '+ref.description.substring(0,300)+']'});}}}
+  if(opts.referenceImages?.length>0){
+    parts.push({text:'REFERENCE IMAGES — You MUST replicate these characters, backgrounds, and props EXACTLY as shown. Copy every visual detail with pixel-level accuracy: facial features, hairstyle, hair color, eye color, eye shape, skin tone, outfit design, outfit colors, body proportions, accessories. Do NOT change, reimagine, or stylize any element differently from these references:'});
+    for(const ref of opts.referenceImages.slice(0,6)){
+      const b=extractBase64(ref.image);
+      if(b){
+        parts.push({inlineData:{mimeType:'image/png',data:b}});
+        if(ref.description)parts.push({text:'[Asset: '+ref.description.substring(0,400)+'] — COPY THIS EXACTLY'});
+      }
+    }
+    parts.push({text:'END OF REFERENCES. Now generate the following scene using EXACTLY these character/prop designs:'});
+  }
   parts.push({text:prompt});
   const body={contents:[{role:'user',parts}],generationConfig:{responseModalities:['TEXT','IMAGE'],temperature:1.0}};
   const maxRetries = 3;
@@ -1115,9 +1125,20 @@ function App() {
       const epCharImg = episodeRefs?.characters?.[charId];
       const charImg = saCharImg || epCharImg;
       const charInfo = analysisData.characters?.find(c => c.id === charId);
+      const saCharData = sa?.characters?.[charId];
       const outfitDesc = pc.outfitOverride || charInfo?.outfit || '';
       const appearanceDesc = charInfo?.appearance || charId;
-      const fullDesc = appearanceDesc + (outfitDesc ? ', wearing: ' + outfitDesc : '');
+      // Build detailed Visual ID Card: combine all available description fields
+      const detailParts = [appearanceDesc];
+      if (charInfo?.age) detailParts.push(`age: ${charInfo.age}`);
+      if (charInfo?.gender) detailParts.push(`gender: ${charInfo.gender}`);
+      if (charInfo?.hairStyle || charInfo?.hair) detailParts.push(`hair: ${charInfo.hairStyle || charInfo.hair}`);
+      if (charInfo?.eyeColor || charInfo?.eyes) detailParts.push(`eyes: ${charInfo.eyeColor || charInfo.eyes}`);
+      if (charInfo?.height) detailParts.push(`height/build: ${charInfo.height}`);
+      if (charInfo?.features) detailParts.push(`distinctive features: ${charInfo.features}`);
+      if (outfitDesc) detailParts.push(`outfit: ${outfitDesc}`);
+      if (saCharData?.description && saCharData.description !== appearanceDesc) detailParts.push(saCharData.description);
+      const fullDesc = detailParts.join(', ');
       assetDescriptions.push(`[Character ${charInfo?.name || charId}]: ${fullDesc}`);
       if (charImg) {
         refImages.push({image: charImg, description: fullDesc});
@@ -1281,15 +1302,43 @@ function App() {
       return await callStableDiffusion(basePrompt, sdOpts);
     }
 
-    // ========== Imagen 4 (default) — text only, maximize description detail ==========
-    if (refs.length > 0) {
-      const refDescs = refs.map(r => r.description).filter(Boolean).join(';\n');
-      const enrichedPrompt = basePrompt + '\n\nIMPORTANT - Reproduce these visual references with EXACT fidelity:\n' + refDescs;
-      log(`Imagen 4 사용 (${curStyleName} 스타일 + asset 설명 ${refs.length}개 강화)`, 'info');
-      return await callImagen(enrichedPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+    // ========== Imagen 4 (default) — text-only, use detailed Character Visual ID Cards ==========
+    {
+      // Build Character Visual ID Cards for text-only consistency
+      let characterCards = '';
+      if (opts.assetDescriptions?.length > 0) {
+        const charDescs = opts.assetDescriptions.filter(d => d.startsWith('[Character'));
+        const propDescs = opts.assetDescriptions.filter(d => d.startsWith('[Prop'));
+        const bgDescs = opts.assetDescriptions.filter(d => d.startsWith('[Background'));
+        if (charDescs.length > 0 || propDescs.length > 0) {
+          characterCards = '\n\n=== MANDATORY CHARACTER/PROP VISUAL ID CARDS ===\n' +
+            'CRITICAL: You MUST render each character and prop EXACTLY as described below. ' +
+            'These descriptions define the CANONICAL appearance that must be IDENTICAL across ALL panels. ' +
+            'Do NOT change, reimagine, or add any visual details not listed here.\n\n';
+          for (const desc of charDescs) {
+            characterCards += desc + '\nIMPORTANT: This character must look EXACTLY the same in every panel — same face, same hair, same outfit, same proportions.\n\n';
+          }
+          for (const desc of propDescs) {
+            characterCards += desc + '\nIMPORTANT: This prop must look EXACTLY the same whenever it appears — same design, color, shape, material.\n\n';
+          }
+          if (bgDescs.length > 0) {
+            characterCards += bgDescs.join('\n') + '\n';
+          }
+          characterCards += '=== END OF VISUAL ID CARDS ===\n';
+        }
+      }
+
+      // Build the final Imagen4 prompt: style + scene + character ID cards
+      const imagen4Prompt = stylePrefix + prompt + characterCards;
+      const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
+      const propCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Prop')).length;
+      if (charCount > 0 || propCount > 0) {
+        log(`Imagen 4 사용 (${curStyleName} 스타일 + 캐릭터 ID카드 ${charCount}개 + 소품 ID카드 ${propCount}개)`, 'info');
+      } else {
+        log(`Imagen 4 사용 (${curStyleName} 스타일 적용)`, 'info');
+      }
+      return await callImagen(imagen4Prompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
-    log(`Imagen 4 사용 (${curStyleName} 스타일 적용)`, 'info');
-    return await callImagen(basePrompt, {aspectRatio: opts.aspectRatio || '3:4'});
   }, [imageProvider, artStyle, customStylePrompt, getStylePrefix, log, loraModels]);
 
   // LoRA Training: train a character LoRA from reference images
