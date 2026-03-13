@@ -198,18 +198,51 @@ async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImag
   const db = getDb(); if (!db) return;
   const ref = db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).collection('phases').doc(phaseName);
   const imgs = []; const safe = stripBase64(phaseData, imgs);
-  const retrySet = async (docRef, data, attempts) => {
+  const retryWrite = async (fn, attempts) => {
     for (let a = 0; a < (attempts||3); a++) {
-      try { await docRef.set(data); return; } catch(e) {
-        if (a < (attempts||3)-1 && e.code === 'resource-exhausted') { await new Promise(r => setTimeout(r, 2000*(a+1))); } else throw e;
+      try { await fn(); return; } catch(e) {
+        if (a < (attempts||3)-1 && (e.code === 'resource-exhausted' || e.message?.includes('exhausted'))) {
+          console.warn(`[fbSavePhase] resource-exhausted, retry ${a+1}/${attempts||3} after ${3*(a+1)}s...`);
+          await new Promise(r => setTimeout(r, 3000*(a+1)));
+        } else throw e;
       }
     }
   };
-  await retrySet(ref, {...safe, imageCount: skipImages ? 0 : imgs.length, savedAt: firebase.firestore.FieldValue.serverTimestamp()});
+  await retryWrite(() => ref.set({...safe, imageCount: skipImages ? 0 : imgs.length, savedAt: firebase.firestore.FieldValue.serverTimestamp()}));
   if (skipImages || imgs.length === 0) return;
   const imgColl = ref.collection('images');
-  try { const old = await imgColl.get(); if(old.docs.length>0){const b=db.batch();old.docs.forEach(d=>b.delete(d.ref));await b.commit(); await new Promise(r=>setTimeout(r,500));} } catch(e){}
-  for(let i=0;i<imgs.length;i+=2){const b=db.batch();for(let j=i;j<Math.min(i+2,imgs.length);j++){const im=imgs[j];if(im.data.length>900000){const cs=800000,cn=Math.ceil(im.data.length/cs);b.set(imgColl.doc(im.id),{key:im.key,chunks:cn});for(let c=0;c<cn;c++)b.set(imgColl.doc(im.id+'_c'+c),{data:im.data.substring(c*cs,(c+1)*cs),idx:c});}else b.set(imgColl.doc(im.id),{key:im.key,data:im.data});}try{await b.commit();await new Promise(r=>setTimeout(r,300));}catch(e){if(e.code==='resource-exhausted'){await new Promise(r=>setTimeout(r,3000));try{await b.commit();}catch(e2){}}else throw e;}}
+  // Delete old images in small batches (max 10 per batch)
+  try {
+    const old = await imgColl.get();
+    if (old.docs.length > 0) {
+      for (let d = 0; d < old.docs.length; d += 10) {
+        const b = db.batch();
+        old.docs.slice(d, d + 10).forEach(doc => b.delete(doc.ref));
+        await b.commit();
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+  } catch(e) { console.warn('[fbSavePhase] old image cleanup failed:', e.message); }
+  // Save images ONE at a time to avoid write stream exhaustion
+  const CHUNK_SIZE = 800000;
+  for (let i = 0; i < imgs.length; i++) {
+    const im = imgs[i];
+    await retryWrite(async () => {
+      if (im.data.length > 900000) {
+        // Large image: save metadata doc + chunk docs sequentially
+        const cn = Math.ceil(im.data.length / CHUNK_SIZE);
+        await imgColl.doc(im.id).set({key: im.key, chunks: cn});
+        for (let c = 0; c < cn; c++) {
+          await imgColl.doc(im.id + '_c' + c).set({data: im.data.substring(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE), idx: c});
+          await new Promise(r => setTimeout(r, 200)); // Throttle between chunks
+        }
+      } else {
+        await imgColl.doc(im.id).set({key: im.key, data: im.data});
+      }
+    }, 4);
+    await new Promise(r => setTimeout(r, 500)); // Throttle between images
+    console.log(`[fbSavePhase] 이미지 ${i+1}/${imgs.length} 저장 완료`);
+  }
 }
 
 async function fbLoadPhase(projectId, episodeNum, phaseName) {
