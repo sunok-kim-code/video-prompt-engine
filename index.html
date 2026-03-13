@@ -1152,8 +1152,17 @@ function App() {
       const bgAsset = sa?.backgrounds?.[panel.background];
       const bgImg = bgAsset?.image || episodeRefs?.backgrounds?.[panel.background];
       const bgInfo = analysisData.backgrounds?.find(b => b.id === panel.background);
-      const bgDesc = bgAsset?.description || bgInfo?.description || panel.background;
-      assetDescriptions.push(`[Background]: ${bgDesc}`);
+      // Build detailed background description
+      const bgParts = [];
+      bgParts.push(bgAsset?.description || bgInfo?.description || panel.background);
+      if (bgInfo?.atmosphere) bgParts.push(`atmosphere: ${bgInfo.atmosphere}`);
+      if (bgInfo?.timeOfDay || bgInfo?.time) bgParts.push(`time: ${bgInfo.timeOfDay || bgInfo.time}`);
+      if (bgInfo?.weather) bgParts.push(`weather: ${bgInfo.weather}`);
+      if (bgInfo?.features) bgParts.push(`key features: ${bgInfo.features}`);
+      if (bgInfo?.colors) bgParts.push(`color palette: ${bgInfo.colors}`);
+      if (bgAsset?.name) bgParts.push(`location name: ${bgAsset.name}`);
+      const bgDesc = bgParts.join(', ');
+      assetDescriptions.push(`[Background ${bgAsset?.name || bgInfo?.name || panel.background}]: ${bgDesc}`);
       if (bgImg) {
         refImages.push({image: bgImg, description: 'background: ' + bgDesc});
         console.log(`[buildPanelRefs] ✓ 배경 "${panel.background}" 이미지 발견 (length: ${bgImg.length})`);
@@ -1166,8 +1175,17 @@ function App() {
       for (const propId of panel.props) {
         const propAsset = sa?.props?.[propId];
         const propInfo = analysisData.props?.find(p => p.id === propId);
-        const propDesc = propAsset?.description || propInfo?.description || propId;
         const propName = propAsset?.name || propInfo?.name || propId;
+        // Build detailed prop description
+        const propParts = [];
+        propParts.push(propAsset?.description || propInfo?.description || propId);
+        if (propInfo?.material) propParts.push(`material: ${propInfo.material}`);
+        if (propInfo?.color) propParts.push(`color: ${propInfo.color}`);
+        if (propInfo?.size) propParts.push(`size: ${propInfo.size}`);
+        if (propInfo?.shape) propParts.push(`shape: ${propInfo.shape}`);
+        if (propInfo?.significance) propParts.push(`significance: ${propInfo.significance}`);
+        if (propAsset?.description && propAsset.description !== (propInfo?.description || propId)) propParts.push(propAsset.description);
+        const propDesc = propParts.join(', ');
         assetDescriptions.push(`[Prop ${propName}]: ${propDesc}`);
         if (propAsset?.image) {
           refImages.push({image: propAsset.image, description: propName + ': ' + propDesc});
@@ -1304,36 +1322,48 @@ function App() {
 
     // ========== Imagen 4 (default) — text-only, use detailed Character Visual ID Cards ==========
     {
-      // Build Character Visual ID Cards for text-only consistency
-      let characterCards = '';
+      // Build Visual ID Cards for ALL assets (characters, props, backgrounds)
+      let visualIdCards = '';
       if (opts.assetDescriptions?.length > 0) {
         const charDescs = opts.assetDescriptions.filter(d => d.startsWith('[Character'));
         const propDescs = opts.assetDescriptions.filter(d => d.startsWith('[Prop'));
         const bgDescs = opts.assetDescriptions.filter(d => d.startsWith('[Background'));
-        if (charDescs.length > 0 || propDescs.length > 0) {
-          characterCards = '\n\n=== MANDATORY CHARACTER/PROP VISUAL ID CARDS ===\n' +
-            'CRITICAL: You MUST render each character and prop EXACTLY as described below. ' +
-            'These descriptions define the CANONICAL appearance that must be IDENTICAL across ALL panels. ' +
-            'Do NOT change, reimagine, or add any visual details not listed here.\n\n';
-          for (const desc of charDescs) {
-            characterCards += desc + '\nIMPORTANT: This character must look EXACTLY the same in every panel — same face, same hair, same outfit, same proportions.\n\n';
+        const totalAssets = charDescs.length + propDescs.length + bgDescs.length;
+        if (totalAssets > 0) {
+          visualIdCards = '\n\n=== MANDATORY VISUAL ID CARDS (ALL ASSETS) ===\n' +
+            'CRITICAL: You MUST render EVERY character, prop, and background EXACTLY as described below. ' +
+            'These are the CANONICAL designs for this webtoon. They must be VISUALLY IDENTICAL every time they appear, across ALL panels. ' +
+            'Do NOT change, reimagine, simplify, or add any visual details not listed here.\n\n';
+
+          if (charDescs.length > 0) {
+            visualIdCards += '--- CHARACTERS ---\n';
+            for (const desc of charDescs) {
+              visualIdCards += desc + '\n→ RULE: This character must look EXACTLY the same in every panel — same face shape, same hairstyle & color, same eye shape & color, same outfit & colors, same body proportions. A reader must instantly recognize this character.\n\n';
+            }
           }
-          for (const desc of propDescs) {
-            characterCards += desc + '\nIMPORTANT: This prop must look EXACTLY the same whenever it appears — same design, color, shape, material.\n\n';
+          if (propDescs.length > 0) {
+            visualIdCards += '--- PROPS & OBJECTS ---\n';
+            for (const desc of propDescs) {
+              visualIdCards += desc + '\n→ RULE: This prop must look EXACTLY the same whenever it appears — same design, same color, same shape, same material, same size proportions relative to characters.\n\n';
+            }
           }
           if (bgDescs.length > 0) {
-            characterCards += bgDescs.join('\n') + '\n';
+            visualIdCards += '--- BACKGROUNDS & LOCATIONS ---\n';
+            for (const desc of bgDescs) {
+              visualIdCards += desc + '\n→ RULE: This location must maintain consistent architectural style, color palette, spatial layout, and atmosphere whenever it appears. Key landmarks and features must be in the same positions.\n\n';
+            }
           }
-          characterCards += '=== END OF VISUAL ID CARDS ===\n';
+          visualIdCards += '=== END OF VISUAL ID CARDS ===\n';
         }
       }
 
-      // Build the final Imagen4 prompt: style + scene + character ID cards
-      const imagen4Prompt = stylePrefix + prompt + characterCards;
+      // Build the final Imagen4 prompt: style + scene + visual ID cards
+      const imagen4Prompt = stylePrefix + prompt + visualIdCards;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
       const propCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Prop')).length;
-      if (charCount > 0 || propCount > 0) {
-        log(`Imagen 4 사용 (${curStyleName} 스타일 + 캐릭터 ID카드 ${charCount}개 + 소품 ID카드 ${propCount}개)`, 'info');
+      const bgCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Background')).length;
+      if (charCount > 0 || propCount > 0 || bgCount > 0) {
+        log(`Imagen 4 사용 (${curStyleName} + 에셋 ID카드: 캐릭터 ${charCount} / 소품 ${propCount} / 배경 ${bgCount})`, 'info');
       } else {
         log(`Imagen 4 사용 (${curStyleName} 스타일 적용)`, 'info');
       }
