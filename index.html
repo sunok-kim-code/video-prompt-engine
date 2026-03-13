@@ -544,6 +544,8 @@ async function callFalAI(prompt, opts={}) {
     }];
   }
 
+  console.log('[callFalAI] Request body keys:', Object.keys(body), body.ip_adapters ? 'ip_adapters:' + JSON.stringify(body.ip_adapters.map(a => ({...a, ip_adapter_image_url: a.ip_adapter_image_url?.substring(0,60)}))) : 'no ip_adapters');
+
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -562,6 +564,13 @@ async function callFalAI(prompt, opts={}) {
     }
     if (!res.ok) {
       const e = await res.text();
+      console.error('[callFalAI] Error response:', e.substring(0, 500));
+      // If 422 with ip_adapters, retry without them
+      if (res.status === 422 && body.ip_adapters) {
+        console.warn('[callFalAI] 422 with IP-Adapter, retrying without ip_adapters...');
+        delete body.ip_adapters;
+        continue;
+      }
       throw new Error('fal.ai ' + res.status + ': ' + e.substring(0, 300));
     }
 
