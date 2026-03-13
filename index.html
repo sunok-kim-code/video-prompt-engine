@@ -281,11 +281,32 @@ async function fbDeleteAsset(projectId, assetType, assetId) {
   const batch = db.batch(); imgs.docs.forEach(d => batch.delete(d.ref)); batch.delete(ref); await batch.commit();
 }
 
+let _firebaseReady = false;
+let _firebaseReadyCallbacks = [];
+function onFirebaseReady(cb) { if (_firebaseReady) cb(); else _firebaseReadyCallbacks.push(cb); }
+function _notifyFirebaseReady() { _firebaseReady = true; _firebaseReadyCallbacks.forEach(cb => { try{cb();}catch(e){} }); _firebaseReadyCallbacks = []; }
+
 async function autoLoadServerConfig() {
   try { const res = await fetch('/api/firebase-config'); if (!res.ok) throw new Error(''); const data = await res.json();
     if (data.firebase) saveFirebaseConfig(data.firebase);
     if (data.vertex) { if(data.vertex.projectId)localStorage.setItem('VERTEX_PROJECT_ID',data.vertex.projectId); if(data.vertex.location)localStorage.setItem('VERTEX_LOCATION',data.vertex.location); if(data.vertex.accessToken)localStorage.setItem('VERTEX_ACCESS_TOKEN',data.vertex.accessToken); if(data.vertex.grokApiKey)localStorage.setItem('GROK_API_KEY',data.vertex.grokApiKey); if(data.vertex.stabilityApiKey)localStorage.setItem('STABILITY_API_KEY',data.vertex.stabilityApiKey); }
   } catch(e) { try{initFirebase();}catch(e2){} }
+  // After Firebase is ready, sync API keys from Firestore
+  if (getDb()) {
+    try {
+      const keys = await fbLoadApiKeys();
+      if (keys) {
+        let synced = 0;
+        const syncKey = (name) => { if (keys[name] && !localStorage.getItem(name)) { localStorage.setItem(name, keys[name]); synced++; } };
+        syncKey('VERTEX_PROJECT_ID'); syncKey('VERTEX_LOCATION'); syncKey('VERTEX_ACCESS_TOKEN');
+        syncKey('XAI_API_KEY'); syncKey('STABILITY_API_KEY'); syncKey('FAL_API_KEY');
+        if (synced > 0) console.log('[WebtoonProd] API keys synced from Firestore:', synced);
+      }
+    } catch(e) { console.warn('[WebtoonProd] Firestore key sync failed:', e); }
+    _notifyFirebaseReady();
+  } else {
+    _notifyFirebaseReady();
+  }
 }
 autoLoadServerConfig();
 
@@ -1790,19 +1811,21 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
   // Auto-load API keys from Firestore on mount (cross-browser sync)
   useEffect(() => {
-    fbLoadApiKeys().then(keys => {
-      if (!keys) return;
-      let synced = 0;
-      const syncKey = (name) => {
-        if (keys[name] && !localStorage.getItem(name)) {
-          localStorage.setItem(name, keys[name]);
-          synced++;
-        }
-      };
-      syncKey('VERTEX_PROJECT_ID'); syncKey('VERTEX_LOCATION'); syncKey('VERTEX_ACCESS_TOKEN');
-      syncKey('XAI_API_KEY'); syncKey('STABILITY_API_KEY'); syncKey('FAL_API_KEY');
-      if (synced > 0) log(`API 키 ${synced}개가 서버에서 동기화되었습니다`, 'success');
-    }).catch(()=>{});
+    onFirebaseReady(() => {
+      fbLoadApiKeys().then(keys => {
+        if (!keys) return;
+        let synced = 0;
+        const syncKey = (name) => {
+          if (keys[name] && !localStorage.getItem(name)) {
+            localStorage.setItem(name, keys[name]);
+            synced++;
+          }
+        };
+        syncKey('VERTEX_PROJECT_ID'); syncKey('VERTEX_LOCATION'); syncKey('VERTEX_ACCESS_TOKEN');
+        syncKey('XAI_API_KEY'); syncKey('STABILITY_API_KEY'); syncKey('FAL_API_KEY');
+        if (synced > 0) log(`API 키 ${synced}개가 서버에서 동기화되었습니다`, 'success');
+      }).catch(()=>{});
+    });
   }, []);
 
   // ======== Save Panel Image ========
