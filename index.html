@@ -1042,49 +1042,71 @@ function App() {
   // Helper: build reference images & descriptions from shared assets for a panel
   const buildPanelRefs = useCallback((panel, sa, analysisData, episodeRefs) => {
     const refImages = [];
-    const assetDescriptions = []; // text descriptions of all referenced assets
-    if (!panel.characters || !analysisData) return {refImages, assetDescriptions, charIds: []};
+    const assetDescriptions = [];
+    if (!panel.characters || !analysisData) {
+      console.warn('[buildPanelRefs] 패널에 characters 또는 analysisData 없음:', {hasChars: !!panel.characters, hasAnalysis: !!analysisData});
+      return {refImages, assetDescriptions, charIds: []};
+    }
+
+    // Debug: log asset availability
+    const saCharCount = Object.keys(sa?.characters || {}).length;
+    const saBgCount = Object.keys(sa?.backgrounds || {}).length;
+    const saPropCount = Object.keys(sa?.props || {}).length;
+    const epCharCount = Object.keys(episodeRefs?.characters || {}).length;
+    const epBgCount = Object.keys(episodeRefs?.backgrounds || {}).length;
+    console.log(`[buildPanelRefs] 에셋 현황: sharedAssets(캐릭터:${saCharCount}, 배경:${saBgCount}, 소품:${saPropCount}), episodeRefs(캐릭터:${epCharCount}, 배경:${epBgCount})`);
 
     const charIds = [];
     for (const pc of panel.characters) {
       const charId = pc.id || pc;
       charIds.push(charId);
-      const charImg = sa.characters?.[charId]?.image || episodeRefs?.characters?.[charId];
+      const saCharImg = sa?.characters?.[charId]?.image;
+      const epCharImg = episodeRefs?.characters?.[charId];
+      const charImg = saCharImg || epCharImg;
       const charInfo = analysisData.characters?.find(c => c.id === charId);
       const outfitDesc = pc.outfitOverride || charInfo?.outfit || '';
       const appearanceDesc = charInfo?.appearance || charId;
       const fullDesc = appearanceDesc + (outfitDesc ? ', wearing: ' + outfitDesc : '');
-      // Always add text description even if no image
       assetDescriptions.push(`[Character ${charInfo?.name || charId}]: ${fullDesc}`);
       if (charImg) {
         refImages.push({image: charImg, description: fullDesc});
+        console.log(`[buildPanelRefs] ✓ 캐릭터 "${charId}" 이미지 발견 (source: ${saCharImg ? 'sharedAssets' : 'episodeRefs'}, length: ${charImg.length})`);
+      } else {
+        console.warn(`[buildPanelRefs] ✗ 캐릭터 "${charId}" 이미지 없음 (sharedAssets keys: [${Object.keys(sa?.characters || {}).join(',')}])`);
       }
     }
 
     if (panel.background) {
-      const bgAsset = sa.backgrounds?.[panel.background];
+      const bgAsset = sa?.backgrounds?.[panel.background];
       const bgImg = bgAsset?.image || episodeRefs?.backgrounds?.[panel.background];
       const bgInfo = analysisData.backgrounds?.find(b => b.id === panel.background);
       const bgDesc = bgAsset?.description || bgInfo?.description || panel.background;
       assetDescriptions.push(`[Background]: ${bgDesc}`);
       if (bgImg) {
         refImages.push({image: bgImg, description: 'background: ' + bgDesc});
+        console.log(`[buildPanelRefs] ✓ 배경 "${panel.background}" 이미지 발견 (length: ${bgImg.length})`);
+      } else {
+        console.warn(`[buildPanelRefs] ✗ 배경 "${panel.background}" 이미지 없음 (sharedAssets bg keys: [${Object.keys(sa?.backgrounds || {}).join(',')}])`);
       }
     }
 
     if (panel.props) {
       for (const propId of panel.props) {
-        const propAsset = sa.props?.[propId];
+        const propAsset = sa?.props?.[propId];
         const propInfo = analysisData.props?.find(p => p.id === propId);
         const propDesc = propAsset?.description || propInfo?.description || propId;
         const propName = propAsset?.name || propInfo?.name || propId;
         assetDescriptions.push(`[Prop ${propName}]: ${propDesc}`);
         if (propAsset?.image) {
           refImages.push({image: propAsset.image, description: propName + ': ' + propDesc});
+          console.log(`[buildPanelRefs] ✓ 소품 "${propId}" 이미지 발견`);
+        } else {
+          console.warn(`[buildPanelRefs] ✗ 소품 "${propId}" 이미지 없음`);
         }
       }
     }
 
+    console.log(`[buildPanelRefs] 결과: refImages=${refImages.length}개, assetDescriptions=${assetDescriptions.length}개`);
     return {refImages, assetDescriptions, charIds: charIds.filter(Boolean)};
   }, []);
 
@@ -1680,11 +1702,12 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
 
       const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs);
+      log(`패널 ${i+1}: 레퍼런스 이미지 ${refImages.length}개, 에셋 설명 ${assetDescriptions.length}개, 캐릭터 ${panelCharIds.length}명`);
 
       try {
         const images = await callImage(panel.imagePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
         newPanels[i] = images[0];
-        log(`패널 ${i+1} 완료`, 'success');
+        log(`패널 ${i+1} 완료 (레퍼런스 ${refImages.length}개 사용)`, 'success');
       } catch(e) {
         log(`패널 ${i+1} 실패: ${e.message}`, 'error');
         if (e.message.includes('429')) await new Promise(r => setTimeout(r, 10000));
