@@ -1130,27 +1130,21 @@ function App() {
 
     // ========== Stable Diffusion ==========
     if (imageProvider === 'stableDiffusion') {
-      // SD 3.5 supports image-to-image: use background asset as init_image
+      const sdOpts = {aspectRatio: opts.aspectRatio || '3:4'};
       if (refs.length > 0) {
-        // Try to find background ref for image-to-image
+        // Use background asset as init_image for image-to-image if available
         const bgRef = refs.find(r => r.description?.startsWith('background'));
-        const charRefs = refs.filter(r => !r.description?.startsWith('background'));
         if (bgRef?.image?.startsWith('data:')) {
-          // Use SD image-to-image with background as base
+          sdOpts.initImage = bgRef.image;
+          sdOpts.strength = 0.65;
           log(`SD image-to-image: 배경 asset을 init_image로 활용 (${curStyleName} 스타일)`, 'info');
-          return await callStableDiffusion(basePrompt, {
-            aspectRatio: opts.aspectRatio || '3:4',
-            initImage: bgRef.image,
-            strength: 0.65
-          });
         }
-        // If no usable init_image, fall back to Gemini which can use images directly
-        log(`레퍼런스 이미지 감지 → Gemini로 전환 (레퍼런스 ${refs.length}개 직접 활용, ${curStyleName} 스타일)`, 'info');
-        const refInstruction = '\n\nCRITICAL: Reference images are provided. You MUST draw the characters and backgrounds EXACTLY as they appear in the reference images.';
-        return await callNanoBanana(basePrompt + refInstruction, opts);
+        // Asset descriptions are already in basePrompt via assetSuffix
+        log(`Stable Diffusion 사용 (${curStyleName} 스타일 + asset 설명 ${refs.length}개)`, 'info');
+      } else {
+        log(`Stable Diffusion 사용 (${curStyleName} 스타일 적용)`, 'info');
       }
-      log(`Stable Diffusion 사용 (${curStyleName} 스타일 적용)`, 'info');
-      return await callStableDiffusion(basePrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+      return await callStableDiffusion(basePrompt, sdOpts);
     }
 
     // ========== Imagen 4 (default) — text only, maximize description detail ==========
