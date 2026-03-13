@@ -393,7 +393,7 @@ async function callNanoBanana(prompt, opts={}) {
   const model=opts.model||'gemini-2.0-flash-preview-image-generation';
   const url=`https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
   const parts=[];
-  if(opts.referenceImages?.length>0){parts.push({text:'Reference images for visual consistency:'});for(const ref of opts.referenceImages.slice(0,3)){const b=extractBase64(ref.image);if(b){parts.push({inlineData:{mimeType:'image/png',data:b}});if(ref.description)parts.push({text:'[Ref: '+ref.description.substring(0,200)+']'});}}}
+  if(opts.referenceImages?.length>0){parts.push({text:'REFERENCE IMAGES — You MUST replicate these characters/backgrounds EXACTLY as shown. Maintain identical facial features, hairstyle, hair color, eye color, outfit, and proportions:'});for(const ref of opts.referenceImages.slice(0,5)){const b=extractBase64(ref.image);if(b){parts.push({inlineData:{mimeType:'image/png',data:b}});if(ref.description)parts.push({text:'[Asset: '+ref.description.substring(0,300)+']'});}}}
   parts.push({text:prompt});
   const body={contents:[{role:'user',parts}],generationConfig:{responseModalities:['TEXT','IMAGE'],temperature:1.0}};
   const maxRetries = 3;
@@ -421,7 +421,6 @@ function hasStabilityKey() { return !!localStorage.getItem('STABILITY_API_KEY');
 async function callStableDiffusion(prompt, opts={}) {
   const apiKey = getStabilityKey();
   const model = opts.model || 'sd3.5-large-turbo';
-  const url = 'https://api.stability.ai/v2beta/stable-image/generate/sd3';
 
   // Map aspect ratios - SD supports: 1:1, 16:9, 21:9, 2:3, 3:2, 4:5, 5:4, 9:16, 9:21
   const arMap = {'3:4':'2:3', '4:3':'3:2'};
@@ -430,8 +429,29 @@ async function callStableDiffusion(prompt, opts={}) {
   const formData = new FormData();
   formData.append('prompt', prompt.substring(0, 10000));
   formData.append('model', model);
-  formData.append('aspect_ratio', aspectRatio);
   formData.append('output_format', 'png');
+
+  // Image-to-image mode: use init_image as base for generation
+  let url;
+  if (opts.initImage && opts.initImage.startsWith('data:')) {
+    url = 'https://api.stability.ai/v2beta/stable-image/generate/sd3';
+    const b64match = opts.initImage.match(/^data:image\/\w+;base64,(.+)$/);
+    if (b64match) {
+      const byteString = atob(b64match[1]);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+      const blob = new Blob([ab], {type: 'image/png'});
+      formData.append('image', blob, 'init_image.png');
+      formData.append('strength', opts.strength || 0.65);
+      formData.append('mode', 'image-to-image');
+    } else {
+      formData.append('aspect_ratio', aspectRatio);
+    }
+  } else {
+    url = 'https://api.stability.ai/v2beta/stable-image/generate/sd3';
+    formData.append('aspect_ratio', aspectRatio);
+  }
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch(url, {
@@ -1042,11 +1062,23 @@ function App() {
       ? '\n\nVISUAL CONSISTENCY - Use these EXACT asset descriptions:\n' + opts.assetDescriptions.join('\n')
       : '';
     const basePrompt = stylePrefix + prompt + assetSuffix;
+    const refs = opts.referenceImages || [];
 
+    // ========== Gemini ==========
     if (imageProvider === 'nanoBanana') {
+      // Gemini can receive images directly — add strong instruction to match them
+      const geminiOpts = {...opts};
+      if (refs.length > 0) {
+        // Enhance prompt with explicit instruction to replicate reference images
+        const refInstruction = '\n\nCRITICAL: Reference images are provided. You MUST draw the characters and backgrounds EXACTLY as they appear in the reference images. Maintain identical facial features, hairstyle, hair color, eye color, outfit, and body proportions. Do NOT change or reimagine any visual details.';
+        log(`Gemini 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개 직접 전달)`, 'info');
+        return await callNanoBanana(basePrompt + refInstruction, geminiOpts);
+      }
       log(`Gemini 사용 (${curStyleName} 스타일 적용)`, 'info');
-      return await callNanoBanana(basePrompt, opts);
+      return await callNanoBanana(basePrompt, geminiOpts);
     }
+
+    // ========== fal.ai FLUX ==========
     if (imageProvider === 'falAI') {
       let styledPrompt = basePrompt;
       log(`fal.ai FLUX: "${curStyleName}" 스타일 프롬프트 적용됨`, 'info');
@@ -1072,22 +1104,22 @@ function App() {
         log(`fal.ai: LoRA ${activeLoras.length}개 자동 적용 (캐릭터 고정)`, 'info');
       }
 
-      // Upload reference images as IP-Adapter inputs for style consistency
-      if (opts.referenceImages?.length > 0) {
-        log('fal.ai: 레퍼런스 이미지 업로드 중 (IP-Adapter)...', 'info');
+      // Upload ALL reference images as IP-Adapter inputs (up to 4)
+      if (refs.length > 0) {
+        log(`fal.ai: 레퍼런스 이미지 ${Math.min(refs.length, 4)}개 업로드 중 (IP-Adapter)...`, 'info');
         const ipImages = [];
-        for (const ref of opts.referenceImages.slice(0, 2)) {
+        for (const ref of refs.slice(0, 4)) {
           if (ref.image?.startsWith('data:')) {
             try {
               const url = await uploadToFalCDN(ref.image);
-              if (url) ipImages.push({url, scale: 0.6});
+              if (url) ipImages.push({url, scale: 0.85});
             } catch(e) { console.warn('fal CDN upload failed:', e); }
           }
         }
         if (ipImages.length > 0) {
           falOpts.ipAdapterImages = ipImages;
           const loraInfo = activeLoras.length > 0 ? ` + LoRA ${activeLoras.length}개` : '';
-          log(`fal.ai FLUX 사용 (IP-Adapter ${ipImages.length}개${loraInfo} + ${curStyleName} 스타일)`, 'info');
+          log(`fal.ai FLUX 사용 (IP-Adapter ${ipImages.length}개 [scale=0.85]${loraInfo} + ${curStyleName} 스타일)`, 'info');
           return await callFalAI(styledPrompt, falOpts);
         }
       }
@@ -1095,16 +1127,39 @@ function App() {
       log(`fal.ai FLUX 사용 (${curStyleName} 스타일${loraInfo})`, 'info');
       return await callFalAI(styledPrompt, falOpts);
     }
+
+    // ========== Stable Diffusion ==========
     if (imageProvider === 'stableDiffusion') {
-      if (opts.referenceImages?.length > 0) {
-        log(`레퍼런스 이미지 감지 → Gemini로 전환 (SD는 이미지 입력 불가, ${curStyleName} 스타일 적용)`, 'info');
-        return await callNanoBanana(basePrompt, opts);
+      // SD 3.5 supports image-to-image: use background asset as init_image
+      if (refs.length > 0) {
+        // Try to find background ref for image-to-image
+        const bgRef = refs.find(r => r.description?.startsWith('background'));
+        const charRefs = refs.filter(r => !r.description?.startsWith('background'));
+        if (bgRef?.image?.startsWith('data:')) {
+          // Use SD image-to-image with background as base
+          log(`SD image-to-image: 배경 asset을 init_image로 활용 (${curStyleName} 스타일)`, 'info');
+          return await callStableDiffusion(basePrompt, {
+            aspectRatio: opts.aspectRatio || '3:4',
+            initImage: bgRef.image,
+            strength: 0.65
+          });
+        }
+        // If no usable init_image, fall back to Gemini which can use images directly
+        log(`레퍼런스 이미지 감지 → Gemini로 전환 (레퍼런스 ${refs.length}개 직접 활용, ${curStyleName} 스타일)`, 'info');
+        const refInstruction = '\n\nCRITICAL: Reference images are provided. You MUST draw the characters and backgrounds EXACTLY as they appear in the reference images.';
+        return await callNanoBanana(basePrompt + refInstruction, opts);
       }
       log(`Stable Diffusion 사용 (${curStyleName} 스타일 적용)`, 'info');
-      log(`SD 프롬프트 (앞 100자): ${basePrompt.substring(0,100)}...`, 'info');
       return await callStableDiffusion(basePrompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
-    // Imagen 4 (default)
+
+    // ========== Imagen 4 (default) — text only, maximize description detail ==========
+    if (refs.length > 0) {
+      const refDescs = refs.map(r => r.description).filter(Boolean).join(';\n');
+      const enrichedPrompt = basePrompt + '\n\nIMPORTANT - Reproduce these visual references with EXACT fidelity:\n' + refDescs;
+      log(`Imagen 4 사용 (${curStyleName} 스타일 + asset 설명 ${refs.length}개 강화)`, 'info');
+      return await callImagen(enrichedPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+    }
     log(`Imagen 4 사용 (${curStyleName} 스타일 적용)`, 'info');
     return await callImagen(basePrompt, {aspectRatio: opts.aspectRatio || '3:4'});
   }, [imageProvider, artStyle, customStylePrompt, getStylePrefix, log, loraModels]);
