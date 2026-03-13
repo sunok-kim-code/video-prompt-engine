@@ -1909,29 +1909,13 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
         }
       }
       setPanels([...newPanels]);
-      // Incremental save: save after each panel is generated
-      if (projectId && currentEpisode && newPanels[i]) {
-        try {
-          await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels});
-          log(`패널 ${i+1} 저장 완료`, 'info');
-        } catch(e) { log(`패널 ${i+1} 저장 실패: ${e.message}`, 'error'); }
-      }
       // Delay between panels to avoid API rate limits
       if (i < sb.length - 1) await new Promise(r => setTimeout(r, 3000));
     }
 
     setCompletedSteps(prev => new Set([...prev, 3]));
     setStep(4);
-    // Final save step 4
-    if (projectId && currentEpisode) {
-      try {
-        const cs = [...new Set([...completedSteps, 0, 1, 2, 3])];
-        await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels});
-        await fbSaveEpisode(projectId, currentEpisode, {step: 4, completedSteps: cs});
-        updateEpisodeState(4, cs);
-        log('Step 4 자동 저장 완료', 'info');
-      } catch(e) { log('Step 4 자동 저장 실패: ' + e.message, 'error'); }
-    }
+    log(`패널 ${newPanels.filter(Boolean).length}개 생성 완료! Firebase 저장 버튼으로 저장하세요.`, 'success');
     return newPanels;
   };
 
@@ -1995,10 +1979,6 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
       const newPanels = [...panels];
       newPanels[idx] = images[0];
       setPanels(newPanels);
-      // Auto-save updated panels
-      if (projectId && currentEpisode) {
-        try { await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels}); } catch(e) {}
-      }
       log(`패널 ${idx+1} 재생성 완료`, 'success');
     } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
     finally { setRunning(false); }
