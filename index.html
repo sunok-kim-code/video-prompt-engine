@@ -307,13 +307,26 @@ async function syncApiKeysFromFirestore() {
 }
 
 async function autoLoadServerConfig() {
+  let serverKeySynced = 0;
   try { const res = await fetch('/api/firebase-config'); if (!res.ok) throw new Error(''); const data = await res.json();
     if (data.firebase) saveFirebaseConfig(data.firebase);
     if (data.vertex) { if(data.vertex.projectId)localStorage.setItem('VERTEX_PROJECT_ID',data.vertex.projectId); if(data.vertex.location)localStorage.setItem('VERTEX_LOCATION',data.vertex.location); if(data.vertex.accessToken)localStorage.setItem('VERTEX_ACCESS_TOKEN',data.vertex.accessToken); if(data.vertex.grokApiKey)localStorage.setItem('GROK_API_KEY',data.vertex.grokApiKey); if(data.vertex.stabilityApiKey)localStorage.setItem('STABILITY_API_KEY',data.vertex.stabilityApiKey); }
+    // Load FAL, SD, XAI keys from server config
+    if (data.apiKeys) {
+      Object.entries(data.apiKeys).forEach(([key, val]) => {
+        if (val && !localStorage.getItem(key)) {
+          localStorage.setItem(key, val);
+          serverKeySynced++;
+          console.log('[KeySync] From server:', key);
+        }
+      });
+    }
   } catch(e) { try{initFirebase();}catch(e2){} }
-  const synced = await syncApiKeysFromFirestore();
-  console.log('[KeySync] autoLoad complete, synced:', synced);
-  _apiKeySyncResolve(synced);
+  // Also try Firestore as fallback
+  const firestoreSynced = await syncApiKeysFromFirestore();
+  const total = serverKeySynced + firestoreSynced;
+  console.log('[KeySync] autoLoad complete — server:', serverKeySynced, 'firestore:', firestoreSynced);
+  _apiKeySyncResolve(total);
 }
 autoLoadServerConfig();
 

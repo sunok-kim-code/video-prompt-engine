@@ -29,6 +29,13 @@ export default function handler(req, res) {
     grokApiKey: process.env.GROK_API_KEY || ''
   };
 
+  // API keys for image generation providers
+  const apiKeys = {
+    FAL_API_KEY: process.env.FAL_API_KEY || '',
+    STABILITY_API_KEY: process.env.STABILITY_API_KEY || '',
+    XAI_API_KEY: process.env.XAI_API_KEY || ''
+  };
+
   // Check if Firebase is configured
   const firebaseConfigured = !!(config.apiKey && config.projectId);
   const vertexConfigured = !!(vertexConfig.projectId && vertexConfig.accessToken);
@@ -36,6 +43,7 @@ export default function handler(req, res) {
   res.status(200).json({
     firebase: firebaseConfigured ? config : null,
     vertex: vertexConfigured ? vertexConfig : null,
+    apiKeys,
     status: {
       firebase: firebaseConfigured ? 'configured' : 'not_configured',
       vertex: vertexConfigured ? 'configured' : 'not_configured'
