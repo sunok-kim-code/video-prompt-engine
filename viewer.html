@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>웹툰 뷰어</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #111; --surface: #1a1a1a; --text: #f0f0f0; --muted: #888;
+    --accent: #4fc3f7; --border: #333;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif; min-height: 100vh; }
+
+  /* Loading / Error states */
+  .state-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 16px; padding: 24px; text-align: center; }
+  .state-screen h2 { font-size: 20px; font-weight: 600; }
+  .state-screen p { color: var(--muted); font-size: 14px; max-width: 400px; }
+  .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Header */
+  .viewer-header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(17,17,17,0.92); backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px; display: flex; align-items: center; gap: 16px;
+  }
+  .viewer-header h1 { font-size: 18px; font-weight: 700; flex: 1; }
+  .viewer-header .meta { color: var(--muted); font-size: 13px; }
+  .viewer-header button {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 14px; font-size: 13px; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .viewer-header button:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Webtoon strip */
+  .webtoon-container {
+    max-width: 720px; margin: 0 auto; padding: 0;
+  }
+  .webtoon-container img {
+    display: block; width: 100%;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Panel with dialogue overlay */
+  .panel-wrap { position: relative; }
+  .dialogue-area {
+    position: absolute; bottom: 8px; left: 8px; right: 8px;
+    display: flex; flex-direction: column; gap: 4px;
+    pointer-events: none;
+  }
+  .speech-bubble {
+    background: rgba(255,255,255,0.92);
+    color: #111; padding: 8px 14px; border-radius: 18px;
+    font-size: 14px; font-weight: 500; max-width: 80%;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    pointer-events: auto;
+  }
+  .speech-bubble .speaker { font-size: 11px; color: #4fc3f7; font-weight: 700; }
+  .speech-bubble:nth-child(even) { align-self: flex-end; }
+  .narration-box {
+    background: rgba(0,0,0,0.75); color: #eee;
+    padding: 8px 14px; border-radius: 4px; font-size: 13px;
+    font-style: italic; text-align: center;
+    pointer-events: auto;
+  }
+
+  /* Panel number */
+  .panel-number {
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(0,0,0,0.6); color: #fff;
+    font-size: 11px; font-weight: 700; padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  /* Episode navigation */
+  .episode-nav {
+    max-width: 720px; margin: 0 auto;
+    padding: 32px 24px; display: flex; justify-content: center; gap: 12px;
+  }
+  .episode-nav button {
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 24px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .episode-nav button:hover { border-color: var(--accent); color: var(--accent); }
+  .episode-nav button:disabled { opacity: 0.3; cursor: default; }
+
+  /* Footer */
+  .viewer-footer {
+    text-align: center; padding: 24px; color: var(--muted); font-size: 12px;
+    border-top: 1px solid var(--border); margin-top: 32px;
+  }
+
+  /* Share modal */
+  .share-modal {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7); z-index: 200;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .share-modal-content {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px; max-width: 500px; width: 90%;
+  }
+  .share-modal-content h3 { font-size: 16px; margin-bottom: 12px; }
+  .share-url-box {
+    display: flex; gap: 8px; margin-bottom: 12px;
+  }
+  .share-url-box input {
+    flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 12px; font-size: 13px; font-family: monospace;
+  }
+  .share-url-box button {
+    background: var(--accent); color: #000; border: none; border-radius: 6px;
+    padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .share-close { margin-top: 8px; text-align: right; }
+  .share-close button {
+    background: none; color: var(--muted); border: none; font-size: 13px;
+    cursor: pointer;
+  }
+
+  /* Scroll to top */
+  .scroll-top {
+    position: fixed; bottom: 24px; right: 24px; z-index: 50;
+    background: var(--accent); color: #000; border: none;
+    width: 44px; height: 44px; border-radius: 50%;
+    font-size: 20px; cursor: pointer; display: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    transition: opacity 0.3s;
+  }
+  .scroll-top.show { display: flex; align-items: center; justify-content: center; }
+
+  /* Toggle dialogue */
+  .toggle-active { border-color: var(--accent) !important; color: var(--accent) !important; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+// ============================================================
+// Webtoon Viewer — standalone page for reading webtoons
+// Loads from Firebase via URL params: ?project=ID&episode=NUM
+// ============================================================
+
+// --- Firebase helpers (same logic as main app) ---
+let _db = null;
+function getDb() { return _db; }
+
+async function initFirebaseFromServer() {
+  // 1) Try server config
+  try {
+    const res = await fetch('/api/firebase-config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.firebase) {
+        firebase.initializeApp(data.firebase);
+        _db = firebase.firestore();
+        return true;
+      }
+    }
+  } catch(e) {}
+  // 2) Try localStorage
+  try {
+    const raw = localStorage.getItem('firebase_config');
+    if (raw) {
+      const cfg = JSON.parse(raw);
+      if (cfg.apiKey && cfg.projectId) {
+        firebase.initializeApp(cfg);
+        _db = firebase.firestore();
+        return true;
+      }
+    }
+  } catch(e) {}
+  return false;
+}
+
+function restoreBase64(obj, map) {
+  if (!obj || typeof obj !== 'object') {
+    if (typeof obj === 'string' && obj.startsWith('[img:') && obj.endsWith(']'))
+      return map[obj.slice(5, -1)] || obj;
+    return obj;
+  }
+  if (Array.isArray(obj)) return obj.map(item => restoreBase64(item, map));
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) out[k] = restoreBase64(v, map);
+  return out;
+}
+
+async function fbLoadPhase(projectId, episodeNum, phaseName) {
+  const db = getDb();
+  if (!db) return null;
+  const ref = db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).collection('phases').doc(phaseName);
+  const doc = await ref.get();
+  if (!doc.exists) return null;
+  const d = doc.data();
+  const snap = await ref.collection('images').get();
+  const map = {}, cmeta = {}, cdata = {};
+  snap.docs.forEach(s => {
+    const sd = s.data();
+    if (s.id.includes('_c')) {
+      const pid = s.id.split('_c')[0];
+      if (!cdata[pid]) cdata[pid] = {};
+      cdata[pid][sd.idx] = sd.data;
+    } else if (sd.chunks) {
+      cmeta[s.id] = sd;
+    } else if (sd.data) {
+      map[s.id] = sd.data;
+    }
+  });
+  for (const [id, m] of Object.entries(cmeta)) {
+    let a = '';
+    for (let i = 0; i < m.chunks; i++) a += (cdata[id]?.[i] || '');
+    if (a) map[id] = a;
+  }
+  return restoreBase64(d, map);
+}
+
+async function loadEpisodeList(projectId) {
+  const db = getDb();
+  if (!db) return [];
+  const snap = await db.collection('webtoon_projects').doc(projectId).collection('episodes').get();
+  return snap.docs.map(d => ({number: d.data().number || parseInt(d.id), title: d.data().title || `에피소드 ${d.id}`, ...d.data()})).sort((a,b) => a.number - b.number);
+}
+
+async function loadProjectInfo(projectId) {
+  const db = getDb();
+  if (!db) return null;
+  const doc = await db.collection('webtoon_projects').doc(projectId).get();
+  return doc.exists ? doc.data() : null;
+}
+
+// --- Main ---
+(async function main() {
+  const app = document.getElementById('app');
+  const params = new URLSearchParams(window.location.search);
+  const projectId = params.get('project');
+  const episodeNum = params.get('episode');
+
+  if (!projectId) {
+    app.innerHTML = `<div class="state-screen"><h2>웹툰 뷰어</h2><p>URL에 프로젝트 정보가 없습니다.<br>메인 앱에서 "새 창으로 보기" 버튼을 사용해주세요.</p></div>`;
+    return;
+  }
+
+  // Loading state
+  app.innerHTML = `<div class="state-screen"><div class="spinner"></div><h2>웹툰 로딩 중...</h2><p>Firebase에서 패널 데이터를 불러오고 있습니다</p></div>`;
+
+  // Init Firebase
+  const fbOk = await initFirebaseFromServer();
+  if (!fbOk) {
+    app.innerHTML = `<div class="state-screen"><h2>Firebase 연결 실패</h2><p>Firebase 설정을 찾을 수 없습니다. 메인 앱에서 먼저 설정해주세요.</p></div>`;
+    return;
+  }
+
+  // Load data
+  const [project, episodes, s1, s3, s4] = await Promise.all([
+    loadProjectInfo(projectId),
+    loadEpisodeList(projectId),
+    fbLoadPhase(projectId, episodeNum || '1', 'step1_analysis'),
+    fbLoadPhase(projectId, episodeNum || '1', 'step3_storyboard'),
+    fbLoadPhase(projectId, episodeNum || '1', 'step4_panels'),
+  ]);
+
+  const epNum = parseInt(episodeNum) || 1;
+  const epInfo = episodes.find(e => e.number === epNum);
+  const analysis = s1?.analysis || s1;
+  const storyboard = s3?.storyboard || [];
+  const panels = s4?.panels || [];
+  const title = analysis?.title || epInfo?.title || project?.name || '웹툰';
+  const panelCount = panels.filter(Boolean).length;
+
+  if (panelCount === 0) {
+    app.innerHTML = `<div class="state-screen"><h2>${title}</h2><p>아직 생성된 패널이 없습니다.<br>메인 앱에서 패널을 생성하고 Firebase에 저장해주세요.</p></div>`;
+    return;
+  }
+
+  // Build viewer
+  let showDialogue = true;
+  let showShareModal = false;
+
+  function render() {
+    const shareUrl = `${window.location.origin}/viewer.html?project=${encodeURIComponent(projectId)}&episode=${epNum}`;
+    const prevEp = episodes.find(e => e.number === epNum - 1);
+    const nextEp = episodes.find(e => e.number === epNum + 1);
+
+    app.innerHTML = `
+      <div class="viewer-header">
+        <h1>${title}</h1>
+        <span class="meta">EP${epNum} · ${panelCount}컷</span>
+        <button id="toggleDialogue" class="${showDialogue ? 'toggle-active' : ''}" title="대사 표시/숨기기">💬</button>
+        <button id="shareBtn" title="공유">🔗 공유</button>
+      </div>
+
+      <div class="webtoon-container">
+        ${storyboard.map((panel, i) => {
+          if (!panels[i]) return '';
+          return `
+            <div class="panel-wrap">
+              <img src="${panels[i]}" alt="Panel ${i + 1}" loading="lazy" />
+              <div class="panel-number">${i + 1}</div>
+              ${showDialogue && panel.narration ? `<div class="dialogue-area"><div class="narration-box">${panel.narration}</div></div>` : ''}
+              ${showDialogue && panel.dialogue?.length > 0 ? `
+                <div class="dialogue-area">
+                  ${panel.dialogue.map((d, di) => `
+                    <div class="speech-bubble">
+                      <span class="speaker">${d.speaker || ''}</span><br/>${d.text || ''}
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="episode-nav">
+        <button id="prevEp" ${!prevEp ? 'disabled' : ''}>← 이전 에피소드</button>
+        <button id="nextEp" ${!nextEp ? 'disabled' : ''}>다음 에피소드 →</button>
+      </div>
+
+      <div class="viewer-footer">
+        ${project?.name || '웹툰 프로덕션'} · 에피소드 ${epNum}
+      </div>
+
+      <button class="scroll-top" id="scrollTop">↑</button>
+
+      ${showShareModal ? `
+        <div class="share-modal" id="shareModal">
+          <div class="share-modal-content">
+            <h3>🔗 웹툰 공유</h3>
+            <div class="share-url-box">
+              <input id="shareUrlInput" type="text" value="${shareUrl}" readonly />
+              <button id="copyUrl">복사</button>
+            </div>
+            <p style="color:var(--muted);font-size:12px;">이 URL을 공유하면 누구나 이 에피소드를 볼 수 있습니다.</p>
+            <div class="share-close"><button id="closeShare">닫기</button></div>
+          </div>
+        </div>
+      ` : ''}
+    `;
+
+    // Event listeners
+    document.getElementById('toggleDialogue')?.addEventListener('click', () => {
+      showDialogue = !showDialogue;
+      render();
+    });
+
+    document.getElementById('shareBtn')?.addEventListener('click', () => {
+      showShareModal = true;
+      render();
+    });
+
+    document.getElementById('closeShare')?.addEventListener('click', () => {
+      showShareModal = false;
+      render();
+    });
+
+    document.getElementById('shareModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'shareModal') { showShareModal = false; render(); }
+    });
+
+    document.getElementById('copyUrl')?.addEventListener('click', () => {
+      const input = document.getElementById('shareUrlInput');
+      input.select();
+      navigator.clipboard.writeText(input.value).then(() => {
+        document.getElementById('copyUrl').textContent = '✓ 복사됨';
+        setTimeout(() => { try { document.getElementById('copyUrl').textContent = '복사'; } catch(e){} }, 2000);
+      });
+    });
+
+    document.getElementById('prevEp')?.addEventListener('click', () => {
+      if (prevEp) window.location.href = `/viewer.html?project=${encodeURIComponent(projectId)}&episode=${prevEp.number}`;
+    });
+
+    document.getElementById('nextEp')?.addEventListener('click', () => {
+      if (nextEp) window.location.href = `/viewer.html?project=${encodeURIComponent(projectId)}&episode=${nextEp.number}`;
+    });
+
+    document.getElementById('scrollTop')?.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  render();
+
+  // Show/hide scroll-to-top button
+  window.addEventListener('scroll', () => {
+    const btn = document.getElementById('scrollTop');
+    if (btn) btn.classList.toggle('show', window.scrollY > 500);
+  });
+
+  // Update title
+  document.title = `${title} - EP${epNum} | 웹툰 뷰어`;
+
+})();
+</script>
+</body>
+</html>

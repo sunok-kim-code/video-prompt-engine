@@ -2672,6 +2672,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                     {panels.filter(Boolean).length > 0 && <>
                       <span className="text-muted">{panels.filter(Boolean).length}/{storyboard.length} 완료</span>
                       <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
+                      {projectId && currentEpisode && <button className="btn btn-outline btn-sm" onClick={() => window.open(`/viewer.html?project=${encodeURIComponent(projectId)}&episode=${currentEpisode}`, '_blank')} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>}
                     </>}
                     {running && <span className="status-badge running">생성 중...</span>}
                   </div>
@@ -2719,7 +2720,10 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                   <div className="flex-row gap-8">
                     <span style={{fontWeight:700,fontSize:15}}>웹툰 미리보기: {analysis?.title || ''}</span>
                     <span className="text-muted">({panels.filter(Boolean).length}개 패널)</span>
-                    {panels.filter(Boolean).length > 0 && <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>}
+                    {panels.filter(Boolean).length > 0 && <>
+                      <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
+                      {projectId && currentEpisode && <button className="btn btn-outline btn-sm" onClick={() => window.open(`/viewer.html?project=${encodeURIComponent(projectId)}&episode=${currentEpisode}`, '_blank')} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>}
+                    </>}
                   </div>
 
                   {panels.filter(Boolean).length === 0 && <div className="placeholder">패널 이미지를 먼저 생성하세요</div>}
