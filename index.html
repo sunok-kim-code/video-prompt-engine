@@ -1944,17 +1944,17 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
         {projectId && (
           <div className="episode-bar">
             <span className="project-title-bar" onClick={() => {
-              const newName = prompt('\ud504\ub85c\uc81d\ud2b8 \uc774\ub984 \ubcc0\uacbd:', projectTitle);
+              const newName = prompt('프로젝트 이름 변경:', projectTitle);
               if (newName && newName.trim() && newName !== projectTitle) {
                 setProjectTitle(newName.trim());
-                if (projectId) fbSaveProject(projectId, {title: newName.trim()}).then(() => log('\ud504\ub85c\uc81d\ud2b8 \uc774\ub984 \ubcc0\uacbd\ub428', 'success'));
+                if (projectId) fbSaveProject(projectId, {title: newName.trim()}).then(() => log('프로젝트 이름 변경됨', 'success'));
               }
-            }} style={{cursor:'pointer'}} title="\ud074\ub9ad\ud558\uc5ec \uc774\ub984 \ubcc0\uacbd">{projectTitle} \u270e</span>
+            }} style={{cursor:'pointer'}} title="클릭하여 이름 변경">{projectTitle} ✏️</span>
             <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 8px',marginLeft:4}} onClick={() => {
               setProjectId(null); setProjectTitle(''); setEpisodes([]); setCurrentEpisode(null);
               setAnalysis(null); setReferences({characters:{},backgrounds:{}}); setStoryboard([]); setPanels([]);
               setStep(0); setCompletedSteps(new Set()); setSourceText('');
-            }}>\ud504\ub85c\uc81d\ud2b8 \ubaa9\ub85d</button>
+            }}>프로젝트 목록</button>
             {episodes.map(ep => {
               const isActive = ep.number === currentEpisode;
               const stepsDone = ep.completedSteps ? ep.completedSteps.length : 0;
@@ -2020,8 +2020,20 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                 <div style={{padding:12,background:'var(--surface2)',borderRadius:8}}>
                   <div className="section-title">저장된 프로젝트</div>
                   {projectList.map(p => (
-                    <div key={p.id} style={{padding:'8px 0',borderBottom:'1px solid var(--border)',cursor:'pointer'}} className="text-muted" onClick={()=>loadProject(p.id)}>
-                      {p.title || p.id}
+                    <div key={p.id} className="flex-row" style={{padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
+                      <div style={{flex:1,cursor:'pointer',fontSize:13}} onClick={()=>loadProject(p.id)}>
+                        {p.title || p.id}
+                        {p.updatedAt && <span className="text-xs" style={{marginLeft:8}}>{new Date(p.updatedAt?.seconds ? p.updatedAt.seconds * 1000 : p.updatedAt).toLocaleDateString()}</span>}
+                      </div>
+                      <button className="btn btn-outline btn-xs" style={{color:'var(--err)',borderColor:'var(--err)',flexShrink:0}} onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!confirm(`"${p.title || p.id}" 프로젝트를 삭제하시겠습니까?\n모든 에피소드와 데이터가 삭제됩니다.`)) return;
+                        try {
+                          await fbDeleteProject(p.id);
+                          setProjectList(prev => prev.filter(x => x.id !== p.id));
+                          log(`프로젝트 "${p.title || p.id}" 삭제됨`, 'success');
+                        } catch(err) { log('삭제 실패: ' + err.message, 'error'); }
+                      }}>삭제</button>
                     </div>
                   ))}
                   {projectList.length === 0 && <div className="text-muted">저장된 프로젝트가 없습니다. 새 프로젝트를 만들어 시작하세요.</div>}
@@ -2246,7 +2258,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                       <div key={i} className="panel-card">
                         <div className="panel-num">{i+1}</div>
                         {panels[i] ? (
-                          <img className="clickable-img" src={panels[i]} alt={`Panel ${i+1}`} onClick={() => showPreview(panels[i], `\ud328\ub110 ${i+1}: ${panel.description?.substring(0,60) || ""}`)} />
+                          <img className="clickable-img" src={panels[i]} alt={`Panel ${i+1}`} onClick={() => showPreview(panels[i], `패널 ${i+1}: ${panel.description?.substring(0,60) || ""}`)} />
                         ) : (
                           <div className="panel-placeholder">{running ? '생성 대기...' : '미생성'}</div>
                         )}
@@ -2291,7 +2303,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                       if (!panels[i]) return null;
                       return (
                         <div key={i} style={{position:'relative'}}>
-                          <img className="clickable-img" src={panels[i]} alt={`Panel ${i+1}`} onClick={() => showPreview(panels[i], `\ud328\ub110 ${i+1}: ${panel.description?.substring(0,60) || ""}`)} />
+                          <img className="clickable-img" src={panels[i]} alt={`Panel ${i+1}`} onClick={() => showPreview(panels[i], `패널 ${i+1}: ${panel.description?.substring(0,60) || ""}`)} />
                           <button onClick={()=>savePanelImage(panels[i], `${analysis?.title || 'webtoon'}_panel_${i+1}.png`)} style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,0.7)',color:'#fff',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:4,transition:'background 0.2s'}} onMouseOver={e=>e.currentTarget.style.background='rgba(39,174,96,0.9)'} onMouseOut={e=>e.currentTarget.style.background='rgba(0,0,0,0.7)'}>💾 저장</button>
                           {/* Dialogue overlay */}
                           {panel.dialogue?.length > 0 && (
