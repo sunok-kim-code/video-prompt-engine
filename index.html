@@ -256,14 +256,18 @@ async function fbLoadPhase(projectId, episodeNum, phaseName) {
   return restoreBase64(d, map);
 }
 
-function stripBase64(obj, imgs) {
+function stripBase64(obj, imgs, parentKey) {
+  // Handle bare strings (e.g. array elements that are data URLs)
+  if (typeof obj === 'string' && obj.startsWith('data:') && obj.length > 500) {
+    const id = 'img_' + Math.random().toString(36).slice(2, 10);
+    if (imgs) imgs.push({id, data: obj, key: parentKey || id});
+    return '[img:' + id + ']';
+  }
   if (!obj || typeof obj !== 'object') return obj;
-  if (Array.isArray(obj)) return obj.map(item => stripBase64(item, imgs));
+  if (Array.isArray(obj)) return obj.map((item, i) => stripBase64(item, imgs, (parentKey || 'arr') + '_' + i));
   const out = {};
-  for (const [k,v] of Object.entries(obj)) {
-    if (typeof v === 'string' && v.startsWith('data:') && v.length > 500) { const id='img_'+Math.random().toString(36).slice(2,10); out[k]='[img:'+id+']'; if(imgs) imgs.push({id,data:v,key:k}); }
-    else if (typeof v === 'object' && v !== null) out[k] = stripBase64(v, imgs);
-    else out[k] = v;
+  for (const [k, v] of Object.entries(obj)) {
+    out[k] = stripBase64(v, imgs, k);
   }
   return out;
 }
