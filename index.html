@@ -588,7 +588,7 @@ async function callFalAI(prompt, opts={}) {
   throw new Error('fal.ai: Rate limit exceeded after 3 retries');
 }
 
-// Helper: upload base64 image to fal.ai CDN for use as reference
+// Helper: upload base64 image to fal.ai CDN via server proxy (uses fal SDK server-side)
 async function uploadToFalCDN(base64DataUrl) {
   const apiKey = getFalKey();
   // Extract base64 data and mime type
@@ -596,25 +596,20 @@ async function uploadToFalCDN(base64DataUrl) {
   if (!match) return null;
   const mimeType = match[1];
   const base64Data = match[2];
-  const byteChars = atob(base64Data);
-  const byteArr = new Uint8Array(byteChars.length);
-  for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-  const blob = new Blob([byteArr], {type: mimeType});
-
-  // Use our Vercel proxy to bypass CORS (fal.ai storage API blocks browser requests)
-  const formData = new FormData();
-  formData.append('file', blob, 'image.png');
 
   try {
-    console.log('[uploadToFalCDN] Uploading via /api/fal-upload proxy...');
+    console.log(`[uploadToFalCDN] Uploading via /api/fal-upload (SDK proxy, ${(base64Data.length / 1024).toFixed(0)}KB)...`);
     const res = await fetch('/api/fal-upload', {
       method: 'POST',
-      headers: { 'Authorization': 'Key ' + apiKey },
-      body: formData
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Fal-Key': apiKey
+      },
+      body: JSON.stringify({ base64: base64Data, mimeType })
     });
     if (res.ok) {
       const data = await res.json();
-      const url = data.url || data.file_url || data.access_url;
+      const url = data.url || data.file_url;
       if (url) {
         console.log(`[uploadToFalCDN] ✓ Upload succeeded: ${url.substring(0, 80)}...`);
         return url;
@@ -626,7 +621,6 @@ async function uploadToFalCDN(base64DataUrl) {
     console.warn('[uploadToFalCDN] Proxy failed:', e.message);
   }
 
-  // Fallback: return data URL (will be filtered out for IP-Adapter but may work for other uses)
   console.warn('[uploadToFalCDN] Upload failed, returning data URL as fallback');
   return base64DataUrl;
 }

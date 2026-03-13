@@ -1,0 +1,7 @@
+{
+  "name": "video-prompt-engine",
+  "private": true,
+  "dependencies": {
+    "@fal-ai/client": "^1.2.0"
+  }
+}
