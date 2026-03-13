@@ -515,23 +515,13 @@ async function callFalAI(prompt, opts={}) {
   }
 
   // IP-Adapter — for art style consistency using reference images
+  // Pass data URLs directly — fal.ai accepts base64 data URLs for image inputs
   if (opts.ipAdapterImages?.length > 0) {
-    // Filter out data URLs — fal.ai IP-Adapter requires publicly accessible URLs
-    const validIpImages = opts.ipAdapterImages.slice(0, 2).filter(img => {
-      const url = img.url || img;
-      if (typeof url === 'string' && url.startsWith('data:')) {
-        console.warn('[callFalAI] IP-Adapter: data URL은 사용 불가, CDN 업로드 필요:', url.substring(0, 60));
-        return false;
-      }
-      return true;
-    });
-    if (validIpImages.length > 0) {
-      body.ip_adapters = validIpImages.map(img => ({
-        ip_adapter_image_url: img.url || img,
-        scale: img.scale || 0.6
-      }));
-      console.log(`[callFalAI] IP-Adapter ${validIpImages.length}개 적용:`, validIpImages.map(i => (i.url||i).substring(0, 80)));
-    }
+    body.ip_adapters = opts.ipAdapterImages.slice(0, 2).map(img => ({
+      ip_adapter_image_url: img.url || img,
+      scale: img.scale || 0.6
+    }));
+    console.log(`[callFalAI] IP-Adapter ${body.ip_adapters.length}개 적용 (data URL 직접 전달)`);
   }
 
   // ControlNet (OpenPose) — for dynamic poses
@@ -1186,16 +1176,14 @@ function App() {
         log(`fal.ai: LoRA ${activeLoras.length}개 자동 적용 (캐릭터 고정)`, 'info');
       }
 
-      // Upload ALL reference images as IP-Adapter inputs (up to 4)
+      // Pass reference images as IP-Adapter inputs (up to 4)
+      // Try data URL directly first; fal.ai FLUX accepts data URLs for ip_adapter_image_url
       if (refs.length > 0) {
-        log(`fal.ai: 레퍼런스 이미지 ${Math.min(refs.length, 4)}개 업로드 중 (IP-Adapter)...`, 'info');
         const ipImages = [];
         for (const ref of refs.slice(0, 4)) {
-          if (ref.image?.startsWith('data:')) {
-            try {
-              const url = await uploadToFalCDN(ref.image);
-              if (url) ipImages.push({url, scale: 0.85});
-            } catch(e) { console.warn('fal CDN upload failed:', e); }
+          if (ref.image) {
+            // Use data URL directly — fal.ai queue API supports inline base64
+            ipImages.push({url: ref.image, scale: 0.85});
           }
         }
         if (ipImages.length > 0) {
