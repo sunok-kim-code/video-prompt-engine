@@ -174,6 +174,20 @@ async function fbSaveProject(projectId, data) { const db = getDb(); if (!db) thr
 async function fbLoadProject(projectId) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); const doc = await db.collection('webtoon_projects').doc(projectId).get(); if (!doc.exists) throw new Error('Not found'); return {id:doc.id,...doc.data()}; }
 async function fbDeleteProject(projectId) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); const episodes = await db.collection('webtoon_projects').doc(projectId).collection('episodes').get(); const batch = db.batch(); episodes.docs.forEach(d => batch.delete(d.ref)); batch.delete(db.collection('webtoon_projects').doc(projectId)); await batch.commit(); }
 
+// API Keys sync via Firestore
+async function fbSaveApiKeys(keys) {
+  const db = getDb(); if (!db) return;
+  await db.collection('webtoon_config').doc('api_keys').set({...keys, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+}
+async function fbLoadApiKeys() {
+  const db = getDb(); if (!db) return null;
+  try {
+    const doc = await db.collection('webtoon_config').doc('api_keys').get();
+    if (!doc.exists) return null;
+    return doc.data();
+  } catch(e) { return null; }
+}
+
 // Episode-level CRUD
 async function fbListEpisodes(projectId) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); const snap = await db.collection('webtoon_projects').doc(projectId).collection('episodes').orderBy('number','asc').get(); return snap.docs.map(d => ({number: d.id, ...d.data()})); }
 async function fbSaveEpisode(projectId, episodeNum, data) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); await db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).set({...data, number: episodeNum, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}, {merge:true}); }
@@ -814,7 +828,20 @@ function ApiKeyModal({onClose}) {
   const [xk,setXk]=useState(localStorage.getItem('XAI_API_KEY')||'');
   const [sk,setSk]=useState(localStorage.getItem('STABILITY_API_KEY')||'');
   const [fk,setFk]=useState(localStorage.getItem('FAL_API_KEY')||'');
-  const save=()=>{if(vp)localStorage.setItem('VERTEX_PROJECT_ID',vp);if(vl)localStorage.setItem('VERTEX_LOCATION',vl);if(vt)localStorage.setItem('VERTEX_ACCESS_TOKEN',vt);if(xk)localStorage.setItem('XAI_API_KEY',xk);if(sk)localStorage.setItem('STABILITY_API_KEY',sk);if(fk)localStorage.setItem('FAL_API_KEY',fk);onClose();};
+  const save=()=>{
+    if(vp)localStorage.setItem('VERTEX_PROJECT_ID',vp);
+    if(vl)localStorage.setItem('VERTEX_LOCATION',vl);
+    if(vt)localStorage.setItem('VERTEX_ACCESS_TOKEN',vt);
+    if(xk)localStorage.setItem('XAI_API_KEY',xk);
+    if(sk)localStorage.setItem('STABILITY_API_KEY',sk);
+    if(fk)localStorage.setItem('FAL_API_KEY',fk);
+    // Sync to Firestore for cross-browser access
+    fbSaveApiKeys({
+      VERTEX_PROJECT_ID: vp, VERTEX_LOCATION: vl, VERTEX_ACCESS_TOKEN: vt,
+      XAI_API_KEY: xk, STABILITY_API_KEY: sk, FAL_API_KEY: fk
+    }).catch(()=>{});
+    onClose();
+  };
   return (
     <div className="modal-overlay" onClick={onClose}><div className="modal-box" onClick={e=>e.stopPropagation()}>
       <div className="modal-title">API 설정</div>
@@ -1760,6 +1787,23 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   useEffect(() => {
     if (!projectId) loadProjectList();
   }, [projectId]);
+
+  // Auto-load API keys from Firestore on mount (cross-browser sync)
+  useEffect(() => {
+    fbLoadApiKeys().then(keys => {
+      if (!keys) return;
+      let synced = 0;
+      const syncKey = (name) => {
+        if (keys[name] && !localStorage.getItem(name)) {
+          localStorage.setItem(name, keys[name]);
+          synced++;
+        }
+      };
+      syncKey('VERTEX_PROJECT_ID'); syncKey('VERTEX_LOCATION'); syncKey('VERTEX_ACCESS_TOKEN');
+      syncKey('XAI_API_KEY'); syncKey('STABILITY_API_KEY'); syncKey('FAL_API_KEY');
+      if (synced > 0) log(`API 키 ${synced}개가 서버에서 동기화되었습니다`, 'success');
+    }).catch(()=>{});
+  }, []);
 
   // ======== Save Panel Image ========
   const savePanelImage = (dataUrl, filename) => {
