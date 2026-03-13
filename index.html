@@ -978,6 +978,55 @@ function App() {
     return await callGemini(system, user, {maxTokens: 16384, thinkBudget: 1024});
   }, []);
 
+  // Helper: build reference images & descriptions from shared assets for a panel
+  const buildPanelRefs = useCallback((panel, sa, analysisData, episodeRefs) => {
+    const refImages = [];
+    const assetDescriptions = []; // text descriptions of all referenced assets
+    if (!panel.characters || !analysisData) return {refImages, assetDescriptions, charIds: []};
+
+    const charIds = [];
+    for (const pc of panel.characters) {
+      const charId = pc.id || pc;
+      charIds.push(charId);
+      const charImg = sa.characters?.[charId]?.image || episodeRefs?.characters?.[charId];
+      const charInfo = analysisData.characters?.find(c => c.id === charId);
+      const outfitDesc = pc.outfitOverride || charInfo?.outfit || '';
+      const appearanceDesc = charInfo?.appearance || charId;
+      const fullDesc = appearanceDesc + (outfitDesc ? ', wearing: ' + outfitDesc : '');
+      // Always add text description even if no image
+      assetDescriptions.push(`[Character ${charInfo?.name || charId}]: ${fullDesc}`);
+      if (charImg) {
+        refImages.push({image: charImg, description: fullDesc});
+      }
+    }
+
+    if (panel.background) {
+      const bgAsset = sa.backgrounds?.[panel.background];
+      const bgImg = bgAsset?.image || episodeRefs?.backgrounds?.[panel.background];
+      const bgInfo = analysisData.backgrounds?.find(b => b.id === panel.background);
+      const bgDesc = bgAsset?.description || bgInfo?.description || panel.background;
+      assetDescriptions.push(`[Background]: ${bgDesc}`);
+      if (bgImg) {
+        refImages.push({image: bgImg, description: 'background: ' + bgDesc});
+      }
+    }
+
+    if (panel.props) {
+      for (const propId of panel.props) {
+        const propAsset = sa.props?.[propId];
+        const propInfo = analysisData.props?.find(p => p.id === propId);
+        const propDesc = propAsset?.description || propInfo?.description || propId;
+        const propName = propAsset?.name || propInfo?.name || propId;
+        assetDescriptions.push(`[Prop ${propName}]: ${propDesc}`);
+        if (propAsset?.image) {
+          refImages.push({image: propAsset.image, description: propName + ': ' + propDesc});
+        }
+      }
+    }
+
+    return {refImages, assetDescriptions, charIds: charIds.filter(Boolean)};
+  }, []);
+
   // Helper: get style prefix for current art style selection
   const getStylePrefix = useCallback(() => {
     if (artStyle === 'custom') return customStylePrompt ? customStylePrompt.trim() + '. ' : '';
@@ -986,15 +1035,20 @@ function App() {
 
   const callImage = useCallback(async (prompt, opts={}) => {
     const stylePrefix = getStylePrefix();
+    const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name;
+
+    // Build asset-enriched prompt: always append asset descriptions to ensure consistency
+    const assetSuffix = opts.assetDescriptions?.length > 0
+      ? '\n\nVISUAL CONSISTENCY - Use these EXACT asset descriptions:\n' + opts.assetDescriptions.join('\n')
+      : '';
+    const basePrompt = stylePrefix + prompt + assetSuffix;
+
     if (imageProvider === 'nanoBanana') {
-      const styledPrompt = stylePrefix + prompt;
-      log(`Gemini 사용 (${artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name} 스타일 적용)`, 'info');
-      return await callNanoBanana(styledPrompt, opts);
+      log(`Gemini 사용 (${curStyleName} 스타일 적용)`, 'info');
+      return await callNanoBanana(basePrompt, opts);
     }
     if (imageProvider === 'falAI') {
-      // fal.ai FLUX: LoRA + ControlNet(OpenPose) + IP-Adapter pipeline
-      const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name;
-      let styledPrompt = stylePrefix + prompt;
+      let styledPrompt = basePrompt;
       log(`fal.ai FLUX: "${curStyleName}" 스타일 프롬프트 적용됨`, 'info');
       const falOpts = {
         imageSize: opts.aspectRatio === '16:9' ? {width:1024,height:576} : opts.aspectRatio === '1:1' ? {width:768,height:768} : {width:768,height:1024}
@@ -1032,11 +1086,9 @@ function App() {
         }
         if (ipImages.length > 0) {
           falOpts.ipAdapterImages = ipImages;
-          const refDescs = opts.referenceImages.map(r => r.description).filter(Boolean).join('; ');
           const loraInfo = activeLoras.length > 0 ? ` + LoRA ${activeLoras.length}개` : '';
           log(`fal.ai FLUX 사용 (IP-Adapter ${ipImages.length}개${loraInfo} + ${curStyleName} 스타일)`, 'info');
-          const finalPrompt = refDescs ? styledPrompt + '\n\nCharacter/scene details: ' + refDescs : styledPrompt;
-          return await callFalAI(finalPrompt, falOpts);
+          return await callFalAI(styledPrompt, falOpts);
         }
       }
       const loraInfo = activeLoras.length > 0 ? ` (LoRA ${activeLoras.length}개 적용)` : '';
@@ -1044,29 +1096,17 @@ function App() {
       return await callFalAI(styledPrompt, falOpts);
     }
     if (imageProvider === 'stableDiffusion') {
-      // SD can't process reference images — fall back to Gemini when refs exist
-      const sdStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name;
       if (opts.referenceImages?.length > 0) {
-        const styledPrompt = stylePrefix + prompt;
-        log(`레퍼런스 이미지 감지 → Gemini로 전환 (SD는 이미지 입력 불가, ${sdStyleName} 스타일 적용)`, 'info');
-        return await callNanoBanana(styledPrompt, opts);
+        log(`레퍼런스 이미지 감지 → Gemini로 전환 (SD는 이미지 입력 불가, ${curStyleName} 스타일 적용)`, 'info');
+        return await callNanoBanana(basePrompt, opts);
       }
-      const styledPrompt = stylePrefix + prompt;
-      log(`Stable Diffusion 사용 (${sdStyleName} 스타일 적용)`, 'info');
-      log(`SD 프롬프트 (앞 100자): ${styledPrompt.substring(0,100)}...`, 'info');
-      return await callStableDiffusion(styledPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+      log(`Stable Diffusion 사용 (${curStyleName} 스타일 적용)`, 'info');
+      log(`SD 프롬프트 (앞 100자): ${basePrompt.substring(0,100)}...`, 'info');
+      return await callStableDiffusion(basePrompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
-    // Imagen 4 (default): apply style prefix + enrich prompt with reference descriptions
-    const styledPrompt = stylePrefix + prompt;
-    const styleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.ridiWebtoon).name;
-    if (opts.referenceImages?.length > 0) {
-      const refDescs = opts.referenceImages.map(r => r.description).filter(Boolean).join('; ');
-      const enrichedPrompt = refDescs ? styledPrompt + '\n\nIMPORTANT visual references for consistency: ' + refDescs : styledPrompt;
-      log(`Imagen 4 사용 (${styleName} 스타일 + 레퍼런스 설명 포함)`, 'info');
-      return await callImagen(enrichedPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
-    }
-    log(`Imagen 4 사용 (${styleName} 스타일 적용)`, 'info');
-    return await callImagen(styledPrompt, {...opts, aspectRatio: opts.aspectRatio || '3:4'});
+    // Imagen 4 (default)
+    log(`Imagen 4 사용 (${curStyleName} 스타일 적용)`, 'info');
+    return await callImagen(basePrompt, {aspectRatio: opts.aspectRatio || '3:4'});
   }, [imageProvider, artStyle, customStylePrompt, getStylePrefix, log, loraModels]);
 
   // LoRA Training: train a character LoRA from reference images
@@ -1536,45 +1576,18 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
       const panel = sb[i];
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
 
-      const refImages = [];
-      const sa = sharedAssets;
-      if (panel.characters && analysis) {
-        for (const pc of panel.characters) {
-          const charId = pc.id || pc;
-          // Prefer shared asset image, fall back to episode refs
-          const charImg = sa.characters[charId]?.image || refs.characters[charId];
-          if (charImg) {
-            const charInfo = analysis.characters.find(c => c.id === charId);
-            const outfitDesc = pc.outfitOverride || charInfo?.outfit || '';
-            refImages.push({image: charImg, description: (charInfo?.appearance || charId) + (outfitDesc ? ', wearing: ' + outfitDesc : '')});
-          }
-        }
-        if (panel.background) {
-          const bgImg = sa.backgrounds[panel.background]?.image || refs.backgrounds[panel.background];
-          if (bgImg) refImages.push({image: bgImg, description: 'background environment'});
-        }
-        // Include prop references
-        if (panel.props) {
-          for (const propId of panel.props) {
-            if (sa.props[propId]?.image) {
-              refImages.push({image: sa.props[propId].image, description: sa.props[propId].name + ': ' + (sa.props[propId].description || '')});
-            }
-          }
-        }
-      }
-
-      // Extract character IDs for LoRA auto-application
-      const panelCharIds = panel.characters ? panel.characters.map(pc => pc.id || pc).filter(Boolean) : [];
+      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs);
 
       try {
-        const images = await callImage(panel.imagePrompt, {referenceImages: refImages, aspectRatio: '3:4', characterIds: panelCharIds});
+        const images = await callImage(panel.imagePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
         newPanels[i] = images[0];
         log(`패널 ${i+1} 완료`, 'success');
       } catch(e) {
         log(`패널 ${i+1} 실패: ${e.message}`, 'error');
         if (e.message.includes('429')) await new Promise(r => setTimeout(r, 10000));
         try {
-          const images = await callImage(panel.imagePrompt, {aspectRatio: '3:4', characterIds: panelCharIds});
+          // Retry without reference images but keep asset descriptions
+          const images = await callImage(panel.imagePrompt, {assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
           newPanels[i] = images[0];
           log(`패널 ${i+1} 레퍼런스 없이 재생성 완료`, 'success');
         } catch(e2) {
@@ -1662,30 +1675,9 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
         newSb[idx] = {...newSb[idx], imagePrompt: customPrompt};
         setStoryboard(newSb);
       }
-      const refImages = [];
-      const sa = sharedAssets;
-      if (panel.characters && analysis) {
-        for (const pc of panel.characters) {
-          const charId = pc.id || pc;
-          const charImg = sa.characters[charId]?.image || references.characters[charId];
-          if (charImg) {
-            const charInfo = analysis.characters.find(c => c.id === charId);
-            refImages.push({image: charImg, description: charInfo?.appearance || ''});
-          }
-        }
-        if (panel.background) {
-          const bgImg = sa.backgrounds[panel.background]?.image || references.backgrounds[panel.background];
-          if (bgImg) refImages.push({image: bgImg, description: 'background'});
-        }
-        if (panel.props) {
-          for (const propId of panel.props) {
-            if (sa.props[propId]?.image) refImages.push({image: sa.props[propId].image, description: sa.props[propId].name});
-          }
-        }
-      }
-      const panelCharIds = panel.characters ? panel.characters.map(pc => pc.id || pc).filter(Boolean) : [];
-      log(`패널 ${idx+1} 재생성 중...`);
-      const images = await callImage(usePrompt, {referenceImages: refImages, aspectRatio: '3:4', characterIds: panelCharIds});
+      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, references);
+      log(`패널 ${idx+1} 재생성 중... (asset ${assetDescriptions.length}개 참조)`);
+      const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
       const newPanels = [...panels];
       newPanels[idx] = images[0];
       setPanels(newPanels);
