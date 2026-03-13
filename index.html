@@ -527,7 +527,7 @@ async function callFalAI(prompt, opts={}) {
     });
     if (validImages.length > 0) {
       body.ip_adapters = validImages.map(img => ({
-        path: 'XLabs-AI/flux-ip-adapter',
+        path: 'https://huggingface.co/XLabs-AI/flux-ip-adapter/resolve/main/ip_adapter.safetensors',
         image_encoder_path: 'openai/clip-vit-large-patch14',
         image_url: img.url || img,
         scale: img.scale || 0.6
