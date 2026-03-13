@@ -735,48 +735,59 @@ const STEPS = ['분석','레퍼런스','스토리보드','패널생성','미리�
 const STEP_LABELS = ['1. 스토리 분석','2. 캐릭터/배경 레퍼런스','3. 스토리보드','4. 패널 이미지 생성','5. 웹툰 미리보기'];
 
 // Art Style Presets
+// prefix: 패널 이미지 생성 시 프롬프트 앞에 붙는 스타일 지시
+// charSuffix: 캐릭터 레퍼런스 시트 생성 시 추가되는 스타일 (정적 포즈에 적합해야 함)
+// bgSuffix: 배경 레퍼런스 생성 시 추가되는 스타일
+// propSuffix: 소품 레퍼런스 생성 시 추가되는 스타일
 const ART_STYLES = {
   naverWebtoon: {
     name: '네이버 웹툰',
-    prefix: 'Korean Naver webtoon style, clean bold linework, flat cel-shaded coloring, natural color palette matching the scene mood, expressive character faces with distinct features, solid backgrounds with moderate detail, professional digital illustration, vertical-scroll webtoon format. ',
-    charSuffix: ', clean linework, distinct facial features, expressive eyes, natural proportions, solid colors, webtoon character design, high quality',
-    bgSuffix: ', clean digital background, natural lighting, moderate detail, webtoon background art',
+    prefix: 'Korean Naver webtoon style, clean bold linework, flat cel-shaded coloring, natural color palette matching the scene mood, professional digital illustration. ',
+    charSuffix: ', clean bold linework, distinct facial features, expressive eyes, natural body proportions, flat cel-shaded coloring, webtoon character design, high quality',
+    bgSuffix: ', clean digital painting, scene-appropriate lighting, moderate detail, Korean webtoon background style',
+    propSuffix: ', clean linework, flat coloring, simple shading, webtoon object illustration',
   },
   manhwa: {
     name: '만화 스타일',
-    prefix: 'Korean manhwa webtoon art style, clean line art, cel shading, vibrant colors, comic panel illustration. ',
-    charSuffix: ', manhwa art style, high quality, detailed',
-    bgSuffix: ', manhwa background art, detailed environment',
+    prefix: 'Korean manhwa art style, precise ink-like linework, cel shading with vivid colors, dynamic panel composition, detailed expressions. ',
+    charSuffix: ', precise linework, detailed face and hair rendering, vivid cel shading, manhwa character style, high quality',
+    bgSuffix: ', detailed environment art, depth and perspective, manhwa background style',
+    propSuffix: ', precise linework, detailed shading, manhwa object illustration',
   },
   romanceWebtoon: {
     name: '로맨스 웹툰',
-    prefix: 'Korean romance webtoon style, semi-realistic anime art, beautifully detailed eyes, smooth digital painting, soft warm lighting, delicate linework, high-quality illustration. ',
-    charSuffix: ', soft lighting, beautifully detailed eyes, semi-realistic anime style, high quality',
-    bgSuffix: ', soft warm lighting, cinematic composition, high quality',
+    prefix: 'Korean romance webtoon style, semi-realistic anime art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition. ',
+    charSuffix: ', beautifully detailed eyes and hair, semi-realistic anime proportions, smooth skin rendering, elegant character design, high quality',
+    bgSuffix: ', atmospheric mood lighting matching the scene emotion, cinematic depth of field, elegant composition, high quality',
+    propSuffix: ', delicate rendering, soft shading, elegant illustration style',
   },
   realistic: {
     name: '사실적 (Realistic)',
-    prefix: 'Photorealistic digital art, cinematic lighting, highly detailed, professional photography quality, 8K resolution. ',
-    charSuffix: ', photorealistic, cinematic lighting, highly detailed, professional portrait',
-    bgSuffix: ', photorealistic environment, cinematic lighting, highly detailed',
+    prefix: 'Photorealistic digital art, cinematic lighting, highly detailed textures and materials, professional illustration quality. ',
+    charSuffix: ', photorealistic rendering, accurate anatomy, detailed skin and hair textures, cinematic portrait lighting, high quality',
+    bgSuffix: ', photorealistic environment, physically accurate lighting, detailed textures, cinematic composition',
+    propSuffix: ', photorealistic rendering, accurate material textures, studio lighting',
   },
   darkFantasy: {
     name: '다크 판타지',
-    prefix: 'Dark fantasy webtoon art style, dramatic shadows, rich deep colors, intricate details, gothic atmosphere, painterly style. ',
-    charSuffix: ', dark fantasy art style, dramatic lighting, intricate details',
-    bgSuffix: ', dark fantasy atmosphere, dramatic lighting, detailed environment',
+    prefix: 'Dark fantasy art style, rich deep color palette, intricate details, painterly brushwork, dramatic contrast between light and shadow. ',
+    charSuffix: ', painterly rendering, intricate costume details, dramatic rim lighting, dark fantasy character design, high quality',
+    bgSuffix: ', rich atmospheric depth, dramatic light and shadow contrast, intricate environmental details, painterly style',
+    propSuffix: ', ornate details, dark metallic and mystical textures, painterly rendering',
   },
   actionWebtoon: {
     name: '액션 웹툰',
-    prefix: 'Korean action webtoon style, dynamic bold linework, high contrast shading, intense dramatic lighting, speed lines, impactful composition, sharp details, vivid saturated colors. ',
-    charSuffix: ', dynamic pose, bold linework, sharp details, intense expression, action webtoon style',
-    bgSuffix: ', dramatic atmosphere, high contrast lighting, dynamic perspective, action webtoon background',
+    prefix: 'Korean action webtoon style, bold confident linework, high contrast shading, intense dramatic lighting, impactful composition, sharp details, vivid saturated colors. ',
+    charSuffix: ', bold confident linework, sharp detailed features, strong physique rendering, intense eyes, action webtoon character design, high quality',
+    bgSuffix: ', high contrast dramatic lighting, dynamic perspective, detailed destruction or environmental effects where appropriate',
+    propSuffix: ', bold linework, sharp metallic or weapon-like rendering, high contrast shading',
   },
   custom: {
     name: '사용자 정의',
     prefix: '',
     charSuffix: '',
     bgSuffix: '',
+    propSuffix: '',
   }
 };
 
@@ -1954,7 +1965,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   // Helper: get full prompt for asset type (uses current art style)
   const getCharSuffix = () => ', character reference sheet, full body, front view, clean background' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.naverWebtoon).charSuffix || ''));
   const getBgSuffix = () => ', no characters, detailed environment, wide shot' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.naverWebtoon).bgSuffix || ''));
-  const getPropSuffix = () => ', single object, centered, clean white background, detailed illustration' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.naverWebtoon).charSuffix || ''));
+  const getPropSuffix = () => ', single object, centered, clean white background, detailed illustration' + (artStyle === 'custom' ? (customStylePrompt ? ', ' + customStylePrompt : '') : ((ART_STYLES[artStyle] || ART_STYLES.naverWebtoon).propSuffix || ''));
 
   const getAssetFullPrompt = (assetType, refPrompt) => {
     if (assetType === 'characters') return refPrompt + getCharSuffix();
