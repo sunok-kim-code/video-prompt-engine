@@ -536,6 +536,7 @@ async function callFalAI(prompt, opts={}) {
     body.ip_adapters = validRefImages.map(img => ({
       path: 'XLabs-AI/flux-ip-adapter-v2',
       weight_name: 'ip_adapter.safetensors',
+      image_encoder_path: 'openai/clip-vit-large-patch14',
       image_url: img.url || img,
       scale: 0.8
     }));
