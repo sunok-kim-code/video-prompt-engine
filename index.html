@@ -1753,8 +1753,13 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   };
 
   const loadProjectList = async () => {
-    try { setProjectList(await fbListProjects()); } catch(e) { log('목록 로드 실패: ' + e.message, 'error'); }
+    try { setProjectList(await fbListProjects()); } catch(e) { /* Firebase not configured yet */ }
   };
+
+  // Auto-load project list when no project is selected
+  useEffect(() => {
+    if (!projectId) loadProjectList();
+  }, [projectId]);
 
   // ======== Save Panel Image ========
   const savePanelImage = (dataUrl, filename) => {
