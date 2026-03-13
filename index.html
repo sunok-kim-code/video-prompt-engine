@@ -788,10 +788,11 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "role": "protagonist|antagonist|supporting",
       "age": "approximate age",
       "gender": "male|female",
-      "appearance": "detailed physical description in English for image generation (hair color, style, eye color, skin tone, height, build, distinguishing features)",
-      "outfit": "default outfit description in English - MUST match existing asset if reusing ID",
+      "appearance": "detailed physical description in English for image generation. MUST include ALL of: (1) hair color AND specific hairstyle (e.g. wavy shoulder-length auburn hair with side-swept bangs), (2) eye color AND shape, (3) skin tone, (4) height AND build (e.g. tall and slender, petite, muscular), (5) face shape AND distinguishing facial features (e.g. sharp jawline, round cheeks, beauty mark, freckles, scar), (6) any unique visual traits that set this character apart from ALL other characters in the story",
+      "outfit": "default outfit description in English - MUST match existing asset if reusing ID. Be specific about colors, patterns, accessories (e.g. navy blue blazer with gold buttons over white blouse, red plaid skirt, black loafers)",
       "personality": "brief personality in Korean",
-      "refPrompt": "detailed English prompt for generating a consistent character reference sheet: full body portrait, front-facing, neutral background, anime/manhwa style, [all appearance details]",
+      "distinctFeatures": "English list of 3-5 MOST distinctive visual traits that differentiate this character from every other character (e.g. 'only character with red hair, tallest character, always wears round glasses, has a visible scar on left cheek')",
+      "refPrompt": "detailed English prompt for generating a DISTINCTIVE character reference sheet. MUST follow this structure: 'Full body character reference sheet, front-facing T-pose, clean white background. [CHARACTER NAME] is a [age] [gender] [height/build]. Face: [face shape, specific facial features, eye color+shape, nose, lips]. Hair: [exact color, length, style, bangs]. Outfit: [complete outfit with colors and details]. Unique traits: [features that make this character visually distinct from others]. Maintain strong visual identity.'",
       "isExisting": false
     }
   ],
@@ -828,7 +829,17 @@ Return ONLY a valid JSON object (no markdown, no explanation):
 }
 
 Extract ALL characters mentioned (even minor ones). Create 3-6 backgrounds for distinct locations. Extract important props/objects that appear repeatedly. Break the story into 8-20 plot beats that cover the full narrative.
-For outfitOverrides: ONLY include if the story text explicitly describes a costume/clothing change. Normal scenes without clothing mentions = no override = character wears default outfit.`,
+For outfitOverrides: ONLY include if the story text explicitly describes a costume/clothing change. Normal scenes without clothing mentions = no override = character wears default outfit.
+
+CRITICAL — CHARACTER VISUAL DIFFERENTIATION:
+- Every character MUST be visually distinct and instantly recognizable in silhouette alone.
+- NEVER give two characters the same hair color. If the story doesn't specify, assign contrasting colors (e.g. black, auburn, platinum blonde, dark brown, silver).
+- NEVER give two characters similar hairstyles. Vary length (short/medium/long), style (straight/wavy/curly/braided), and bangs (side-swept/blunt/none/curtain).
+- Give each character a unique face shape + at least one distinctive facial feature (e.g. sharp jaw, round cheeks, cat-like eyes, thick eyebrows, beauty mark, freckles, glasses).
+- Vary body types: height (short/average/tall), build (slender/athletic/curvy/stocky).
+- Give each character a distinctive outfit color scheme. No two characters should share the same primary outfit color.
+- In 'distinctFeatures', list the traits that ONLY this character has.
+- In 'refPrompt', emphasize the features that distinguish this character from others.`,
 
   CREATE_STORYBOARD: `You are a professional webtoon storyboard artist. Given the story analysis (characters, backgrounds, plot), create a panel-by-panel storyboard for a webtoon episode.
 
@@ -1458,21 +1469,34 @@ function App() {
     const refs = {characters:{}, backgrounds:{}};
     const sa = {...sharedAssets};
 
-    // Characters
+    // Characters — build differentiation context as we generate each one
+    const generatedChars = []; // track already-generated characters for contrast prompts
     for (let i = 0; i < data.characters.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
       const char = data.characters[i];
       // Check shared asset first
       if (sa.characters[char.id]?.image) {
         refs.characters[char.id] = sa.characters[char.id].image;
+        generatedChars.push({name: char.name, appearance: char.appearance, outfit: char.outfit, distinctFeatures: char.distinctFeatures});
         log(`${char.name} — 공유 에셋에서 로드 ✓`, 'success');
         setReferences({...refs});
         continue;
       }
       log(`캐릭터 레퍼런스 생성 (${i+1}/${data.characters.length}): ${char.name}`);
       try {
-        const images = await callImage(char.refPrompt + getCharSuffix());
+        // Build contrast prompt: tell the AI what other characters look like so this one is distinct
+        let contrastSuffix = '';
+        if (generatedChars.length > 0) {
+          const otherDescs = generatedChars.map(oc =>
+            `${oc.name}: ${oc.appearance?.substring(0, 100)}${oc.distinctFeatures ? ' [distinct: ' + oc.distinctFeatures + ']' : ''}`
+          ).join('; ');
+          contrastSuffix = `\n\nIMPORTANT: This character must look COMPLETELY DIFFERENT from these other characters: ${otherDescs}. Ensure distinct hair color, hairstyle, face shape, and body type.`;
+        }
+        const distinctInfo = char.distinctFeatures ? `\nThis character's unique visual identity: ${char.distinctFeatures}.` : '';
+        const fullPrompt = char.refPrompt + distinctInfo + getCharSuffix() + contrastSuffix;
+        const images = await callImage(fullPrompt);
         refs.characters[char.id] = images[0];
+        generatedChars.push({name: char.name, appearance: char.appearance, outfit: char.outfit, distinctFeatures: char.distinctFeatures});
         // Save to shared assets
         const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
         sa.characters[char.id] = {...assetData, assetId: char.id, type: 'characters'};
@@ -1747,7 +1771,20 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
     setRunning(true);
     try {
       const basePrompt = customPrompt || char.refPrompt;
-      const finalPrompt = customPrompt ? customPrompt : (basePrompt + getCharSuffix());
+      // Add differentiation context from other characters
+      let contrastSuffix = '';
+      if (!customPrompt) {
+        const otherChars = analysis.characters.filter(c => c.id !== charId);
+        if (otherChars.length > 0) {
+          const otherDescs = otherChars.map(oc =>
+            `${oc.name}: ${oc.appearance?.substring(0, 100)}${oc.distinctFeatures ? ' [distinct: ' + oc.distinctFeatures + ']' : ''}`
+          ).join('; ');
+          contrastSuffix = `\n\nIMPORTANT: This character must look COMPLETELY DIFFERENT from: ${otherDescs}. Ensure distinct hair color, hairstyle, face shape, and body type.`;
+        }
+        const distinctInfo = char.distinctFeatures ? `\nThis character's unique visual identity: ${char.distinctFeatures}.` : '';
+        contrastSuffix = distinctInfo + contrastSuffix;
+      }
+      const finalPrompt = customPrompt ? customPrompt : (basePrompt + getCharSuffix() + contrastSuffix);
       log(`${char.name} 레퍼런스 재생성 중...`);
       const images = await callImage(finalPrompt);
       setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
