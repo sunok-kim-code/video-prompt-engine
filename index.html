@@ -493,11 +493,14 @@ function hasFalKey() { return !!localStorage.getItem('FAL_API_KEY'); }
 async function callFalAI(prompt, opts={}) {
   const apiKey = getFalKey();
 
-  // Determine endpoint: use image-to-image when reference images are available
-  const hasRefImages = opts.ipAdapterImages?.some(img => {
+  // Filter valid CDN-uploaded reference images (exclude data: URLs)
+  const validRefImages = (opts.ipAdapterImages || []).filter(img => {
     const url = img.url || img;
-    return typeof url === 'string' && !url.startsWith('data:');
+    return typeof url === 'string' && url.startsWith('http');
   });
+  const hasRefImages = validRefImages.length > 0;
+
+  // Use image-to-image endpoint when we have reference images
   const endpoint = hasRefImages
     ? 'https://fal.run/fal-ai/flux-general/image-to-image'
     : 'https://fal.run/fal-ai/flux-general';
@@ -521,16 +524,22 @@ async function callFalAI(prompt, opts={}) {
     }));
   }
 
-  // Image-to-image mode: use first reference image as base, rest as prompt context
+  // Reference images: image-to-image base + IP-Adapter v2 for style consistency
   if (hasRefImages) {
-    const validImages = opts.ipAdapterImages.filter(img => {
-      const url = img.url || img;
-      return typeof url === 'string' && !url.startsWith('data:');
-    });
-    // Use first image as the reference base image
-    body.image_url = validImages[0].url || validImages[0];
-    body.strength = 0.75; // How much to deviate from reference (0=identical, 1=ignore)
-    console.log(`[callFalAI] image-to-image 모드: 레퍼런스 이미지 사용, strength=0.75, URL: ${body.image_url.substring(0, 80)}`);
+    // First image → image-to-image base
+    const firstUrl = validRefImages[0].url || validRefImages[0];
+    body.image_url = firstUrl;
+    body.strength = 0.75; // 0=identical to reference, 1=ignore reference
+    console.log(`[callFalAI] image-to-image 모드: base image URL: ${firstUrl.substring(0, 80)}`);
+
+    // All images → IP-Adapter v2 for style/character consistency
+    body.ip_adapters = validRefImages.map(img => ({
+      path: 'XLabs-AI/flux-ip-adapter-v2',
+      weight_name: 'ip_adapter.safetensors',
+      image_url: img.url || img,
+      scale: 0.8
+    }));
+    console.log(`[callFalAI] IP-Adapter v2: ${validRefImages.length}개 레퍼런스 이미지 사용`);
   }
 
   // ControlNet (OpenPose) — for dynamic poses
@@ -563,7 +572,13 @@ async function callFalAI(prompt, opts={}) {
     if (!res.ok) {
       const e = await res.text();
       console.error('[callFalAI] Error response:', e.substring(0, 500));
-      // If 422 with image-to-image, retry as text-only
+      // 422 fallback: step 1) remove IP-Adapter, keep image-to-image
+      if (res.status === 422 && body.ip_adapters) {
+        console.warn('[callFalAI] 422 with IP-Adapter v2, retrying without ip_adapters (image-to-image only)...');
+        delete body.ip_adapters;
+        continue;
+      }
+      // 422 fallback: step 2) remove image-to-image too, go text-only
       if (res.status === 422 && body.image_url) {
         console.warn('[callFalAI] 422 with image-to-image, retrying text-only...');
         delete body.image_url;
