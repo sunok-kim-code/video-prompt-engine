@@ -600,40 +600,33 @@ async function uploadToFalCDN(base64DataUrl) {
   for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
   const blob = new Blob([byteArr], {type: mimeType});
 
-  // Try multiple fal.ai upload endpoints (API has changed over time)
-  const uploadEndpoints = [
-    'https://fal.ai/api/storage/upload',
-    'https://rest.fal.run/storage/upload/file',
-    'https://v3.fal.media/files/upload',
-  ];
+  // Use our Vercel proxy to bypass CORS (fal.ai storage API blocks browser requests)
+  const formData = new FormData();
+  formData.append('file', blob, 'image.png');
 
-  for (const endpoint of uploadEndpoints) {
-    try {
-      const formData = new FormData();
-      formData.append('file', blob, 'image.png');
-      console.log(`[uploadToFalCDN] Trying: ${endpoint}`);
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Authorization': 'Key ' + apiKey },
-        body: formData
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const url = data.url || data.file_url || data.access_url;
-        if (url) {
-          console.log(`[uploadToFalCDN] ✓ Upload succeeded via ${endpoint}: ${url.substring(0, 80)}...`);
-          return url;
-        }
-      } else {
-        console.warn(`[uploadToFalCDN] ${endpoint} returned ${res.status}`);
+  try {
+    console.log('[uploadToFalCDN] Uploading via /api/fal-upload proxy...');
+    const res = await fetch('/api/fal-upload', {
+      method: 'POST',
+      headers: { 'Authorization': 'Key ' + apiKey },
+      body: formData
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const url = data.url || data.file_url || data.access_url;
+      if (url) {
+        console.log(`[uploadToFalCDN] ✓ Upload succeeded: ${url.substring(0, 80)}...`);
+        return url;
       }
-    } catch(e) {
-      console.warn(`[uploadToFalCDN] ${endpoint} failed:`, e.message);
     }
+    const errText = await res.text().catch(() => '');
+    console.warn(`[uploadToFalCDN] Proxy returned ${res.status}: ${errText.substring(0, 200)}`);
+  } catch(e) {
+    console.warn('[uploadToFalCDN] Proxy failed:', e.message);
   }
 
-  // Final fallback: return data URL directly (some fal.ai models accept base64 data URLs)
-  console.warn('[uploadToFalCDN] All upload endpoints failed, returning data URL directly');
+  // Fallback: return data URL (will be filtered out for IP-Adapter but may work for other uses)
+  console.warn('[uploadToFalCDN] Upload failed, returning data URL as fallback');
   return base64DataUrl;
 }
 
