@@ -499,9 +499,12 @@ async function callFalAI(prompt, opts={}) {
     return typeof url === 'string' && url.startsWith('http');
   });
   const hasRefImages = validRefImages.length > 0;
+  const hasLoras = opts.loras?.length > 0;
 
-  // Always use text-to-image; IP-Adapter handles reference image guidance
-  const endpoint = 'https://fal.run/fal-ai/flux-general';
+  // Choose endpoint: flux-lora for LoRA, flux-general for IP-Adapter/ControlNet, flux-lora as default
+  const endpoint = hasLoras
+    ? 'https://fal.run/fal-ai/flux-lora'
+    : 'https://fal.run/fal-ai/flux-general';
 
   // Build request body
   const body = {
@@ -514,16 +517,17 @@ async function callFalAI(prompt, opts={}) {
     image_size: opts.imageSize || {width: 768, height: 1024}
   };
 
-  // LoRA support — for character/style consistency
-  if (opts.loras?.length > 0) {
+  // LoRA support — for character/style consistency (flux-lora endpoint)
+  if (hasLoras) {
     body.loras = opts.loras.map(l => ({
       path: l.path || l.url,
       scale: l.scale || 0.8
     }));
+    console.log(`[callFalAI] flux-lora 엔드포인트: LoRA ${body.loras.length}개 적용`, body.loras.map(l => l.path.split('/').pop()));
   }
 
-  // IP-Adapter v2: reference images guide style/character consistency (text-to-image base)
-  if (hasRefImages) {
+  // IP-Adapter v2: reference images (only with flux-general, not supported by flux-lora)
+  if (hasRefImages && !hasLoras) {
     body.ip_adapters = validRefImages.map(img => ({
       path: 'XLabs-AI/flux-ip-adapter-v2',
       weight_name: 'ip_adapter.safetensors',
@@ -531,11 +535,11 @@ async function callFalAI(prompt, opts={}) {
       image_url: img.url || img,
       scale: 0.6
     }));
-    console.log(`[callFalAI] IP-Adapter v2 (text-to-image): ${validRefImages.length}개 레퍼런스, scale=0.6`);
+    console.log(`[callFalAI] IP-Adapter v2: ${validRefImages.length}개 레퍼런스, scale=0.6`);
   }
 
-  // ControlNet (OpenPose) — for dynamic poses
-  if (opts.controlNetImage) {
+  // ControlNet (OpenPose) — for dynamic poses (flux-general only)
+  if (opts.controlNetImage && !hasLoras) {
     body.controlnet_unions = [{
       control_image_url: opts.controlNetImage.url || opts.controlNetImage,
       control_mode: opts.controlNetMode || 'openpose',
