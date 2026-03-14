@@ -274,12 +274,108 @@ async function loadProjectInfo(projectId) {
   const analysis = s1?.analysis || s1;
   const storyboard = s3?.storyboard || [];
   const panels = s4?.panels || [];
+  const bubbleOverlays = s4?.bubbleOverlays || {};
   const title = analysis?.title || epInfo?.title || project?.name || '웹툰';
   const panelCount = panels.filter(Boolean).length;
+
+  // Bubble type definitions (same as main app)
+  const BUBBLE_TYPES = {
+    speech: {name:'말풍선', tail:true, bg:'#fff', border:'#222', radius:24, fontWeight:500},
+    thought: {name:'생각', tail:false, bg:'#fff', border:'#999', radius:50, fontWeight:400, dashed:true},
+    shout:  {name:'외침', tail:true, bg:'#fff', border:'#222', radius:6, fontWeight:800, spiky:true},
+    narration:{name:'나레이션', tail:false, bg:'rgba(0,0,0,0.75)', border:'none', radius:4, fontWeight:500, color:'#fff'},
+  };
+
+  // Flatten panel + bubble overlays onto canvas
+  async function flattenPanel(panelIdx) {
+    const src = panels[panelIdx];
+    const overlays = bubbleOverlays[panelIdx] || [];
+    if (!src) return null;
+    if (overlays.length === 0) return src;
+
+    const img = await new Promise((res, rej) => {
+      const im = new Image(); im.crossOrigin='anonymous';
+      im.onload = () => res(im); im.onerror = rej; im.src = src;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width; canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    const editorW = 720;
+    const scale = img.width / editorW;
+    const editorH = editorW * (img.height / img.width);
+    const scaleY = img.height / editorH;
+
+    for (const b of overlays) {
+      const bx = b.x * scale, by = b.y * scaleY, bw = b.w * scale, bh = b.h * scaleY;
+      const bt = BUBBLE_TYPES[b.type] || BUBBLE_TYPES.speech;
+      ctx.save();
+      if (bt.spiky) {
+        ctx.beginPath();
+        const cx = bx + bw/2, cy = by + bh/2;
+        for (let s = 0; s < 24; s++) {
+          const angle = (Math.PI * s) / 12 - Math.PI/2;
+          const rx = s%2===0 ? bw/2 : bw/2.6, ry = s%2===0 ? bh/2 : bh/2.6;
+          const px = cx + Math.cos(angle) * rx, py = cy + Math.sin(angle) * ry;
+          s === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fillStyle = bt.bg; ctx.fill();
+        ctx.lineWidth = 2 * scale; ctx.strokeStyle = bt.border; ctx.stroke();
+      } else {
+        const r = bt.radius * scale / 2;
+        ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, r);
+        ctx.fillStyle = bt.bg; ctx.fill();
+        if (bt.border !== 'none') {
+          ctx.lineWidth = 2 * scale; ctx.strokeStyle = bt.border;
+          if (bt.dashed) ctx.setLineDash([6*scale, 4*scale]);
+          ctx.stroke();
+        }
+      }
+      if (bt.tail) {
+        const tailX = bx + bw * 0.3, tailY = by + bh;
+        ctx.beginPath();
+        ctx.moveTo(tailX - 8*scale, tailY - 2*scale);
+        ctx.lineTo(tailX, tailY + 16*scale);
+        ctx.lineTo(tailX + 12*scale, tailY - 2*scale);
+        ctx.fillStyle = bt.bg; ctx.fill();
+        ctx.strokeStyle = bt.border; ctx.lineWidth = 2*scale; ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(tailX - 8*scale, tailY - 2*scale);
+        ctx.lineTo(tailX, tailY + 16*scale);
+        ctx.lineTo(tailX + 12*scale, tailY - 2*scale);
+        ctx.stroke();
+        ctx.fillStyle = bt.bg;
+        ctx.fillRect(tailX - 10*scale, tailY - 4*scale, 24*scale, 6*scale);
+      }
+      if (b.text) {
+        const fontSize = Math.max(12, (b.fontSize || 14)) * scale;
+        ctx.font = `${bt.fontWeight} ${fontSize}px 'Noto Sans KR', sans-serif`;
+        ctx.fillStyle = bt.color || '#111';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const lines = b.text.split('\n');
+        const lineH = fontSize * 1.3;
+        const startY = by + bh/2 - (lines.length - 1) * lineH / 2;
+        lines.forEach((line, li) => { ctx.fillText(line, bx + bw/2, startY + li * lineH, bw - 16*scale); });
+      }
+      ctx.restore();
+    }
+    return canvas.toDataURL('image/png');
+  }
 
   if (panelCount === 0) {
     app.innerHTML = `<div class="state-screen"><h2>${title}</h2><p>아직 생성된 패널이 없습니다.<br>메인 앱에서 패널을 생성하고 Firebase에 저장해주세요.</p></div>`;
     return;
+  }
+
+  // Pre-flatten panels with bubble overlays
+  app.innerHTML = `<div class="state-screen"><div class="spinner"></div><h2>웹툰 준비 중...</h2><p>말풍선을 합성하고 있습니다</p></div>`;
+  const displayPanels = [...panels];
+  for (let i = 0; i < panels.length; i++) {
+    if (panels[i] && (bubbleOverlays[i] || []).length > 0) {
+      try { displayPanels[i] = await flattenPanel(i); } catch(e) { console.warn('Flatten failed for panel', i, e); }
+    }
   }
 
   // Build viewer
@@ -297,18 +393,19 @@ async function loadProjectInfo(projectId) {
         <span class="meta">EP${epNum} · ${panelCount}컷</span>
         <button id="toggleDialogue" class="${showDialogue ? 'toggle-active' : ''}" title="대사 표시/숨기기">💬</button>
         <button id="shareBtn" title="공유">🔗 공유</button>
+        <button id="copyUrlBtn" title="URL 복사">📋 URL 복사</button>
         <button id="pdfBtn" title="PDF 내보내기">📄 PDF</button>
       </div>
 
       <div class="webtoon-container">
         ${storyboard.map((panel, i) => {
-          if (!panels[i]) return '';
+          if (!displayPanels[i]) return '';
           return `
             <div class="panel-wrap">
-              <img src="${panels[i]}" alt="Panel ${i + 1}" loading="lazy" />
+              <img src="${displayPanels[i]}" alt="Panel ${i + 1}" loading="lazy" />
               <div class="panel-number">${i + 1}</div>
-              ${showDialogue && panel.narration ? `<div class="dialogue-area"><div class="narration-box">${panel.narration}</div></div>` : ''}
-              ${showDialogue && panel.dialogue?.length > 0 ? `
+              ${showDialogue && !((bubbleOverlays[i] || []).length > 0) && panel.narration ? `<div class="dialogue-area"><div class="narration-box">${panel.narration}</div></div>` : ''}
+              ${showDialogue && !((bubbleOverlays[i] || []).length > 0) && panel.dialogue?.length > 0 ? `
                 <div class="dialogue-area">
                   ${panel.dialogue.map((d, di) => `
                     <div class="speech-bubble">
@@ -359,6 +456,14 @@ async function loadProjectInfo(projectId) {
       render();
     });
 
+    document.getElementById('copyUrlBtn')?.addEventListener('click', () => {
+      const url = `${window.location.origin}/viewer.html?project=${encodeURIComponent(projectId)}&episode=${epNum}`;
+      navigator.clipboard.writeText(url).then(() => {
+        const btn = document.getElementById('copyUrlBtn');
+        if (btn) { btn.textContent = '✓ 복사됨'; setTimeout(() => { try { btn.textContent = '📋 URL 복사'; } catch(e){} }, 2000); }
+      }).catch(() => { window.prompt('공유 URL을 복사하세요:', url); });
+    });
+
     document.getElementById('pdfBtn')?.addEventListener('click', async () => {
       const btn = document.getElementById('pdfBtn');
       if (!btn || btn.disabled) return;
@@ -374,43 +479,30 @@ async function loadProjectInfo(projectId) {
         let first = true;
 
         for (let i = 0; i < storyboard.length; i++) {
-          if (!panels[i]) continue;
+          if (!displayPanels[i]) continue;
           if (!first) pdf.addPage();
           first = false;
 
+          const panelSrc = displayPanels[i];
           const image = await new Promise((resolve, reject) => {
             const im = new Image();
             im.crossOrigin = 'anonymous';
             im.onload = () => resolve(im);
             im.onerror = reject;
-            im.src = panels[i];
+            im.src = panelSrc;
           });
 
           const imgRatio = image.width / image.height;
           let drawW = contentW;
           let drawH = drawW / imgRatio;
-          const maxH = pageH - margin * 2 - 15;
+          const maxH = pageH - margin * 2 - 4;
           if (drawH > maxH) { drawH = maxH; drawW = drawH * imgRatio; }
           const x = (pageW - drawW) / 2;
-          const y = margin + 2;
+          const y = margin;
 
-          pdf.setFontSize(9);
-          pdf.setTextColor(120, 120, 120);
-          pdf.text('Panel ' + (i + 1), margin, margin + 1);
+          const format = panelSrc.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+          pdf.addImage(panelSrc, format, x, y, drawW, drawH);
 
-          const format = panels[i].startsWith('data:image/png') ? 'PNG' : 'JPEG';
-          pdf.addImage(panels[i], format, x, y, drawW, drawH);
-
-          if (storyboard[i]?.dialogue?.length > 0) {
-            let textY = y + drawH + 4;
-            pdf.setFontSize(8);
-            pdf.setTextColor(60, 60, 60);
-            for (const d of storyboard[i].dialogue) {
-              if (textY > pageH - margin) break;
-              pdf.text((d.speaker || '') + ': ' + (d.text || ''), margin, textY, {maxWidth: contentW});
-              textY += 4;
-            }
-          }
         }
 
         pdf.save(title + '_EP' + epNum + '.pdf');
