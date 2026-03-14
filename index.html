@@ -2290,6 +2290,20 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
   };
 
   // PDF 내보내기
+  // 새 창으로 보기: 현재 앱 데이터를 직접 전달 (Firebase 불필요)
+  const openViewerLocal = () => {
+    window.__webtoonData = {
+      panels: [...panels],
+      storyboard: [...storyboard],
+      bubbleOverlays: {...bubbleOverlays},
+      analysis,
+      title: analysis?.title || projectTitle || '웹툰',
+      episodeNum: currentEpisode || 1,
+      projectId,
+    };
+    window.open('/viewer.html?source=local', '_blank');
+  };
+
   const exportWebtoonPDF = async () => {
     const validPanels = storyboard.map((sb, i) => panels[i] ? {img: panels[i], sb, idx: i} : null).filter(Boolean);
     if (validPanels.length === 0) { log('내보낼 패널 이미지가 없습니다', 'error'); return; }
@@ -3012,7 +3026,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                     {panels.filter(Boolean).length > 0 && <>
                       <span className="text-muted">{panels.filter(Boolean).length}/{storyboard.length} 완료</span>
                       <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
-                      {projectId && currentEpisode && <button className="btn btn-outline btn-sm" onClick={() => window.open(`/viewer.html?project=${encodeURIComponent(projectId)}&episode=${currentEpisode}`, '_blank')} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>}
+                      <button className="btn btn-outline btn-sm" onClick={() => openViewerLocal()} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>
                       <button className="btn btn-outline btn-sm" onClick={exportWebtoonPDF} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>📄 PDF 내보내기</button>
                     </>}
                     {running && <span className="status-badge running">생성 중...</span>}
@@ -3065,13 +3079,13 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                     {panels.filter(Boolean).length > 0 && <>
                       <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
                       <button className="btn btn-outline btn-sm" onClick={exportWebtoonPDF} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>📄 PDF 내보내기</button>
-                      {projectId && currentEpisode && <>
-                        <button className="btn btn-outline btn-sm" onClick={() => window.open(`/viewer.html?project=${encodeURIComponent(projectId)}&episode=${currentEpisode}`, '_blank')} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => openViewerLocal()} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>
+                      {projectId && currentEpisode &&
                         <button className="btn btn-outline btn-sm" onClick={() => {
                           const url = `${window.location.origin}/viewer.html?project=${encodeURIComponent(projectId)}&episode=${currentEpisode}`;
                           navigator.clipboard.writeText(url).then(() => log('공유 URL이 클립보드에 복사되었습니다!', 'success')).catch(() => { window.prompt('공유 URL을 복사하세요:', url); });
                         }} style={{display:'flex',alignItems:'center',gap:4}}>📋 공유 URL 복사</button>
-                      </>}
+                      }
                     </>}
                   </div>
 

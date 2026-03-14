@@ -242,39 +242,54 @@ async function loadProjectInfo(projectId) {
 (async function main() {
   const app = document.getElementById('app');
   const params = new URLSearchParams(window.location.search);
+  const source = params.get('source');
   const projectId = params.get('project');
   const episodeNum = params.get('episode');
 
-  if (!projectId) {
+  let analysis, storyboard, panels, bubbleOverlays, epNum, episodes = [], project = null;
+
+  if (source === 'local' && window.opener && window.opener.__webtoonData) {
+    // ===== 로컬 모드: 메인 앱에서 직접 데이터 전달 =====
+    const d = window.opener.__webtoonData;
+    analysis = d.analysis;
+    storyboard = d.storyboard || [];
+    panels = d.panels || [];
+    bubbleOverlays = d.bubbleOverlays || {};
+    epNum = d.episodeNum || 1;
+    // 공유 URL용 프로젝트 정보
+    project = {name: d.title};
+
+  } else if (projectId) {
+    // ===== Firebase 모드 =====
+    app.innerHTML = `<div class="state-screen"><div class="spinner"></div><h2>웹툰 로딩 중...</h2><p>Firebase에서 패널 데이터를 불러오고 있습니다</p></div>`;
+
+    const fbOk = await initFirebaseFromServer();
+    if (!fbOk) {
+      app.innerHTML = `<div class="state-screen"><h2>Firebase 연결 실패</h2><p>Firebase 설정을 찾을 수 없습니다. 메인 앱에서 먼저 설정해주세요.</p></div>`;
+      return;
+    }
+
+    const [proj, eps, s1, s3, s4] = await Promise.all([
+      loadProjectInfo(projectId),
+      loadEpisodeList(projectId),
+      fbLoadPhase(projectId, episodeNum || '1', 'step1_analysis'),
+      fbLoadPhase(projectId, episodeNum || '1', 'step3_storyboard'),
+      fbLoadPhase(projectId, episodeNum || '1', 'step4_panels'),
+    ]);
+
+    project = proj;
+    episodes = eps;
+    epNum = parseInt(episodeNum) || 1;
+    analysis = s1?.analysis || s1;
+    storyboard = s3?.storyboard || [];
+    panels = s4?.panels || [];
+    bubbleOverlays = s4?.bubbleOverlays || {};
+
+  } else {
     app.innerHTML = `<div class="state-screen"><h2>웹툰 뷰어</h2><p>URL에 프로젝트 정보가 없습니다.<br>메인 앱에서 "새 창으로 보기" 버튼을 사용해주세요.</p></div>`;
     return;
   }
-
-  // Loading state
-  app.innerHTML = `<div class="state-screen"><div class="spinner"></div><h2>웹툰 로딩 중...</h2><p>Firebase에서 패널 데이터를 불러오고 있습니다</p></div>`;
-
-  // Init Firebase
-  const fbOk = await initFirebaseFromServer();
-  if (!fbOk) {
-    app.innerHTML = `<div class="state-screen"><h2>Firebase 연결 실패</h2><p>Firebase 설정을 찾을 수 없습니다. 메인 앱에서 먼저 설정해주세요.</p></div>`;
-    return;
-  }
-
-  // Load data
-  const [project, episodes, s1, s3, s4] = await Promise.all([
-    loadProjectInfo(projectId),
-    loadEpisodeList(projectId),
-    fbLoadPhase(projectId, episodeNum || '1', 'step1_analysis'),
-    fbLoadPhase(projectId, episodeNum || '1', 'step3_storyboard'),
-    fbLoadPhase(projectId, episodeNum || '1', 'step4_panels'),
-  ]);
-
-  const epNum = parseInt(episodeNum) || 1;
   const epInfo = episodes.find(e => e.number === epNum);
-  const analysis = s1?.analysis || s1;
-  const storyboard = s3?.storyboard || [];
-  const panels = s4?.panels || [];
-  const bubbleOverlays = s4?.bubbleOverlays || {};
   const title = analysis?.title || epInfo?.title || project?.name || '웹툰';
   const panelCount = panels.filter(Boolean).length;
 
@@ -383,7 +398,7 @@ async function loadProjectInfo(projectId) {
   let showShareModal = false;
 
   function render() {
-    const shareUrl = `${window.location.origin}/viewer.html?project=${encodeURIComponent(projectId)}&episode=${epNum}`;
+    const shareUrl = projectId ? `${window.location.origin}/viewer.html?project=${encodeURIComponent(projectId)}&episode=${epNum}` : '';
     const prevEp = episodes.find(e => e.number === epNum - 1);
     const nextEp = episodes.find(e => e.number === epNum + 1);
 
@@ -392,8 +407,8 @@ async function loadProjectInfo(projectId) {
         <h1>${title}</h1>
         <span class="meta">EP${epNum} · ${panelCount}컷</span>
         <button id="toggleDialogue" class="${showDialogue ? 'toggle-active' : ''}" title="대사 표시/숨기기">💬</button>
-        <button id="shareBtn" title="공유">🔗 공유</button>
-        <button id="copyUrlBtn" title="URL 복사">📋 URL 복사</button>
+        ${shareUrl ? `<button id="shareBtn" title="공유">🔗 공유</button>
+        <button id="copyUrlBtn" title="URL 복사">📋 URL 복사</button>` : ''}
         <button id="pdfBtn" title="PDF 내보내기">📄 PDF</button>
       </div>
 
