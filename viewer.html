@@ -254,7 +254,7 @@ async function loadProjectInfo(projectId) {
     analysis = d.analysis;
     storyboard = d.storyboard || [];
     panels = d.panels || [];
-    bubbleOverlays = d.bubbleOverlays || {};
+    bubbleOverlays = d.bubbleOverlays || [];
     epNum = d.episodeNum || 1;
     // 공유 URL용 프로젝트 정보
     project = {name: d.title};
@@ -283,7 +283,7 @@ async function loadProjectInfo(projectId) {
     analysis = s1?.analysis || s1;
     storyboard = s3?.storyboard || [];
     panels = s4?.panels || [];
-    bubbleOverlays = s4?.bubbleOverlays || {};
+    bubbleOverlays = s4?.bubbleOverlays || [];
 
   } else {
     app.innerHTML = `<div class="state-screen"><h2>웹툰 뷰어</h2><p>URL에 프로젝트 정보가 없습니다.<br>메인 앱에서 "새 창으로 보기" 버튼을 사용해주세요.</p></div>`;
@@ -302,81 +302,15 @@ async function loadProjectInfo(projectId) {
   };
 
   // Flatten panel + bubble overlays onto canvas
-  async function flattenPanel(panelIdx) {
-    const src = panels[panelIdx];
-    const overlays = bubbleOverlays[panelIdx] || [];
-    if (!src) return null;
-    if (overlays.length === 0) return src;
-
-    const img = await new Promise((res, rej) => {
-      const im = new Image(); im.crossOrigin='anonymous';
-      im.onload = () => res(im); im.onerror = rej; im.src = src;
-    });
-    const canvas = document.createElement('canvas');
-    canvas.width = img.width; canvas.height = img.height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
-
-    const editorW = 720;
-    const scale = img.width / editorW;
-    const editorH = editorW * (img.height / img.width);
-    const scaleY = img.height / editorH;
-
-    for (const b of overlays) {
-      const bx = b.x * scale, by = b.y * scaleY, bw = b.w * scale, bh = b.h * scaleY;
-      const bt = BUBBLE_TYPES[b.type] || BUBBLE_TYPES.speech;
-      ctx.save();
-      if (bt.spiky) {
-        ctx.beginPath();
-        const cx = bx + bw/2, cy = by + bh/2;
-        for (let s = 0; s < 24; s++) {
-          const angle = (Math.PI * s) / 12 - Math.PI/2;
-          const rx = s%2===0 ? bw/2 : bw/2.6, ry = s%2===0 ? bh/2 : bh/2.6;
-          const px = cx + Math.cos(angle) * rx, py = cy + Math.sin(angle) * ry;
-          s === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fillStyle = bt.bg; ctx.fill();
-        ctx.lineWidth = 2 * scale; ctx.strokeStyle = bt.border; ctx.stroke();
-      } else {
-        const r = bt.radius * scale / 2;
-        ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, r);
-        ctx.fillStyle = bt.bg; ctx.fill();
-        if (bt.border !== 'none') {
-          ctx.lineWidth = 2 * scale; ctx.strokeStyle = bt.border;
-          if (bt.dashed) ctx.setLineDash([6*scale, 4*scale]);
-          ctx.stroke();
-        }
-      }
-      if (bt.tail) {
-        const tailX = bx + bw * 0.3, tailY = by + bh;
-        ctx.beginPath();
-        ctx.moveTo(tailX - 8*scale, tailY - 2*scale);
-        ctx.lineTo(tailX, tailY + 16*scale);
-        ctx.lineTo(tailX + 12*scale, tailY - 2*scale);
-        ctx.fillStyle = bt.bg; ctx.fill();
-        ctx.strokeStyle = bt.border; ctx.lineWidth = 2*scale; ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.moveTo(tailX - 8*scale, tailY - 2*scale);
-        ctx.lineTo(tailX, tailY + 16*scale);
-        ctx.lineTo(tailX + 12*scale, tailY - 2*scale);
-        ctx.stroke();
-        ctx.fillStyle = bt.bg;
-        ctx.fillRect(tailX - 10*scale, tailY - 4*scale, 24*scale, 6*scale);
-      }
-      if (b.text) {
-        const fontSize = Math.max(12, (b.fontSize || 14)) * scale;
-        ctx.font = `${bt.fontWeight} ${fontSize}px 'Noto Sans KR', sans-serif`;
-        ctx.fillStyle = bt.color || '#111';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const lines = b.text.split('\n');
-        const lineH = fontSize * 1.3;
-        const startY = by + bh/2 - (lines.length - 1) * lineH / 2;
-        lines.forEach((line, li) => { ctx.fillText(line, bx + bw/2, startY + li * lineH, bw - 16*scale); });
-      }
-      ctx.restore();
-    }
-    return canvas.toDataURL('image/png');
+  // 개별 패널 합성 (bubbleOverlays는 전체 스트립 기준 좌표)
+  function drawBubbleOnCtx(ctx, b, bx, by, bw, bh, scale) {
+    const bt = BUBBLE_TYPES[b.type] || BUBBLE_TYPES.speech;
+    ctx.save();
+    if(bt.spiky){ctx.beginPath();const cx=bx+bw/2,cy=by+bh/2;for(let s=0;s<24;s++){const a=(Math.PI*s)/12-Math.PI/2,rx=s%2===0?bw/2:bw/2.6,ry=s%2===0?bh/2:bh/2.6;s===0?ctx.moveTo(cx+Math.cos(a)*rx,cy+Math.sin(a)*ry):ctx.lineTo(cx+Math.cos(a)*rx,cy+Math.sin(a)*ry);}ctx.closePath();ctx.fillStyle=bt.bg;ctx.fill();ctx.lineWidth=2*scale;ctx.strokeStyle=bt.border;ctx.stroke();}
+    else{const r=bt.radius*scale/2;ctx.beginPath();ctx.roundRect(bx,by,bw,bh,r);ctx.fillStyle=bt.bg;ctx.fill();if(bt.border!=='none'){ctx.lineWidth=2*scale;ctx.strokeStyle=bt.border;if(bt.dashed)ctx.setLineDash([6*scale,4*scale]);ctx.stroke();}}
+    if(bt.tail){const tx=bx+bw*0.3,ty=by+bh;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(tx-8*scale,ty-2*scale);ctx.lineTo(tx,ty+16*scale);ctx.lineTo(tx+12*scale,ty-2*scale);ctx.fillStyle=bt.bg;ctx.fill();ctx.strokeStyle=bt.border;ctx.lineWidth=2*scale;ctx.stroke();ctx.fillStyle=bt.bg;ctx.fillRect(tx-10*scale,ty-4*scale,24*scale,6*scale);}
+    if(b.text){const fs=Math.max(12,(b.fontSize||14))*scale;ctx.font=`${bt.fontWeight} ${fs}px 'Noto Sans KR',sans-serif`;ctx.fillStyle=bt.color||'#111';ctx.textAlign='center';ctx.textBaseline='middle';const lines=b.text.split('\n');const lh=fs*1.3;const sy=by+bh/2-(lines.length-1)*lh/2;lines.forEach((l,li)=>{ctx.fillText(l,bx+bw/2,sy+li*lh,bw-16*scale);});}
+    ctx.restore();
   }
 
   if (panelCount === 0) {
@@ -385,11 +319,34 @@ async function loadProjectInfo(projectId) {
   }
 
   // Pre-flatten panels with bubble overlays
-  app.innerHTML = `<div class="state-screen"><div class="spinner"></div><h2>웹툰 준비 중...</h2><p>말풍선을 합성하고 있습니다</p></div>`;
+  const hasBubbles = Array.isArray(bubbleOverlays) && bubbleOverlays.length > 0;
   const displayPanels = [...panels];
-  for (let i = 0; i < panels.length; i++) {
-    if (panels[i] && (bubbleOverlays[i] || []).length > 0) {
-      try { displayPanels[i] = await flattenPanel(i); } catch(e) { console.warn('Flatten failed for panel', i, e); }
+  if (hasBubbles) {
+    app.innerHTML = `<div class="state-screen"><div class="spinner"></div><h2>웹툰 준비 중...</h2><p>말풍선을 합성하고 있습니다</p></div>`;
+    // 에디터 기준 720px로 각 패널의 y 오프셋 계산
+    const editorW = 720;
+    const panelMeta = []; // {yStart, yEnd, imgW, imgH, origIdx}
+    let yOff = 0;
+    for (let i = 0; i < panels.length; i++) {
+      if (!panels[i]) continue;
+      const im = await new Promise((res, rej) => { const m = new Image(); m.crossOrigin='anonymous'; m.onload=()=>res(m); m.onerror=rej; m.src=panels[i]; });
+      const eH = editorW * (im.height / im.width);
+      panelMeta.push({yStart: yOff, yEnd: yOff + eH, imgW: im.width, imgH: im.height, origIdx: i});
+      yOff += eH;
+    }
+    for (const pm of panelMeta) {
+      const overlapping = bubbleOverlays.filter(b => b.y < pm.yEnd && (b.y + b.h) > pm.yStart);
+      if (overlapping.length === 0) continue;
+      const img = await new Promise((res, rej) => { const m = new Image(); m.crossOrigin='anonymous'; m.onload=()=>res(m); m.onerror=rej; m.src=panels[pm.origIdx]; });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const scale = img.width / editorW;
+      for (const b of overlapping) {
+        drawBubbleOnCtx(ctx, b, b.x * scale, (b.y - pm.yStart) * scale, b.w * scale, b.h * scale, scale);
+      }
+      displayPanels[pm.origIdx] = canvas.toDataURL('image/png');
     }
   }
 
@@ -419,8 +376,8 @@ async function loadProjectInfo(projectId) {
             <div class="panel-wrap">
               <img src="${displayPanels[i]}" alt="Panel ${i + 1}" loading="lazy" />
               <div class="panel-number">${i + 1}</div>
-              ${showDialogue && !((bubbleOverlays[i] || []).length > 0) && panel.narration ? `<div class="dialogue-area"><div class="narration-box">${panel.narration}</div></div>` : ''}
-              ${showDialogue && !((bubbleOverlays[i] || []).length > 0) && panel.dialogue?.length > 0 ? `
+              ${showDialogue && !hasBubbles && panel.narration ? `<div class="dialogue-area"><div class="narration-box">${panel.narration}</div></div>` : ''}
+              ${showDialogue && !hasBubbles && panel.dialogue?.length > 0 ? `
                 <div class="dialogue-area">
                   ${panel.dialogue.map((d, di) => `
                     <div class="speech-bubble">

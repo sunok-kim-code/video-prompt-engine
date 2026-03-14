@@ -1129,9 +1129,11 @@ function App() {
   };
   const closePromptEditor = () => { setPromptEditor(null); setEditedPrompt(''); };
 
-  // ======== Webtoon Bubble Editor ========
-  const [bubbleEditor, setBubbleEditor] = useState(null); // {panelIdx, panelSrc}
-  const [bubbleOverlays, setBubbleOverlays] = useState({}); // {panelIdx: [{id,type,text,x,y,w,h}]}
+  // ======== Webtoon Bubble Editor (전체 스크롤) ========
+  const [bubbleEditorOpen, setBubbleEditorOpen] = useState(false);
+  const [bubbleOverlays, setBubbleOverlays] = useState([]); // [{id,type,text,x,y,w,h,fontSize}] — x,y는 스트립 전체 기준 px
+  const [selectedBubbleId, setSelectedBubbleId] = useState(null);
+  const editorStripRef = React.useRef(null);
 
   const BUBBLE_TYPES = {
     speech: {name:'말풍선', tail:true, bg:'#fff', border:'#222', radius:24, fontWeight:500},
@@ -1140,100 +1142,125 @@ function App() {
     narration:{name:'나레이션', tail:false, bg:'rgba(0,0,0,0.75)', border:'none', radius:4, fontWeight:500, color:'#fff'},
   };
 
-  const openBubbleEditor = (panelIdx) => {
-    if (!panels[panelIdx]) return;
-    setBubbleEditor({panelIdx, panelSrc: panels[panelIdx]});
-  };
-  const closeBubbleEditor = () => setBubbleEditor(null);
+  const openBubbleEditor = () => { if (panels.filter(Boolean).length > 0) setBubbleEditorOpen(true); };
+  const closeBubbleEditor = () => setBubbleEditorOpen(false);
 
-  // Flatten panel image + bubble overlays into a single merged image via canvas
+  const addBubble = (type) => {
+    const scrollTop = editorStripRef.current?.parentElement?.scrollTop || 0;
+    setBubbleOverlays(prev => [...prev, {
+      id: 'b_' + Date.now(), type, text: '',
+      x: 60, y: scrollTop + 120,
+      w: type === 'narration' ? 300 : 180,
+      h: type === 'narration' ? 44 : 80,
+      fontSize: type === 'shout' ? 18 : 14,
+    }]);
+  };
+  const updateBubble = (id, updates) => setBubbleOverlays(prev => prev.map(b => b.id === id ? {...b, ...updates} : b));
+  const removeBubble = (id) => { setBubbleOverlays(prev => prev.filter(b => b.id !== id)); if (selectedBubbleId === id) setSelectedBubbleId(null); };
+
+  // Canvas 합성: 스트립 전체를 하나의 긴 이미지로 합성
+  const flattenWebtoonStrip = async () => {
+    const validPanels = panels.filter(Boolean);
+    if (validPanels.length === 0) return null;
+    // 모든 패널을 로드
+    const imgs = await Promise.all(validPanels.map(src => new Promise((res, rej) => {
+      const im = new Image(); im.crossOrigin='anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src;
+    })));
+    // 에디터 기준 너비 720, 실제 이미지 비율로 각 높이 계산
+    const editorW = 720;
+    const panelEditorHeights = imgs.map(im => editorW * (im.height / im.width));
+    const totalEditorH = panelEditorHeights.reduce((a, b) => a + b, 0);
+    // 출력 너비: 가장 넓은 이미지 기준
+    const outW = Math.max(...imgs.map(im => im.width));
+    const scale = outW / editorW;
+    const totalOutH = Math.round(totalEditorH * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = outW; canvas.height = totalOutH;
+    const ctx = canvas.getContext('2d');
+    // 패널 그리기
+    let yOff = 0;
+    const panelYOffsets = [];
+    for (let i = 0; i < imgs.length; i++) {
+      panelYOffsets.push(yOff);
+      const drawH = Math.round(panelEditorHeights[i] * scale);
+      ctx.drawImage(imgs[i], 0, yOff, outW, drawH);
+      yOff += drawH;
+    }
+    // 말풍선 그리기
+    for (const b of bubbleOverlays) {
+      const bx = b.x * scale, by = b.y * scale, bw = b.w * scale, bh = b.h * scale;
+      const bt = BUBBLE_TYPES[b.type] || BUBBLE_TYPES.speech;
+      ctx.save();
+      if (bt.spiky) {
+        ctx.beginPath();
+        const cx = bx+bw/2, cy = by+bh/2;
+        for (let s=0; s<24; s++) {
+          const angle=(Math.PI*s)/12-Math.PI/2;
+          const rx=s%2===0?bw/2:bw/2.6, ry=s%2===0?bh/2:bh/2.6;
+          const px=cx+Math.cos(angle)*rx, py=cy+Math.sin(angle)*ry;
+          s===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+        }
+        ctx.closePath(); ctx.fillStyle=bt.bg; ctx.fill();
+        ctx.lineWidth=2*scale; ctx.strokeStyle=bt.border; ctx.stroke();
+      } else {
+        const r=bt.radius*scale/2;
+        ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,r);
+        ctx.fillStyle=bt.bg; ctx.fill();
+        if(bt.border!=='none'){ctx.lineWidth=2*scale;ctx.strokeStyle=bt.border;if(bt.dashed)ctx.setLineDash([6*scale,4*scale]);ctx.stroke();}
+      }
+      if(bt.tail){const tx=bx+bw*0.3,ty=by+bh;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(tx-8*scale,ty-2*scale);ctx.lineTo(tx,ty+16*scale);ctx.lineTo(tx+12*scale,ty-2*scale);ctx.fillStyle=bt.bg;ctx.fill();ctx.strokeStyle=bt.border;ctx.lineWidth=2*scale;ctx.stroke();ctx.fillStyle=bt.bg;ctx.fillRect(tx-10*scale,ty-4*scale,24*scale,6*scale);}
+      if(b.text){
+        const fs=Math.max(12,(b.fontSize||14))*scale;
+        ctx.font=`${bt.fontWeight} ${fs}px 'Noto Sans KR',sans-serif`;
+        ctx.fillStyle=bt.color||'#111';ctx.textAlign='center';ctx.textBaseline='middle';
+        const lines=b.text.split('\n');const lh=fs*1.3;
+        const sy=by+bh/2-(lines.length-1)*lh/2;
+        lines.forEach((l,li)=>{ctx.fillText(l,bx+bw/2,sy+li*lh,bw-16*scale);});
+      }
+      ctx.restore();
+    }
+    return canvas.toDataURL('image/png');
+  };
+
+  // 개별 패널별 합성 (PDF 내보내기용)
   const flattenPanelWithBubbles = async (panelIdx) => {
     const src = panels[panelIdx];
-    const overlays = bubbleOverlays[panelIdx] || [];
-    if (!src) return null;
-    if (overlays.length === 0) return src;
-
-    const img = await new Promise((res, rej) => {
-      const im = new Image(); im.crossOrigin='anonymous';
-      im.onload = () => res(im); im.onerror = rej; im.src = src;
+    if (!src || bubbleOverlays.length === 0) return src;
+    // 에디터 좌표 → 패널 좌표로 변환
+    const editorW = 720;
+    const validPanels = panels.filter(Boolean);
+    // 각 패널의 에디터상 y 오프셋 계산
+    let yOff = 0;
+    const panelYMap = []; // [{yStart, yEnd, editorH, panelSrc, origIdx}]
+    for (let i = 0; i < panels.length; i++) {
+      if (!panels[i]) continue;
+      const im = await new Promise((res, rej) => { const m = new Image(); m.onload=()=>res(m); m.onerror=rej; m.src=panels[i]; });
+      const eH = editorW * (im.height / im.width);
+      panelYMap.push({yStart: yOff, yEnd: yOff + eH, editorH: eH, panelSrc: panels[i], origIdx: i, imgW: im.width, imgH: im.height});
+      yOff += eH;
+    }
+    const pm = panelYMap.find(p => p.origIdx === panelIdx);
+    if (!pm) return src;
+    // 이 패널 영역에 겹치는 말풍선 찾기
+    const overlapping = bubbleOverlays.filter(b => {
+      const bBottom = b.y + b.h;
+      return b.y < pm.yEnd && bBottom > pm.yStart;
     });
+    if (overlapping.length === 0) return src;
+    const img = await new Promise((res, rej) => { const m = new Image(); m.crossOrigin='anonymous'; m.onload=()=>res(m); m.onerror=rej; m.src=src; });
     const canvas = document.createElement('canvas');
     canvas.width = img.width; canvas.height = img.height;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
-
-    // Scale factor: overlays are in editor coordinates (containerW), need to map to actual image pixels
-    const editorW = 720; // editor container max-width
     const scale = img.width / editorW;
-    const editorH = editorW * (img.height / img.width);
-    const scaleY = img.height / editorH;
-
-    for (const b of overlays) {
-      const bx = b.x * scale, by = b.y * scaleY, bw = b.w * scale, bh = b.h * scaleY;
+    for (const b of overlapping) {
+      const bx = b.x * scale, by = (b.y - pm.yStart) * scale, bw = b.w * scale, bh = b.h * scale;
       const bt = BUBBLE_TYPES[b.type] || BUBBLE_TYPES.speech;
-
       ctx.save();
-      // Draw bubble background
-      if (bt.spiky) {
-        // Spiky shout bubble
-        ctx.beginPath();
-        const cx = bx + bw/2, cy = by + bh/2;
-        const spikes = 12, outerRx = bw/2, outerRy = bh/2, innerRx = bw/2.6, innerRy = bh/2.6;
-        for (let s = 0; s < spikes * 2; s++) {
-          const angle = (Math.PI * s) / spikes - Math.PI/2;
-          const rx = s % 2 === 0 ? outerRx : innerRx;
-          const ry = s % 2 === 0 ? outerRy : innerRy;
-          const px = cx + Math.cos(angle) * rx, py = cy + Math.sin(angle) * ry;
-          s === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fillStyle = bt.bg; ctx.fill();
-        ctx.lineWidth = 2 * scale; ctx.strokeStyle = bt.border; ctx.stroke();
-      } else {
-        const r = bt.radius * scale / 2;
-        ctx.beginPath();
-        ctx.roundRect(bx, by, bw, bh, r);
-        ctx.fillStyle = bt.bg; ctx.fill();
-        if (bt.border !== 'none') {
-          ctx.lineWidth = 2 * scale; ctx.strokeStyle = bt.border;
-          if (bt.dashed) ctx.setLineDash([6*scale, 4*scale]);
-          ctx.stroke();
-        }
-      }
-
-      // Tail for speech/shout
-      if (bt.tail) {
-        const tailX = bx + bw * 0.3, tailY = by + bh;
-        ctx.beginPath();
-        ctx.moveTo(tailX - 8*scale, tailY - 2*scale);
-        ctx.lineTo(tailX, tailY + 16*scale);
-        ctx.lineTo(tailX + 12*scale, tailY - 2*scale);
-        ctx.fillStyle = bt.bg; ctx.fill();
-        ctx.strokeStyle = bt.border; ctx.lineWidth = 2*scale; ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.moveTo(tailX - 8*scale, tailY - 2*scale);
-        ctx.lineTo(tailX, tailY + 16*scale);
-        ctx.lineTo(tailX + 12*scale, tailY - 2*scale);
-        ctx.stroke();
-        // Cover inner tail line
-        ctx.fillStyle = bt.bg;
-        ctx.fillRect(tailX - 10*scale, tailY - 4*scale, 24*scale, 6*scale);
-      }
-
-      // Draw text
-      if (b.text) {
-        const fontSize = Math.max(12, (b.fontSize || 14)) * scale;
-        ctx.font = `${bt.fontWeight} ${fontSize}px 'Noto Sans KR', sans-serif`;
-        ctx.fillStyle = bt.color || '#111';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const lines = b.text.split('\n');
-        const lineH = fontSize * 1.3;
-        const startY = by + bh/2 - (lines.length - 1) * lineH / 2;
-        lines.forEach((line, li) => {
-          ctx.fillText(line, bx + bw/2, startY + li * lineH, bw - 16*scale);
-        });
-      }
+      if(bt.spiky){ctx.beginPath();const cx=bx+bw/2,cy=by+bh/2;for(let s=0;s<24;s++){const a=(Math.PI*s)/12-Math.PI/2,rx=s%2===0?bw/2:bw/2.6,ry=s%2===0?bh/2:bh/2.6;s===0?ctx.moveTo(cx+Math.cos(a)*rx,cy+Math.sin(a)*ry):ctx.lineTo(cx+Math.cos(a)*rx,cy+Math.sin(a)*ry);}ctx.closePath();ctx.fillStyle=bt.bg;ctx.fill();ctx.lineWidth=2*scale;ctx.strokeStyle=bt.border;ctx.stroke();}
+      else{const r=bt.radius*scale/2;ctx.beginPath();ctx.roundRect(bx,by,bw,bh,r);ctx.fillStyle=bt.bg;ctx.fill();if(bt.border!=='none'){ctx.lineWidth=2*scale;ctx.strokeStyle=bt.border;if(bt.dashed)ctx.setLineDash([6*scale,4*scale]);ctx.stroke();}}
+      if(bt.tail){const tx=bx+bw*0.3,ty=by+bh;ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(tx-8*scale,ty-2*scale);ctx.lineTo(tx,ty+16*scale);ctx.lineTo(tx+12*scale,ty-2*scale);ctx.fillStyle=bt.bg;ctx.fill();ctx.strokeStyle=bt.border;ctx.lineWidth=2*scale;ctx.stroke();ctx.fillStyle=bt.bg;ctx.fillRect(tx-10*scale,ty-4*scale,24*scale,6*scale);}
+      if(b.text){const fs=Math.max(12,(b.fontSize||14))*scale;ctx.font=`${bt.fontWeight} ${fs}px 'Noto Sans KR',sans-serif`;ctx.fillStyle=bt.color||'#111';ctx.textAlign='center';ctx.textBaseline='middle';const lines=b.text.split('\n');const lh=fs*1.3;const sy=by+bh/2-(lines.length-1)*lh/2;lines.forEach((l,li)=>{ctx.fillText(l,bx+bw/2,sy+li*lh,bw-16*scale);});}
       ctx.restore();
     }
     return canvas.toDataURL('image/png');
@@ -2295,7 +2322,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
     window.__webtoonData = {
       panels: [...panels],
       storyboard: [...storyboard],
-      bubbleOverlays: {...bubbleOverlays},
+      bubbleOverlays: [...bubbleOverlays],
       analysis,
       title: analysis?.title || projectTitle || '웹툰',
       episodeNum: currentEpisode || 1,
@@ -2323,12 +2350,11 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
         // 말풍선 오버레이가 있으면 합성된 이미지 사용
         let finalImg = img;
-        if ((bubbleOverlays[idx] || []).length > 0) {
+        if (bubbleOverlays.length > 0) {
           try {
             const merged = await flattenPanelWithBubbles(idx);
-            if (merged) finalImg = merged;
-            log(`패널 ${idx+1} 말풍선 합성 완료`, 'info');
-          } catch(e) { log(`패널 ${idx+1} 말풍선 합성 실패, 원본 사용`, 'warn'); }
+            if (merged && merged !== img) finalImg = merged;
+          } catch(e) { /* use original */ }
         }
 
         const image = await new Promise((resolve, reject) => {
@@ -2448,192 +2474,119 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
         )}
       </div>
 
-      {/* ===== Bubble Editor Modal ===== */}
-      {bubbleEditor && (() => {
-        const pidx = bubbleEditor.panelIdx;
-        const overlays = bubbleOverlays[pidx] || [];
-        const setOverlays = (newOvl) => setBubbleOverlays(prev => ({...prev, [pidx]: typeof newOvl === 'function' ? newOvl(prev[pidx] || []) : newOvl}));
+      {/* ===== Webtoon Bubble Editor (전체 스크롤) ===== */}
+      {bubbleEditorOpen && panels.filter(Boolean).length > 0 && (
+        <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.92)',zIndex:300,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+          {/* Header toolbar */}
+          <div style={{padding:'8px 20px',background:'#1a1a2e',display:'flex',alignItems:'center',gap:10,borderBottom:'1px solid #333',flexShrink:0,flexWrap:'wrap'}}>
+            <span style={{fontWeight:700,fontSize:16,color:'#fff',marginRight:8}}>웹툰 에디터</span>
+            <div style={{width:1,height:24,background:'#444'}} />
+            {Object.entries(BUBBLE_TYPES).map(([key, bt]) => (
+              <button key={key} className="btn btn-outline btn-sm" onClick={() => addBubble(key)} style={{color:'#ccc',borderColor:'#555',fontSize:12}}>+ {bt.name}</button>
+            ))}
+            <div style={{flex:1}} />
+            <span style={{fontSize:12,color:'#888'}}>{bubbleOverlays.length}개 말풍선</span>
+            <button className="btn btn-outline btn-sm" onClick={async () => {
+              const merged = await flattenWebtoonStrip();
+              if (merged) { const a = document.createElement('a'); a.href = merged; a.download = `${analysis?.title || 'webtoon'}_edited.png`; document.body.appendChild(a); a.click(); document.body.removeChild(a); log('합성 이미지 내보내기 완료', 'success'); }
+            }} style={{color:'#4fc3f7',borderColor:'#4fc3f7',fontSize:12}}>이미지 내보내기</button>
+            <button className="btn btn-success btn-sm" onClick={closeBubbleEditor} style={{fontSize:12}}>완료</button>
+          </div>
 
-        const addBubble = (type) => {
-          setOverlays(prev => [...prev, {
-            id: 'b_' + Date.now(), type, text: '', x: 100, y: 100,
-            w: type === 'narration' ? 280 : 180, h: type === 'narration' ? 40 : 80,
-            fontSize: type === 'shout' ? 18 : 14
-          }]);
-        };
-        const updateBubble = (id, updates) => {
-          setOverlays(prev => prev.map(b => b.id === id ? {...b, ...updates} : b));
-        };
-        const removeBubble = (id) => {
-          setOverlays(prev => prev.filter(b => b.id !== id));
-        };
+          <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+            {/* Main scroll area: webtoon strip + floating bubbles */}
+            <div style={{flex:1,overflow:'auto',background:'#111',display:'flex',justifyContent:'center'}}>
+              <div ref={editorStripRef} style={{position:'relative',width:720,flexShrink:0}}>
+                {/* All panel images stacked vertically */}
+                {panels.map((p, i) => p ? <img key={i} src={p} style={{width:'100%',display:'block'}} draggable={false} /> : null)}
 
-        const handleExportFlat = async () => {
-          const merged = await flattenPanelWithBubbles(pidx);
-          if (merged) {
-            const a = document.createElement('a');
-            a.href = merged; a.download = `panel_${pidx+1}_edited.png`;
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            log(`패널 ${pidx+1} 합성 이미지 내보내기 완료`, 'success');
-          }
-        };
-
-        const handleApplyToPanel = async () => {
-          const merged = await flattenPanelWithBubbles(pidx);
-          if (merged) {
-            const newPanels = [...panels];
-            newPanels[pidx] = merged;
-            setPanels(newPanels);
-            log(`패널 ${pidx+1}에 말풍선 합성 적용 완료`, 'success');
-          }
-        };
-
-        return (
-          <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.85)',zIndex:300,display:'flex',flexDirection:'column',overflow:'hidden'}}>
-            {/* Editor Header */}
-            <div style={{padding:'10px 20px',background:'#1a1a2e',display:'flex',alignItems:'center',gap:12,borderBottom:'1px solid #333',flexShrink:0}}>
-              <span style={{fontWeight:700,fontSize:16,color:'#fff'}}>말풍선 에디터 — 패널 {pidx+1}</span>
-              <div style={{flex:1}} />
-              {Object.entries(BUBBLE_TYPES).map(([key, bt]) => (
-                <button key={key} className="btn btn-outline btn-sm" onClick={() => addBubble(key)} style={{color:'#ccc',borderColor:'#555',fontSize:12}}>+ {bt.name}</button>
-              ))}
-              <div style={{width:1,height:24,background:'#444',margin:'0 4px'}} />
-              <button className="btn btn-outline btn-sm" onClick={handleExportFlat} style={{color:'#4fc3f7',borderColor:'#4fc3f7',fontSize:12}}>이미지 내보내기</button>
-              <button className="btn btn-success btn-sm" onClick={handleApplyToPanel} style={{fontSize:12}}>패널에 적용</button>
-              <button className="btn btn-outline btn-sm" onClick={closeBubbleEditor} style={{color:'#f88',borderColor:'#f88',fontSize:12}}>닫기</button>
-            </div>
-
-            <div style={{display:'flex',flex:1,overflow:'hidden'}}>
-              {/* Canvas Area */}
-              <div style={{flex:1,display:'flex',justifyContent:'center',alignItems:'flex-start',overflow:'auto',padding:20,background:'#111'}}>
-                <div style={{position:'relative',maxWidth:720,width:'100%',flexShrink:0}} id={`bubble-canvas-${pidx}`}>
-                  <img src={bubbleEditor.panelSrc} style={{width:'100%',display:'block',borderRadius:4}} draggable={false} />
-                  {/* Bubble overlays */}
-                  {overlays.map(b => {
-                    const bt = BUBBLE_TYPES[b.type] || BUBBLE_TYPES.speech;
-                    return (
-                      <div key={b.id}
-                        style={{
-                          position:'absolute', left:b.x, top:b.y, width:b.w, height:b.h,
-                          cursor:'move', userSelect:'none', zIndex:10,
-                        }}
-                        onMouseDown={(e) => {
-                          if (e.target.tagName === 'TEXTAREA' || e.target.dataset.resize) return;
-                          e.preventDefault();
-                          const startX = e.clientX, startY = e.clientY;
-                          const origX = b.x, origY = b.y;
-                          const onMove = (ev) => {
-                            updateBubble(b.id, {x: origX + (ev.clientX - startX), y: origY + (ev.clientY - startY)});
-                          };
-                          const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-                          window.addEventListener('mousemove', onMove);
-                          window.addEventListener('mouseup', onUp);
-                        }}
-                      >
-                        {/* Bubble shape */}
-                        <svg width={b.w} height={b.h + (bt.tail ? 18 : 0)} style={{position:'absolute',top:0,left:0,overflow:'visible',pointerEvents:'none'}}>
-                          {bt.spiky ? (() => {
-                            const cx=b.w/2, cy=b.h/2, pts=[];
-                            for (let s=0; s<24; s++) {
-                              const angle=(Math.PI*s)/12 - Math.PI/2;
-                              const rx=s%2===0?b.w/2:b.w/2.6, ry=s%2===0?b.h/2:b.h/2.6;
-                              pts.push(`${cx+Math.cos(angle)*rx},${cy+Math.sin(angle)*ry}`);
-                            }
-                            return <polygon points={pts.join(' ')} fill={bt.bg} stroke={bt.border} strokeWidth="2"/>;
-                          })() : (
-                            <rect x="1" y="1" width={b.w-2} height={b.h-2} rx={bt.radius} ry={bt.radius}
-                              fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth="2"
-                              strokeDasharray={bt.dashed ? '6 4' : 'none'}
-                            />
-                          )}
-                          {bt.tail && (
-                            <polygon points={`${b.w*0.3-8},${b.h-2} ${b.w*0.3},${b.h+16} ${b.w*0.3+12},${b.h-2}`}
-                              fill={bt.bg} stroke={bt.border} strokeWidth="2" />
-                          )}
-                        </svg>
-
-                        {/* Text input */}
-                        <textarea
-                          value={b.text}
-                          onChange={(e) => updateBubble(b.id, {text: e.target.value})}
-                          placeholder={bt.name + ' 입력...'}
-                          style={{
-                            position:'absolute', top:4, left:6, width:b.w-12, height:b.h-8,
-                            background:'transparent', border:'none', outline:'none', resize:'none',
-                            textAlign:'center', fontWeight:bt.fontWeight,
-                            fontSize: b.fontSize || 14,
-                            color: bt.color || '#111',
-                            fontFamily:'Noto Sans KR, sans-serif',
-                            display:'flex', alignItems:'center',
-                            lineHeight: 1.3,
-                            overflow:'hidden',
-                          }}
-                        />
-
-                        {/* Resize handle */}
-                        <div data-resize="true"
-                          style={{position:'absolute',right:-4,bottom:-4,width:12,height:12,background:'var(--accent)',borderRadius:2,cursor:'nwse-resize',zIndex:20}}
-                          onMouseDown={(e) => {
-                            e.preventDefault(); e.stopPropagation();
-                            const startX = e.clientX, startY = e.clientY;
-                            const origW = b.w, origH = b.h;
-                            const onMove = (ev) => {
-                              updateBubble(b.id, {w: Math.max(60, origW + (ev.clientX - startX)), h: Math.max(30, origH + (ev.clientY - startY))});
-                            };
-                            const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-                            window.addEventListener('mousemove', onMove);
-                            window.addEventListener('mouseup', onUp);
-                          }}
-                        />
-
-                        {/* Delete button */}
-                        <button onClick={() => removeBubble(b.id)}
-                          style={{position:'absolute',top:-10,right:-10,width:22,height:22,borderRadius:'50%',background:'#e74c3c',color:'#fff',border:'none',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:20}}>×</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Right sidebar: bubble list & properties */}
-              <div style={{width:260,background:'#1e1e30',borderLeft:'1px solid #333',padding:16,overflowY:'auto',flexShrink:0}}>
-                <div style={{fontWeight:700,fontSize:14,color:'#fff',marginBottom:12}}>말풍선 목록 ({overlays.length})</div>
-                {overlays.length === 0 && <div style={{fontSize:12,color:'#888'}}>위 버튼으로 말풍선을 추가하세요</div>}
-                {overlays.map((b, bi) => {
+                {/* All bubbles floating over the entire strip */}
+                {bubbleOverlays.map(b => {
                   const bt = BUBBLE_TYPES[b.type] || BUBBLE_TYPES.speech;
+                  const isSelected = selectedBubbleId === b.id;
                   return (
-                    <div key={b.id} style={{background:'#2a2a40',borderRadius:8,padding:10,marginBottom:8}}>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-                        <span style={{fontSize:12,fontWeight:600,color:'#ccc'}}>{bi+1}. {bt.name}</span>
-                        <button onClick={() => removeBubble(b.id)} style={{background:'none',border:'none',color:'#f66',fontSize:11,cursor:'pointer'}}>삭제</button>
-                      </div>
-                      <textarea
-                        value={b.text} onChange={(e) => updateBubble(b.id, {text: e.target.value})}
-                        placeholder="텍스트 입력..."
-                        style={{width:'100%',minHeight:48,background:'#1a1a2e',color:'#eee',border:'1px solid #444',borderRadius:6,padding:6,fontSize:12,resize:'vertical',fontFamily:'inherit'}}
-                      />
-                      <div style={{display:'flex',gap:6,marginTop:6,alignItems:'center'}}>
-                        <label style={{fontSize:10,color:'#888'}}>크기</label>
-                        <input type="range" min="10" max="32" value={b.fontSize || 14} onChange={e => updateBubble(b.id, {fontSize: parseInt(e.target.value)})}
-                          style={{flex:1,height:4}} />
-                        <span style={{fontSize:10,color:'#aaa',minWidth:20}}>{b.fontSize || 14}</span>
-                      </div>
-                      <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap'}}>
-                        {Object.entries(BUBBLE_TYPES).map(([key, t]) => (
-                          <button key={key} onClick={() => updateBubble(b.id, {type: key})}
-                            style={{fontSize:10,padding:'2px 8px',borderRadius:4,border: b.type===key ? '1px solid var(--accent)' : '1px solid #555',
-                              background: b.type===key ? 'rgba(79,195,247,0.15)' : 'transparent', color: b.type===key ? '#4fc3f7' : '#999', cursor:'pointer'}}
-                          >{t.name}</button>
-                        ))}
-                      </div>
+                    <div key={b.id}
+                      style={{
+                        position:'absolute', left:b.x, top:b.y, width:b.w, height:b.h,
+                        cursor:'move', userSelect:'none', zIndex: isSelected ? 20 : 10,
+                        outline: isSelected ? '2px solid #4fc3f7' : 'none', outlineOffset: 2,
+                      }}
+                      onMouseDown={(e) => {
+                        setSelectedBubbleId(b.id);
+                        if (e.target.tagName === 'TEXTAREA' || e.target.dataset.resize) return;
+                        e.preventDefault();
+                        const startX = e.clientX, startY = e.clientY, origX = b.x, origY = b.y;
+                        const onMove = (ev) => updateBubble(b.id, {x: Math.max(0, origX + (ev.clientX - startX)), y: Math.max(0, origY + (ev.clientY - startY))});
+                        const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                        window.addEventListener('mousemove', onMove);
+                        window.addEventListener('mouseup', onUp);
+                      }}
+                    >
+                      <svg width={b.w} height={b.h + (bt.tail ? 18 : 0)} style={{position:'absolute',top:0,left:0,overflow:'visible',pointerEvents:'none'}}>
+                        {bt.spiky ? (() => {
+                          const cx=b.w/2, cy=b.h/2, pts=[];
+                          for (let s=0;s<24;s++){const a=(Math.PI*s)/12-Math.PI/2,rx=s%2===0?b.w/2:b.w/2.6,ry=s%2===0?b.h/2:b.h/2.6;pts.push(`${cx+Math.cos(a)*rx},${cy+Math.sin(a)*ry}`);}
+                          return <polygon points={pts.join(' ')} fill={bt.bg} stroke={bt.border} strokeWidth="2"/>;
+                        })() : (
+                          <rect x="1" y="1" width={b.w-2} height={b.h-2} rx={bt.radius} ry={bt.radius}
+                            fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth="2"
+                            strokeDasharray={bt.dashed ? '6 4' : 'none'} />
+                        )}
+                        {bt.tail && <polygon points={`${b.w*0.3-8},${b.h-2} ${b.w*0.3},${b.h+16} ${b.w*0.3+12},${b.h-2}`} fill={bt.bg} stroke={bt.border} strokeWidth="2" />}
+                      </svg>
+                      <textarea value={b.text} onChange={(e) => updateBubble(b.id, {text: e.target.value})}
+                        placeholder={bt.name + '...'} onClick={() => setSelectedBubbleId(b.id)}
+                        style={{position:'absolute',top:4,left:6,width:b.w-12,height:b.h-8,background:'transparent',border:'none',outline:'none',resize:'none',textAlign:'center',fontWeight:bt.fontWeight,fontSize:b.fontSize||14,color:bt.color||'#111',fontFamily:"'Noto Sans KR',sans-serif",lineHeight:1.3,overflow:'hidden'}} />
+                      {isSelected && <>
+                        <div data-resize="true" style={{position:'absolute',right:-5,bottom:-5,width:12,height:12,background:'#4fc3f7',borderRadius:2,cursor:'nwse-resize',zIndex:30}}
+                          onMouseDown={(e) => {e.preventDefault();e.stopPropagation();const sx=e.clientX,sy=e.clientY,ow=b.w,oh=b.h;
+                            const onMove=(ev)=>updateBubble(b.id,{w:Math.max(50,ow+(ev.clientX-sx)),h:Math.max(28,oh+(ev.clientY-sy))});
+                            const onUp=()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
+                            window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);}} />
+                        <button onClick={(e) => {e.stopPropagation(); removeBubble(b.id);}}
+                          style={{position:'absolute',top:-10,right:-10,width:22,height:22,borderRadius:'50%',background:'#e74c3c',color:'#fff',border:'none',fontSize:12,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',zIndex:30}}>×</button>
+                      </>}
                     </div>
                   );
                 })}
               </div>
             </div>
+
+            {/* Right sidebar */}
+            <div style={{width:270,background:'#1e1e30',borderLeft:'1px solid #333',padding:16,overflowY:'auto',flexShrink:0}}>
+              <div style={{fontWeight:700,fontSize:14,color:'#fff',marginBottom:12}}>말풍선 목록</div>
+              {bubbleOverlays.length === 0 && <div style={{fontSize:12,color:'#888',lineHeight:1.6}}>상단 버튼으로 말풍선을 추가하세요.<br/>말풍선은 패널에 종속되지 않고 전체 스크롤 위에서 자유롭게 배치됩니다.</div>}
+              {bubbleOverlays.map((b, bi) => {
+                const bt = BUBBLE_TYPES[b.type] || BUBBLE_TYPES.speech;
+                const isSelected = selectedBubbleId === b.id;
+                return (
+                  <div key={b.id} onClick={() => setSelectedBubbleId(b.id)}
+                    style={{background: isSelected ? '#333050' : '#2a2a40',borderRadius:8,padding:10,marginBottom:8,cursor:'pointer',border: isSelected ? '1px solid #4fc3f7' : '1px solid transparent',transition:'all .15s'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                      <span style={{fontSize:12,fontWeight:600,color: isSelected ? '#4fc3f7' : '#ccc'}}>{bi+1}. {bt.name}</span>
+                      <button onClick={(e) => {e.stopPropagation(); removeBubble(b.id);}} style={{background:'none',border:'none',color:'#f66',fontSize:11,cursor:'pointer'}}>삭제</button>
+                    </div>
+                    <textarea value={b.text} onChange={(e) => updateBubble(b.id, {text: e.target.value})}
+                      placeholder="텍스트 입력..." onClick={(e) => e.stopPropagation()}
+                      style={{width:'100%',minHeight:44,background:'#1a1a2e',color:'#eee',border:'1px solid #444',borderRadius:6,padding:6,fontSize:12,resize:'vertical',fontFamily:'inherit'}} />
+                    <div style={{display:'flex',gap:6,marginTop:6,alignItems:'center'}}>
+                      <label style={{fontSize:10,color:'#888'}}>크기</label>
+                      <input type="range" min="10" max="36" value={b.fontSize || 14} onChange={e => updateBubble(b.id, {fontSize: parseInt(e.target.value)})} style={{flex:1,height:4}} />
+                      <span style={{fontSize:10,color:'#aaa',minWidth:20}}>{b.fontSize || 14}</span>
+                    </div>
+                    <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap'}}>
+                      {Object.entries(BUBBLE_TYPES).map(([key, t]) => (
+                        <button key={key} onClick={(e) => {e.stopPropagation(); updateBubble(b.id, {type: key});}}
+                          style={{fontSize:10,padding:'2px 8px',borderRadius:4,border:b.type===key?'1px solid var(--accent)':'1px solid #555',background:b.type===key?'rgba(79,195,247,0.15)':'transparent',color:b.type===key?'#4fc3f7':'#999',cursor:'pointer'}}>{t.name}</button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {showApiModal && <ApiKeyModal onClose={()=>setShowApiModal(false)} />}
 
@@ -3026,6 +2979,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                     {panels.filter(Boolean).length > 0 && <>
                       <span className="text-muted">{panels.filter(Boolean).length}/{storyboard.length} 완료</span>
                       <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
+                      <button className="btn btn-primary btn-sm" onClick={openBubbleEditor} style={{display:'flex',alignItems:'center',gap:4}}>💬 웹툰 에디터</button>
                       <button className="btn btn-outline btn-sm" onClick={() => openViewerLocal()} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>
                       <button className="btn btn-outline btn-sm" onClick={exportWebtoonPDF} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>📄 PDF 내보내기</button>
                     </>}
@@ -3057,7 +3011,6 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                               )} disabled={running}>수정</button>
                             {panels[i] ? (<>
                               <button className="btn btn-outline btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
-                              <button className="btn btn-outline btn-xs" onClick={()=>openBubbleEditor(i)} style={{color:'var(--accent)'}}>말풍선</button>
                               <button className="btn btn-success btn-xs" onClick={()=>savePanelImage(panels[i], `panel_${i+1}.png`)}>저장</button>
                             </>) : (
                               <button className="btn btn-primary btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>생성</button>
@@ -3078,6 +3031,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                     <span className="text-muted">({panels.filter(Boolean).length}개 패널)</span>
                     {panels.filter(Boolean).length > 0 && <>
                       <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
+                      <button className="btn btn-primary btn-sm" onClick={openBubbleEditor} style={{display:'flex',alignItems:'center',gap:4}}>💬 웹툰 에디터</button>
                       <button className="btn btn-outline btn-sm" onClick={exportWebtoonPDF} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>📄 PDF 내보내기</button>
                       <button className="btn btn-outline btn-sm" onClick={() => openViewerLocal()} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>
                       {projectId && currentEpisode &&
@@ -3097,10 +3051,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                       return (
                         <div key={i} style={{position:'relative'}}>
                           <img className="clickable-img" src={panels[i]} alt={`Panel ${i+1}`} onClick={() => showPreview(panels[i], `패널 ${i+1}: ${panel.description?.substring(0,60) || ""}`)} />
-                          <div style={{position:'absolute',top:6,right:6,display:'flex',gap:4}}>
-                            <button onClick={()=>openBubbleEditor(i)} style={{background:'rgba(0,0,0,0.7)',color:'#fff',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:4,transition:'background 0.2s'}} onMouseOver={e=>e.currentTarget.style.background='rgba(108,92,231,0.9)'} onMouseOut={e=>e.currentTarget.style.background='rgba(0,0,0,0.7)'}>💬 말풍선</button>
-                            <button onClick={()=>savePanelImage(panels[i], `${analysis?.title || 'webtoon'}_panel_${i+1}.png`)} style={{background:'rgba(0,0,0,0.7)',color:'#fff',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:4,transition:'background 0.2s'}} onMouseOver={e=>e.currentTarget.style.background='rgba(39,174,96,0.9)'} onMouseOut={e=>e.currentTarget.style.background='rgba(0,0,0,0.7)'}>💾 저장</button>
-                          </div>
+                          <button onClick={()=>savePanelImage(panels[i], `${analysis?.title || 'webtoon'}_panel_${i+1}.png`)} style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,0.7)',color:'#fff',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:4,transition:'background 0.2s'}} onMouseOver={e=>e.currentTarget.style.background='rgba(39,174,96,0.9)'} onMouseOut={e=>e.currentTarget.style.background='rgba(0,0,0,0.7)'}>💾 저장</button>
                           {/* Dialogue overlay */}
                           {panel.dialogue?.length > 0 && (
                             <div style={{position:'absolute',bottom:8,left:8,right:8,display:'flex',flexDirection:'column',gap:4}}>
