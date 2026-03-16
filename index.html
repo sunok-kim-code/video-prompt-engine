@@ -1925,59 +1925,117 @@ Rules:
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  // Generate a unified ellipse+tail SVG path string (PowerPoint-style callout)
-  // Returns a single closed path that seamlessly integrates the tail into the ellipse outline
-  const buildBubblePath = (cx, cy, rx, ry, tailPos, tailLen, tailWid, bubbleW, bubbleH, scale) => {
-    const tw = 12 * tailWid * scale;  // tail half-width at base
-    const th = 18 * tailLen * scale;  // tail length
-    const tailBaseX = bubbleW * tailPos; // tail center X position
+  // Generate a unified bubble+tail SVG path with variable roundness and tail style.
+  // roundness: 0 = sharp rectangle, 50 = rounded rect, 100 = full ellipse (default)
+  // tailStyle: 'normal' (bezier curve), 'straight' (pointy lines), 'round' (bulbous round)
+  const buildBubblePath = (cx, cy, rx, ry, tailPos, tailLen, tailWid, bubbleW, bubbleH, scale, roundness, tailStyle) => {
+    const rn = roundness ?? 100;
+    const ts = tailStyle || 'normal';
+    const tw = 12 * tailWid * scale;
+    const th = 18 * tailLen * scale;
+    const tailBaseX = bubbleW * tailPos;
     const tailTipX = tailBaseX;
     const tailTipY = bubbleH + th;
+    const pad = 2;
 
-    // Calculate where tail meets the ellipse (left and right attachment points)
-    // Clamp attachment points to stay on the lower half of ellipse
+    // For roundness < 100, use rounded-rectangle approach with bezier corners
+    if (rn < 95) {
+      // Corner radius: 0 at rn=0 → full half-size at rn=100
+      const maxR = Math.min(rx, ry);
+      const cr = maxR * Math.max(0.04, rn / 100); // corner radius
+      const L = pad, T = pad, R = bubbleW - pad, B = bubbleH - pad;
+
+      // Tail attachment on bottom edge
+      const tLeft = Math.max(L + cr + 2, tailBaseX - tw);
+      const tRight = Math.min(R - cr - 2, tailBaseX + tw * 0.8);
+
+      // Build tail segments based on tail style
+      const tailSegments = (() => {
+        if (ts === 'straight') {
+          return [
+            `L ${tRight} ${B}`, `L ${tailTipX} ${tailTipY}`, `L ${tLeft} ${B}`
+          ];
+        } else if (ts === 'round') {
+          const midY = B + th * 0.6;
+          return [
+            `L ${tRight} ${B}`,
+            `Q ${tRight + tw * 0.1} ${midY} ${tailTipX + tw * 0.3} ${tailTipY}`,
+            `A ${tw * 0.4} ${tw * 0.35} 0 1 1 ${tailTipX - tw * 0.3} ${tailTipY}`,
+            `Q ${tLeft - tw * 0.1} ${midY} ${tLeft} ${B}`
+          ];
+        } else {
+          // normal (bezier curve)
+          const ctrlR2X = tRight + (tailTipX - tRight) * 0.15;
+          const ctrlR2Y = B + (tailTipY - B) * 0.15;
+          const ctrlR1X = tailTipX + tw * 0.2;
+          const ctrlR1Y = tailTipY - th * 0.15;
+          const ctrlL2X = tailTipX - tw * 0.3;
+          const ctrlL2Y = tailTipY - th * 0.15;
+          const ctrlL1X = tLeft + (tailTipX - tLeft) * 0.15;
+          const ctrlL1Y = B + (tailTipY - B) * 0.15;
+          return [
+            `L ${tRight} ${B}`,
+            `C ${ctrlR2X} ${ctrlR2Y} ${ctrlR1X} ${ctrlR1Y} ${tailTipX} ${tailTipY}`,
+            `C ${ctrlL2X} ${ctrlL2Y} ${ctrlL1X} ${ctrlL1Y} ${tLeft} ${B}`
+          ];
+        }
+      })();
+
+      const path = [
+        `M ${L + cr} ${T}`,
+        `L ${R - cr} ${T}`, `Q ${R} ${T} ${R} ${T + cr}`,
+        `L ${R} ${B - cr}`, `Q ${R} ${B} ${R - cr} ${B}`,
+        ...tailSegments,
+        `L ${L + cr} ${B}`, `Q ${L} ${B} ${L} ${B - cr}`,
+        `L ${L} ${T + cr}`, `Q ${L} ${T} ${L + cr} ${T}`,
+        'Z'
+      ];
+      return path.join(' ');
+    }
+
+    // roundness >= 95: full ellipse mode
     const leftX = Math.max(cx - rx + 4, tailBaseX - tw);
     const rightX = Math.min(cx + rx - 4, tailBaseX + tw * 0.8);
-
-    // Find Y on ellipse bottom for attachment points using ellipse equation
     const leftRelX = (leftX - cx) / rx;
     const rightRelX = (rightX - cx) / rx;
     const leftY = cy + ry * Math.sqrt(Math.max(0.01, 1 - leftRelX * leftRelX));
     const rightY = cy + ry * Math.sqrt(Math.max(0.01, 1 - rightRelX * rightRelX));
 
-    // Calculate angles on ellipse for the attachment points
-    const leftAngle = Math.atan2((leftY - cy) / ry, (leftX - cx) / rx);
-    const rightAngle = Math.atan2((rightY - cy) / ry, (rightX - cx) / rx);
-
-    // Build path: trace ellipse from right attachment → around top → to left attachment → tail tip → back
-    // We use SVG arc commands for the ellipse portions
-    // Start from right attachment point, go clockwise around the top to left attachment
-    const startAngle = rightAngle;
-    const endAngle = leftAngle;
-
-    // Ellipse arc from rightAttach → top → leftAttach (the "main body" arc, going through the top)
-    // This is the large arc going counter-clockwise from right to left through the top
-    const sweepFlag = 1; // clockwise
-    const largeArcFlag = 1; // go the long way around (through the top)
-
-    // Control points for smooth bezier tail curves
-    const ctrlL1X = leftX + (tailTipX - leftX) * 0.15;
-    const ctrlL1Y = leftY + (tailTipY - leftY) * 0.1;
-    const ctrlL2X = tailTipX - tw * 0.3;
-    const ctrlL2Y = tailTipY - th * 0.15;
-    const ctrlR1X = tailTipX + tw * 0.2;
-    const ctrlR1Y = tailTipY - th * 0.15;
-    const ctrlR2X = rightX + (tailTipX - rightX) * 0.15;
-    const ctrlR2Y = rightY + (tailTipY - rightY) * 0.1;
+    // Build tail segments based on style
+    const ellipseTail = (() => {
+      if (ts === 'straight') {
+        return [
+          `L ${leftX} ${leftY}`, `L ${tailTipX} ${tailTipY}`, `L ${rightX} ${rightY}`
+        ];
+      } else if (ts === 'round') {
+        const midLY = leftY + (tailTipY - leftY) * 0.5;
+        const midRY = rightY + (tailTipY - rightY) * 0.5;
+        return [
+          `Q ${leftX} ${midLY} ${tailTipX - tw * 0.3} ${tailTipY}`,
+          `A ${tw * 0.4} ${tw * 0.35} 0 1 1 ${tailTipX + tw * 0.3} ${tailTipY}`,
+          `Q ${rightX} ${midRY} ${rightX} ${rightY}`
+        ];
+      } else {
+        // normal bezier
+        const ctrlL1X = leftX + (tailTipX - leftX) * 0.15;
+        const ctrlL1Y = leftY + (tailTipY - leftY) * 0.1;
+        const ctrlL2X = tailTipX - tw * 0.3;
+        const ctrlL2Y = tailTipY - th * 0.15;
+        const ctrlR1X = tailTipX + tw * 0.2;
+        const ctrlR1Y = tailTipY - th * 0.15;
+        const ctrlR2X = rightX + (tailTipX - rightX) * 0.15;
+        const ctrlR2Y = rightY + (tailTipY - rightY) * 0.1;
+        return [
+          `C ${ctrlL1X} ${ctrlL1Y} ${ctrlL2X} ${ctrlL2Y} ${tailTipX} ${tailTipY}`,
+          `C ${ctrlR1X} ${ctrlR1Y} ${ctrlR2X} ${ctrlR2Y} ${rightX} ${rightY}`
+        ];
+      }
+    })();
 
     const path = [
       `M ${rightX} ${rightY}`,
-      // Arc from right attachment → top → left attachment (the large part of ellipse)
-      `A ${rx} ${ry} 0 ${largeArcFlag} ${sweepFlag} ${leftX} ${leftY}`,
-      // Smooth bezier curve: left attachment → tail tip
-      `C ${ctrlL1X} ${ctrlL1Y} ${ctrlL2X} ${ctrlL2Y} ${tailTipX} ${tailTipY}`,
-      // Smooth bezier curve: tail tip → right attachment
-      `C ${ctrlR1X} ${ctrlR1Y} ${ctrlR2X} ${ctrlR2Y} ${rightX} ${rightY}`,
+      `A ${rx} ${ry} 0 1 1 ${leftX} ${leftY}`,
+      ...ellipseTail,
       'Z'
     ];
     return path.join(' ');
@@ -2172,7 +2230,7 @@ Rules:
       const rx = bw / 2 - 2 * scale, ry = bh / 2 - 2 * scale;
       if (bt.tail) {
         // Use buildBubblePath for unified shape, then offset by bx/by
-        const pathStr = buildBubblePath(bw / 2, bh / 2, rx, ry, tailPos, tailLen, tailWid, bw, bh, 1);
+        const pathStr = buildBubblePath(bw / 2, bh / 2, rx, ry, tailPos, tailLen, tailWid, bw, bh, 1, b.roundness, b.tailStyle);
         // Apply offset transform
         ctx.save();
         ctx.translate(bx, by);
@@ -2189,7 +2247,13 @@ Rules:
         }
         ctx.restore();
       } else {
-        ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        const rn2 = b.roundness ?? 100;
+        if (rn2 < 95) {
+          const cr2 = Math.min(rx, ry) * Math.max(0.04, rn2 / 100);
+          ctx.beginPath(); ctx.roundRect(bx + 2, by + 2, bw - 4, bh - 4, cr2);
+        } else {
+          ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        }
         ctx.fillStyle = bt.bg; ctx.fill();
         if (bt.border !== 'none') {
           ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border;
@@ -4105,12 +4169,16 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                                     const pathD = buildWavePath(W, H, tailPos, tailLen, tailWid, scale);
                                     return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeLinejoin="round"/>;
                                   } else if (bt.ellipse) {
-                                    const cx = W/2, cy = H/2, rx = W/2 - 2, ry = H/2 - 2;
+                                    const cx2 = W/2, cy2 = H/2, rx2 = W/2 - 2, ry2 = H/2 - 2;
+                                    const rn2 = obj.roundness ?? 100;
                                     if (bt.tail) {
-                                      const pathD = buildBubblePath(cx, cy, rx, ry, tailPos, tailLen, tailWid, W, H, 1);
+                                      const pathD = buildBubblePath(cx2, cy2, rx2, ry2, tailPos, tailLen, tailWid, W, H, 1, obj.roundness, obj.tailStyle);
                                       return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash} strokeLinejoin="round"/>;
+                                    } else if (rn2 < 95) {
+                                      const cr2 = Math.min(rx2, ry2) * Math.max(0.04, rn2 / 100);
+                                      return <rect x="2" y="2" width={W-4} height={H-4} rx={cr2} ry={cr2} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash}/>;
                                     } else {
-                                      return <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash}/>;
+                                      return <ellipse cx={cx2} cy={cy2} rx={rx2} ry={ry2} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash}/>;
                                     }
                                   } else {
                                     return (<>
@@ -4253,6 +4321,21 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                         <input type="range" min="30" max="250" value={Math.round((obj.tailSize??1.0)*100)}
                           onChange={e => updatePageObject(currentPageIdx, obj.id, {tailSize: parseInt(e.target.value)/100})} style={{flex:1,height:4}}/>
                         <span className="be-ctrl-val" style={{minWidth:24}}>{Math.round((obj.tailSize??1.0)*100)}%</span>
+                      </div>}
+                      {bt.tail && <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>꼬리모양</label>
+                        <select className="be-select" value={obj.tailStyle || 'normal'} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {tailStyle: e.target.value})}>
+                          <option value="normal">곡선</option>
+                          <option value="straight">직선</option>
+                          <option value="round">둥근</option>
+                        </select>
+                      </div>}
+                      {bt.ellipse && <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>둥근정도</label>
+                        <input type="range" min="0" max="100" value={obj.roundness ?? 100} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {roundness: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
+                        <span className="be-ctrl-val" style={{minWidth:28}}>{obj.roundness ?? 100}%</span>
                       </div>}
                       <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap'}}>
                         {Object.entries(BUBBLE_TYPES).map(([key, t]) => (
