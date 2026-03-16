@@ -2664,13 +2664,8 @@ Rules:
     if (arrStart >= 0 && (objStart < 0 || arrStart < objStart)) cleaned = cleaned.substring(arrStart);
     else if (objStart >= 0) cleaned = cleaned.substring(objStart);
 
-    // Step 2: Pre-clean control characters inside string values before bracket matching
-    cleaned = cleaned.replace(/[\x00-\x1f]/g, (ch) => {
-      if (ch === '\n') return '\\n';
-      if (ch === '\r') return '\\r';
-      if (ch === '\t') return '\\t';
-      return '';
-    });
+    // Step 2: Remove truly problematic control characters (keep \n, \r, \t — valid JSON whitespace)
+    cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1f]/g, '');
 
     // Step 3: Smart bracket matching that skips string contents
     let depth = 0, end = 0;
@@ -2707,8 +2702,22 @@ Rules:
       repaired = repaired.replace(/([:\[,]\s*)'([^']*)'/g, '$1"$2"');
       // 5d: Remove any BOM or zero-width chars
       repaired = repaired.replace(/[\uFEFF\u200B\u200C\u200D]/g, '');
-      // 5e: Fix unescaped newlines inside strings (common Gemini issue)
-      repaired = repaired.replace(/"([^"]*?)(?:\\n)*":/g, (match) => match);
+      // 5e: Escape raw newlines inside JSON string values (common Gemini issue)
+      // Walk through the string, track whether we're inside a JSON string, and escape newlines there
+      {
+        let result = '', inStr = false, esc = false;
+        for (let i = 0; i < repaired.length; i++) {
+          const c = repaired[i];
+          if (esc) { result += c; esc = false; continue; }
+          if (c === '\\' && inStr) { result += c; esc = true; continue; }
+          if (c === '"') { inStr = !inStr; result += c; continue; }
+          if (inStr && c === '\n') { result += '\\n'; continue; }
+          if (inStr && c === '\r') { result += '\\r'; continue; }
+          if (inStr && c === '\t') { result += '\\t'; continue; }
+          result += c;
+        }
+        repaired = result;
+      }
       // 5f: Remove comments (// style) outside strings
       repaired = repaired.replace(/(?<=[,\{\[\n])\s*\/\/[^\n]*/g, '');
       try {
