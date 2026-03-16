@@ -1581,38 +1581,57 @@ function App() {
       ctx.fillStyle = bt.bg; ctx.fill();
       ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border; ctx.stroke();
     } else if (bt.ellipse) {
-      // Ellipse with seamless tail — single combined path
+      // Ellipse with seamless tail — layered approach for reliable fill
       const cx = bx + bw / 2, cy = by + bh / 2;
       const rx = bw / 2 - 2 * scale, ry = bh / 2 - 2 * scale;
-      ctx.beginPath();
       if (bt.tail) {
         const tx = bx + bw * tailPos;
-        const tw = 10 * tailSz * scale, th = 18 * tailSz * scale;
+        const tw = 12 * tailSz * scale, th = 18 * tailSz * scale;
         const tailTipX = tx, tailTipY = by + bh + th;
-        // Calculate where tail meets ellipse
-        const tailLeftAngle = Math.atan2(bh / 2, tx - tw - cx);
-        const tailRightAngle = Math.atan2(bh / 2, tx + tw * 0.8 - cx);
-        const tlx = cx + rx * Math.cos(tailLeftAngle);
-        const tly = cy + ry * Math.sin(tailLeftAngle);
-        const trx = cx + rx * Math.cos(tailRightAngle);
-        const trry = cy + ry * Math.sin(tailRightAngle);
-        // Draw the arc from right contact to left contact (the long way around, skipping bottom)
-        const startAngle = tailRightAngle;
-        const endAngle = tailLeftAngle;
-        ctx.ellipse(cx, cy, rx, ry, 0, startAngle, endAngle, false);
-        // Bezier curve from left contact → tail tip → right contact
-        ctx.quadraticCurveTo((tlx + tailTipX) / 2, tly + th * 0.3, tailTipX, tailTipY);
-        ctx.quadraticCurveTo((trx + tailTipX) / 2, trry + th * 0.3, trx, trry);
+        const tlx = tx - tw, trx2 = tx + tw * 0.8;
+        const tly = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((tlx - cx) / rx, 2)));
+        const trry = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((trx2 - cx) / rx, 2)));
+        // Layer 1: Fill ellipse
+        ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fillStyle = bt.bg; ctx.fill();
+        // Layer 2: Fill tail (overlaps ellipse bottom)
+        ctx.beginPath();
+        ctx.moveTo(tlx, tly);
+        ctx.quadraticCurveTo((tlx + tailTipX) / 2, tly + th * 0.4, tailTipX, tailTipY);
+        ctx.quadraticCurveTo((trx2 + tailTipX) / 2, trry + th * 0.4, trx2, trry);
         ctx.closePath();
+        ctx.fillStyle = bt.bg; ctx.fill();
+        // Layer 3: Stroke ellipse border
+        ctx.shadowColor = 'transparent';
+        if (bt.border !== 'none') {
+          ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+          ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border;
+          if (bt.dashed) ctx.setLineDash([6 * scale, 4 * scale]);
+          ctx.stroke(); ctx.setLineDash([]);
+        }
+        // Layer 4: Stroke tail outer edges
+        if (bt.border !== 'none') {
+          ctx.beginPath();
+          ctx.moveTo(tlx, tly);
+          ctx.quadraticCurveTo((tlx + tailTipX) / 2, tly + th * 0.4, tailTipX, tailTipY);
+          ctx.quadraticCurveTo((trx2 + tailTipX) / 2, trry + th * 0.4, trx2, trry);
+          ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border;
+          ctx.stroke();
+        }
+        // Layer 5: Cover junction border with fill
+        ctx.beginPath();
+        ctx.moveTo(tlx + 1, tly - 1); ctx.lineTo(trx2 - 1, trry - 1);
+        ctx.lineTo(trx2 - 1, trry + 3); ctx.lineTo(tlx + 1, tly + 3);
+        ctx.closePath();
+        ctx.fillStyle = bt.bg; ctx.fill();
       } else {
-        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-      }
-      ctx.fillStyle = bt.bg; ctx.fill();
-      if (bt.border !== 'none') {
-        ctx.lineWidth = (bt.borderWidth || 2) * scale;
-        ctx.strokeStyle = bt.border;
-        if (bt.dashed) ctx.setLineDash([6 * scale, 4 * scale]);
-        ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fillStyle = bt.bg; ctx.fill();
+        if (bt.border !== 'none') {
+          ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border;
+          if (bt.dashed) ctx.setLineDash([6 * scale, 4 * scale]);
+          ctx.stroke();
+        }
       }
     } else {
       // Rounded rect (narration etc.)
@@ -3129,25 +3148,30 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                                 })() : bt.ellipse ? (() => {
                                   const cx = obj.w*scale/2, cy = obj.h*scale/2;
                                   const rx = obj.w*scale/2 - 2, ry = obj.h*scale/2 - 2;
+                                  const bw = bt.borderWidth || 2;
+                                  const strokeColor = bt.border==='none'?'transparent':bt.border;
+                                  const dash = bt.dashed ? '6 4' : 'none';
                                   if (bt.tail) {
-                                    const tp = tailPos, tsz = tailSz;
-                                    const tx = obj.w*scale*tp;
-                                    const tw = 10*tsz*scale, th = 18*tsz*scale;
+                                    const tx = obj.w*scale*tailPos;
+                                    const tw = 12*tailSz*scale, th = 18*tailSz*scale;
                                     const tailTipX = tx, tailTipY = obj.h*scale + th;
-                                    const tailLeftAngle = Math.atan2(obj.h*scale/2, tx - tw - cx);
-                                    const tailRightAngle = Math.atan2(obj.h*scale/2, tx + tw*0.8 - cx);
-                                    const tlx = cx + rx * Math.cos(tailLeftAngle);
-                                    const tly = cy + ry * Math.sin(tailLeftAngle);
-                                    const trx = cx + rx * Math.cos(tailRightAngle);
-                                    const trry = cy + ry * Math.sin(tailRightAngle);
-                                    const startAngle = tailRightAngle;
-                                    const endAngle = tailLeftAngle;
-                                    const largeArc = ((endAngle - startAngle + 2*Math.PI) % (2*Math.PI)) > Math.PI ? 1 : 0;
-                                    const sweep = 1;
-                                    const d = `M ${trx} ${trry} A ${rx} ${ry} 0 ${largeArc} ${sweep} ${tlx} ${tly} Q ${(tlx+tailTipX)/2} ${tly+th*0.3} ${tailTipX} ${tailTipY} Q ${(trx+tailTipX)/2} ${trry+th*0.3} ${trx} ${trry} Z`;
-                                    return <path d={d} fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth={bt.borderWidth||2} strokeDasharray={bt.dashed?'6 4':'none'}/>;
+                                    // Tail base contact points on ellipse bottom
+                                    const tlx = tx - tw, trx2 = tx + tw * 0.8;
+                                    const tly = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((tlx - cx) / rx, 2)));
+                                    const trry = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((trx2 - cx) / rx, 2)));
+                                    return (<>
+                                      {/* Fill layers: ellipse + tail, same color, overlapping */}
+                                      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={bt.bg} stroke="none"/>
+                                      <path d={`M ${tlx} ${tly} Q ${(tlx+tailTipX)/2} ${tly+th*0.4} ${tailTipX} ${tailTipY} Q ${(trx2+tailTipX)/2} ${trry+th*0.4} ${trx2} ${trry} Z`} fill={bt.bg} stroke="none"/>
+                                      {/* Border: ellipse outline */}
+                                      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash}/>
+                                      {/* Border: tail outer edges only (no base line) */}
+                                      <path d={`M ${tlx} ${tly} Q ${(tlx+tailTipX)/2} ${tly+th*0.4} ${tailTipX} ${tailTipY} Q ${(trx2+tailTipX)/2} ${trry+th*0.4} ${trx2} ${trry}`} fill="none" stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash}/>
+                                      {/* Cover junction: white fill strip to hide ellipse border where tail meets */}
+                                      <path d={`M ${tlx+1} ${tly-1} L ${trx2-1} ${trry-1} L ${trx2-1} ${trry+3} L ${tlx+1} ${tly+3} Z`} fill={bt.bg} stroke="none"/>
+                                    </>);
                                   } else {
-                                    return <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth={bt.borderWidth||2} strokeDasharray={bt.dashed?'6 4':'none'}/>;
+                                    return <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={bt.bg} stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash}/>;
                                   }
                                 })() : (
                                   <>
