@@ -926,6 +926,17 @@ const ART_STYLES = {
       {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.7},
     ],
   },
+  blWebtoon: {
+    name: 'BL 웹툰',
+    prefix: 'Korean BL (Boys Love) webtoon style, cartoon, semi-realistic anime art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition, bishounen character design, all characters are male. ',
+    charSuffix: ', beautifully detailed eyes and hair, semi-realistic anime proportions, bishounen male character design, sharp jawline, tall elegant male proportions, smooth skin rendering, high quality',
+    bgSuffix: ', atmospheric romantic mood lighting, cinematic depth of field, elegant composition, soft warm tones, high quality',
+    propSuffix: ', delicate rendering, soft shading, elegant illustration style',
+    defaultGender: 'male',
+    loras: [
+      {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.7},
+    ],
+  },
   realistic: {
     name: '사실적 (Realistic)',
     prefix: 'Photorealistic digital art, cinematic lighting, highly detailed textures and materials, professional illustration quality. ',
@@ -2653,11 +2664,18 @@ function App() {
 
     const analyzePrompt = inputMode === 'scene' ? PROMPTS.ANALYZE_SCENES : PROMPTS.ANALYZE_STORY;
     log(`분석 모드: ${inputMode === 'scene' ? '씬 설명 기반' : '웹소설 기반'}`, 'info');
+    // Apply default gender directive from art style (e.g., BL webtoon → all male)
+    const curStyle = ART_STYLES[artStyle] || {};
+    let genderDirective = '';
+    if (curStyle.defaultGender) {
+      genderDirective = `\n\n--- ART STYLE GENDER DIRECTIVE ---\nThe selected art style is "${curStyle.name}". Unless the story EXPLICITLY states a character is female, ALL characters must default to gender: "${curStyle.defaultGender}". Apply this to every character.\n--- END DIRECTIVE ---\n`;
+      log(`아트 스타일 성별 기본값: ${curStyle.defaultGender}`, 'info');
+    }
     // Retry up to 2 times on JSON parse failure
     let result, parsed;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        result = await callText(analyzePrompt, sourceText + existingAssetsContext, {maxTokens: inputMode === 'scene' ? 32768 : 16384});
+        result = await callText(analyzePrompt, sourceText + existingAssetsContext + genderDirective, {maxTokens: inputMode === 'scene' ? 32768 : 16384});
         parsed = parseJSON(result);
         break;
       } catch(parseErr) {
