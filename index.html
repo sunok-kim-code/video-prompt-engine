@@ -487,7 +487,20 @@ async function callGemini(systemPrompt, userPrompt, opts={}) {
   const body={systemInstruction:{parts:[{text:systemPrompt}]},contents:[{role:'user',parts:[{text:userPrompt}]}],generationConfig:{temperature:opts.temperature||0.7,topP:opts.topP||0.9,maxOutputTokens:opts.maxTokens||8192,thinkingConfig:{thinkingBudget:opts.thinkBudget??0}}};
   const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken},body:JSON.stringify(body)});
   if(!res.ok){const e=await res.text();throw new Error('Gemini '+res.status+': '+e.substring(0,200));}
-  const data=await res.json(); const parts=data.candidates?.[0]?.content?.parts||[]; return parts.filter(p=>p.text&&!p.thought).map(p=>p.text).join('');
+  const data=await res.json();
+  if (!data.candidates?.length) {
+    console.error('[callGemini] No candidates in response:', JSON.stringify(data).substring(0, 500));
+    const blockReason = data.promptFeedback?.blockReason || data.candidates?.[0]?.finishReason;
+    throw new Error('Gemini 응답 없음' + (blockReason ? ` (이유: ${blockReason})` : '') + '. 프롬프트가 너무 길거나 안전 필터에 차단되었을 수 있습니다.');
+  }
+  const parts=data.candidates[0]?.content?.parts||[];
+  const textParts = parts.filter(p=>p.text&&!p.thought);
+  if (textParts.length === 0) {
+    console.error('[callGemini] No text parts in response. All parts:', parts.map(p => ({hasText:!!p.text, thought:!!p.thought, keys:Object.keys(p)})));
+    const finishReason = data.candidates[0]?.finishReason;
+    throw new Error('Gemini 텍스트 응답 없음 (finishReason: ' + (finishReason||'unknown') + '). 토큰 제한 초과 또는 응답이 잘렸을 수 있습니다.');
+  }
+  return textParts.map(p=>p.text).join('');
 }
 
 async function callImagen(prompt, opts={}) {
@@ -2634,15 +2647,24 @@ Rules:
   }, []);
 
   const parseJSON = (text) => {
-    // Step 1: Strip markdown fences and leading text
+    if (!text || !text.trim()) throw new Error('빈 응답 수신 — 모델이 텍스트를 반환하지 않았습니다.');
+    console.log('[parseJSON] Raw response length:', text.length, '| First 200 chars:', text.substring(0, 200));
+
+    // Step 1: Strip markdown fences, HTML tags, and leading text
     let cleaned = text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+    // Strip any XML-like tags (e.g. <output>, <response>, etc.)
+    cleaned = cleaned.replace(/<\/?[a-zA-Z_][a-zA-Z0-9_]*>/g, '').trim();
+
     const arrStart = cleaned.indexOf('[');
     const objStart = cleaned.indexOf('{');
+    if (arrStart < 0 && objStart < 0) {
+      console.error('[parseJSON] No [ or { found. Cleaned text:', cleaned.substring(0, 500));
+      throw new Error('응답에서 JSON 배열/객체를 찾을 수 없습니다. 응답 첫 100자: ' + cleaned.substring(0, 100));
+    }
     if (arrStart >= 0 && (objStart < 0 || arrStart < objStart)) cleaned = cleaned.substring(arrStart);
     else if (objStart >= 0) cleaned = cleaned.substring(objStart);
 
     // Step 2: Pre-clean control characters inside string values before bracket matching
-    // Replace raw control chars (except already-escaped ones) inside JSON strings
     cleaned = cleaned.replace(/[\x00-\x1f]/g, (ch) => {
       if (ch === '\n') return '\\n';
       if (ch === '\r') return '\\r';
@@ -2673,30 +2695,34 @@ Rules:
     try {
       return JSON.parse(jsonStr);
     } catch(e) {
-      console.warn('JSON parse attempt 1 failed:', e.message, '| Repairing...');
+      console.warn('[parseJSON] Parse attempt 1 failed:', e.message);
+      console.warn('[parseJSON] jsonStr first 300:', jsonStr.substring(0, 300));
       // Step 5: Aggressive repair
       let repaired = jsonStr;
       // 5a: Remove trailing commas before } or ]
       repaired = repaired.replace(/,\s*([\]}])/g, '$1');
-      // 5b: Fix unescaped quotes inside string values (heuristic: replace \" patterns that got double-escaped)
+      // 5b: Fix unescaped quotes inside string values
       repaired = repaired.replace(/\\\\"/g, '\\"');
       // 5c: Fix single quotes used as string delimiters
-      // Only replace single quotes that appear to be JSON string delimiters (after : or , or [ or at start)
       repaired = repaired.replace(/([:\[,]\s*)'([^']*)'/g, '$1"$2"');
       // 5d: Remove any BOM or zero-width chars
       repaired = repaired.replace(/[\uFEFF\u200B\u200C\u200D]/g, '');
+      // 5e: Fix unescaped newlines inside strings (common Gemini issue)
+      repaired = repaired.replace(/"([^"]*?)(?:\\n)*":/g, (match) => match);
+      // 5f: Remove comments (// style) outside strings
+      repaired = repaired.replace(/(?<=[,\{\[\n])\s*\/\/[^\n]*/g, '');
       try {
         return JSON.parse(repaired);
       } catch(e2) {
-        console.error('JSON parse failed after repair. Error:', e2.message);
-        // Extract position from error message for debugging
+        console.error('[parseJSON] Parse failed after repair. Error:', e2.message);
         const posMatch = e2.message.match(/position (\d+)/);
         if (posMatch) {
           const pos = parseInt(posMatch[1]);
-          console.error('Around error position:', repaired.substring(Math.max(0, pos - 60), pos + 60));
+          console.error('[parseJSON] Around error position:', repaired.substring(Math.max(0, pos - 80), pos + 80));
+          console.error('[parseJSON] Char at position:', JSON.stringify(repaired[pos]), 'code:', repaired.charCodeAt(pos));
         }
-        console.error('First 300 chars:', repaired.substring(0, 300));
-        throw new Error('JSON 파싱 실패: ' + e.message + ' (자동 수리도 실패)');
+        console.error('[parseJSON] First 500 chars:', repaired.substring(0, 500));
+        throw new Error('JSON 파싱 실패: ' + e.message + ' (자동 수리도 실패). 응답 시작: ' + jsonStr.substring(0, 80));
       }
     }
   };
