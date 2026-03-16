@@ -1058,7 +1058,7 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens in this panel",
-    "imagePrompt": "Detailed English prompt for image generation: [shot size], [camera angle], [character descriptions WITH FULL appearance AND current outfit details], [background/environment], [props in scene], [lighting and atmosphere], manhwa/webtoon style, detailed illustration, vibrant colors. IMPORTANT: describe exact same outfit as character reference unless overridden."
+    "imagePrompt": "Detailed English prompt for image generation: [shot size], [camera angle], [character descriptions WITH FULL appearance AND current outfit details], [background/environment], [props in scene], [lighting and atmosphere], manhwa/webtoon style, detailed illustration, vibrant colors. IMPORTANT: describe exact same outfit as character reference unless overridden. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
   }
 ]
 
@@ -1071,7 +1071,8 @@ Rules:
 - Add transition panels between major scene changes
 - Each imagePrompt must be self-contained (include full character appearance details, EXACT outfit, not just names)
 - Include prop descriptions in imagePrompt when props appear in scene
-- Dialogue should match the original story text`,
+- Dialogue should match the original story text
+- CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, etc.), or onomatopoeia. The generated image must be purely visual with NO text or typography of any kind. Text and sound effects will be added separately as overlays in the editor.`,
 
   ANALYZE_SCENES: `You are a webtoon scene analyst. The user provides NUMBERED scene descriptions (e.g. "1. ...", "2. ...", "3. ..."). Your job is to parse each scene into a plotBeat and extract characters, backgrounds, and props.
 
@@ -1161,7 +1162,7 @@ ABSOLUTE RULE — STRICT 1:1 SCENE-TO-PANEL MAPPING:
 - Panel 1 corresponds to plotBeat 1, Panel 2 to plotBeat 2, etc. panelNumber and plotBeat must match sequentially.
 - Each panel must capture the ENTIRE scene from its plotBeat in a single image: all characters, actions, dialogue, expressions.
 - ALL dialogue from the plotBeat summary MUST appear in the panel's "dialogue" array field. Include every speaker's line.
-- Sound effects mentioned in the plotBeat (끼익, 쾅, 부릉, etc.) MUST appear in the panel "description" and be incorporated into imagePrompt.
+- Sound effects mentioned in the plotBeat (끼익, 쾅, 부릉, etc.) should appear in the panel "description" field only, but NEVER in imagePrompt. The generated image must contain NO text, letters, or typography.
 - The imagePrompt must describe the MOST IMPACTFUL MOMENT of the scene — choose the best camera angle and composition to capture all characters and actions in one frame.
 - If the scene has multiple speakers, show them together in the same panel with appropriate expressions.
 - VERIFY before returning: count your panels and count the plotBeats. They MUST be equal.
@@ -1189,7 +1190,7 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens",
-    "imagePrompt": "Detailed English prompt: [shot size], [camera angle], [character with FULL appearance AND outfit], [background], [props], [lighting], manhwa/webtoon style, detailed illustration, vibrant colors."
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle], [character with FULL appearance AND outfit], [background], [props], [lighting], manhwa/webtoon style, detailed illustration, vibrant colors. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
   }
 ]
 
@@ -1201,7 +1202,8 @@ Rules:
 - EVERY plotBeat must have at least 1 panel — verify this before returning
 - Each imagePrompt must be self-contained with full character appearance
 - Include prop descriptions when they appear
-- ALL dialogue from original scenes must be present in panels`
+- ALL dialogue from original scenes must be present in panels
+- CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, etc.), or onomatopoeia. The generated image must be purely visual with NO text or typography of any kind. Text and sound effects will be added separately as overlays in the editor.`
 };
 
 // ============================================================
@@ -2096,8 +2098,9 @@ function App() {
         }
       }
 
-      // Build the final Imagen4 prompt: style + scene + visual ID cards
-      const imagen4Prompt = stylePrefix + prompt + visualIdCards;
+      // Build the final Imagen4 prompt: style + scene + visual ID cards + no-text directive
+      const noTextDirective = '\nIMPORTANT: Do NOT render any text, letters, words, sound effects, onomatopoeia, speech bubbles, or typography anywhere in the image. The image must be purely visual.';
+      const imagen4Prompt = stylePrefix + prompt + visualIdCards + noTextDirective;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
       const propCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Prop')).length;
       const bgCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Background')).length;
