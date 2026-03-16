@@ -1082,11 +1082,13 @@ CRITICAL RULES FOR SHARED ASSETS:
 
 ABSOLUTE RULE — 1:1 SCENE-TO-PLOTBEAT MAPPING:
 - Each numbered scene in the input MUST become EXACTLY one plotBeat. No merging, no skipping, no summarizing multiple scenes into one.
-- There is NO upper limit on the number of plotBeats. If the user provides 50 scenes, return 50 plotBeats. If 100 scenes, return 100 plotBeats.
-- The plotBeat "beat" number must match the scene number from the input.
+- SUB-SCENES (e.g. "2-1", "2-2", "3-1", "3-2", "3-3") are treated as SEPARATE scenes. Each sub-scene gets its own plotBeat. For example, if input has "2-1. ...", "2-2. ...", "2-3. ...", that produces 3 separate plotBeats with beat labels "2-1", "2-2", "2-3".
+- There is NO upper limit on the number of plotBeats. If the user provides 55 scenes (including sub-scenes), return exactly 55 plotBeats.
+- The plotBeat "beat" field must match the scene number/label from the input (can be a number like 1 or a string like "2-1").
 - Each plotBeat "summary" must FAITHFULLY preserve ALL details from that scene: character actions, expressions, movements, sound effects (끼익, 쾅, 부릉), stage directions, parenthetical descriptions, and EVERY line of dialogue.
 - Do NOT paraphrase or condense. Copy the scene content as closely as possible into the summary field.
 - If a scene contains dialogue (e.g. "이한: 후~ 이제 마지막이다."), include ALL dialogue lines verbatim in the summary AND list all speaking characters.
+- The TOTAL number of plotBeats must EXACTLY match the total number of scenes + sub-scenes in the input. Count carefully before returning.
 
 Return ONLY a valid JSON object (no markdown, no explanation):
 {
@@ -1153,15 +1155,16 @@ CRITICAL — CHARACTER VISUAL DIFFERENTIATION:
 
 IMPORTANT: This is a VERTICAL SCROLL webtoon.
 
-ABSOLUTE RULE — SCENE-TO-PANEL MAPPING:
-- You MUST create at least 1 panel for EVERY plotBeat. No exceptions. No skipping. There is NO upper limit on panels.
-- If there are N plotBeats, the total number of panels MUST be >= N. If there are 50 plotBeats, produce 50+ panels.
-- If a plotBeat contains dialogue (check dialogueCount or look for dialogue in the summary), create SEPARATE panels for each speaker's line. Example: if plotBeat 3 has 2 characters speaking, create at least 2-3 panels for that beat.
-- ALL dialogue from the plotBeat summary MUST appear in panel "dialogue" fields. Do not omit ANY dialogue line.
+ABSOLUTE RULE — STRICT 1:1 SCENE-TO-PANEL MAPPING:
+- You MUST create EXACTLY 1 panel for EVERY plotBeat. Not 0, not 2 — exactly 1.
+- If there are N plotBeats, you MUST return EXACTLY N panels. Panel count = plotBeat count.
+- Panel 1 corresponds to plotBeat 1, Panel 2 to plotBeat 2, etc. panelNumber and plotBeat must match sequentially.
+- Each panel must capture the ENTIRE scene from its plotBeat in a single image: all characters, actions, dialogue, expressions.
+- ALL dialogue from the plotBeat summary MUST appear in the panel's "dialogue" array field. Include every speaker's line.
 - Sound effects mentioned in the plotBeat (끼익, 쾅, 부릉, etc.) MUST appear in the panel "description" and be incorporated into imagePrompt.
-- Stage directions and character actions from the plotBeat MUST drive character pose and expression.
-- For plotBeats without dialogue, create 1 panel that captures the full scene.
-- For plotBeats with dialogue, create 1-3 panels to show each speaker and reactions.
+- The imagePrompt must describe the MOST IMPACTFUL MOMENT of the scene — choose the best camera angle and composition to capture all characters and actions in one frame.
+- If the scene has multiple speakers, show them together in the same panel with appropriate expressions.
+- VERIFY before returning: count your panels and count the plotBeats. They MUST be equal.
 
 CRITICAL VISUAL CONSISTENCY RULES:
 1. Each character MUST wear their DEFAULT OUTFIT unless an outfitOverride is specified.
@@ -2430,9 +2433,10 @@ Original story text:
 ${sourceText}
 
 ` + (inputMode === 'scene'
-  ? `Create a webtoon storyboard with at least ${data.plotBeats?.length || 1} panels (one or more per plotBeat). EVERY plotBeat MUST have at least 1 panel. If a plotBeat has dialogue, create separate panels for each speaker. Total panels MUST be >= ${data.plotBeats?.length || 1}.
+  ? `Create EXACTLY ${data.plotBeats?.length || 1} panels — one panel per plotBeat, no more, no less. Panel count MUST equal ${data.plotBeats?.length || 1}.
+Each panel captures ONE scene entirely in a single image. Include ALL dialogue from that scene in the panel's dialogue array.
 Each panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details.
-CRITICAL: ALL dialogue from each scene must appear in panels. Do NOT skip any plotBeat or any dialogue line.`
+CRITICAL: Do NOT split scenes into multiple panels. Do NOT skip any scene. Return exactly ${data.plotBeats?.length || 1} panels.`
   : `Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details (not just IDs).
 CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is explicitly specified in the plot beat. Include prop descriptions when they appear in a scene.`);
 
@@ -2455,7 +2459,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
           if (p.outfitOverrides && Object.keys(p.outfitOverrides).length > 0) s += `, OUTFIT CHANGES: ${JSON.stringify(p.outfitOverrides)}`;
           return s + ']';
         }).join('\n');
-        const batchPrompt = `Story title: ${data.title}\nSynopsis: ${data.synopsis}\n\nCharacters:\n${charContext}\n\nBackgrounds:\n${bgContext}\n\nProps/Objects:\n${propContext || '(none)'}\n\nPlot beats (batch ${Math.floor(i/BATCH_SIZE)+1}, beats ${batchBeats[0].beat}-${batchBeats[batchBeats.length-1].beat}):\n${batchPlotContext}\n\nCreate panels for ONLY the plot beats listed above. Start panelNumber at ${panelNum}. EVERY plotBeat MUST have at least 1 panel. If a plotBeat has dialogue, create separate panels per speaker.\nEach panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details.`;
+        const batchPrompt = `Story title: ${data.title}\nSynopsis: ${data.synopsis}\n\nCharacters:\n${charContext}\n\nBackgrounds:\n${bgContext}\n\nProps/Objects:\n${propContext || '(none)'}\n\nPlot beats (batch ${Math.floor(i/BATCH_SIZE)+1}, beats ${batchBeats[0].beat}-${batchBeats[batchBeats.length-1].beat}):\n${batchPlotContext}\n\nCreate EXACTLY ${batchBeats.length} panels — one panel per plotBeat listed above. Start panelNumber at ${panelNum}. Do NOT create more or fewer panels than plotBeats. Each panel captures one scene entirely.\nEach panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details. Include ALL dialogue in the dialogue array.`;
         log(`  배치 ${Math.floor(i/BATCH_SIZE)+1}/${Math.ceil(beatCount/BATCH_SIZE)}: Beat ${batchBeats[0].beat}-${batchBeats[batchBeats.length-1].beat} 생성 중...`, 'info');
         const batchResult = await callText(storyboardPrompt, batchPrompt, {maxTokens: 32768});
         const batchParsed = parseJSON(batchResult);
@@ -2468,7 +2472,36 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
       const result = await callText(storyboardPrompt, userPrompt, {maxTokens: 32768});
       parsed = parseJSON(result);
     }
-    log(`스토리보드 완료: ${parsed.length}개 패널`, 'success');
+    // Scene mode: validate and log panel count vs plotBeat count
+    if (inputMode === 'scene') {
+      const expectedCount = data.plotBeats?.length || 0;
+      if (parsed.length !== expectedCount) {
+        log(`⚠️ 패널 수(${parsed.length})가 씬 수(${expectedCount})와 다릅니다. 조정 중...`, 'warn');
+        // If fewer panels, add placeholder entries for missing ones
+        while (parsed.length < expectedCount) {
+          const missingBeat = data.plotBeats[parsed.length];
+          parsed.push({
+            panelNumber: parsed.length + 1,
+            plotBeat: missingBeat?.beat || parsed.length + 1,
+            type: 'establishing', shotSize: 'medium', cameraAngle: 'eye_level',
+            characters: missingBeat?.characters?.map(c => ({id: c, pose: 'standing', expression: 'neutral', position: 'center'})) || [],
+            background: missingBeat?.location || 'bg_1',
+            props: missingBeat?.props || [],
+            dialogue: [],
+            narration: '',
+            mood: missingBeat?.mood || 'calm',
+            description: missingBeat?.summary || '',
+            imagePrompt: `${missingBeat?.summary || 'Scene'}, manhwa/webtoon style, detailed illustration, vibrant colors`
+          });
+        }
+        // If more panels, trim to expected count
+        if (parsed.length > expectedCount) parsed.length = expectedCount;
+        log(`조정 완료: ${parsed.length}개 패널`, 'info');
+      }
+      log(`씬 모드 검증: ${expectedCount}개 씬 → ${parsed.length}개 패널 (1:1 매칭)`, 'success');
+    } else {
+      log(`스토리보드 완료: ${parsed.length}개 패널`, 'success');
+    }
     setStoryboard(parsed);
     setPanels(new Array(parsed.length).fill(null));
     setCompletedSteps(prev => new Set([...prev, 2]));
