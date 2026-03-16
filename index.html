@@ -2257,7 +2257,7 @@ Plot beats:
 ${plotContext}
 
 Original story text:
-${inputMode === 'scene' ? sourceText : sourceText.substring(0, 6000)}
+${sourceText}
 
 ` + (inputMode === 'scene'
   ? `Create a webtoon storyboard with at least ${data.plotBeats?.length || 1} panels (one or more per plotBeat). EVERY plotBeat MUST have at least 1 panel. If a plotBeat has dialogue, create separate panels for each speaker. Total panels MUST be >= ${data.plotBeats?.length || 1}.
