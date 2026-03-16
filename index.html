@@ -213,6 +213,20 @@ div:hover > .panel-ctrl{opacity:1 !important;}
 .be-type-btn{font-size:10px;padding:2px 8px;border-radius:4px;cursor:pointer;border:1px solid #555;background:transparent;color:#999;}
 .be-type-btn.active{border-color:var(--accent);background:rgba(79,195,247,0.15);color:#4fc3f7;}
 .be-ctrl-row{display:flex;gap:6px;margin-top:6px;align-items:center;}
+/* [WebtoonSFX 추가] SFX 스타일 */
+.be-sfx{position:absolute;cursor:move;user-select:none;pointer-events:auto;}
+.be-sfx.selected{outline:2px solid #ff6b6b;outline-offset:2px;z-index:20;}
+.be-sfx-text{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.0;word-break:keep-all;overflow:visible;pointer-events:none;}
+.be-sfx-dropdown{position:absolute;top:100%;left:0;background:#1e1e30;border:1px solid #555;border-radius:8px;padding:12px;z-index:400;min-width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.6);}
+.be-sfx-preset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;}
+.be-sfx-preset-btn{padding:6px 4px;border-radius:6px;border:1px solid #555;background:#2a2a40;color:#ddd;font-size:11px;cursor:pointer;text-align:center;transition:all .15s;font-weight:600;}
+.be-sfx-preset-btn:hover{border-color:#4fc3f7;color:#4fc3f7;background:#333050;}
+.be-sfx-preset-btn.active{border-color:#ff6b6b;color:#ff6b6b;background:rgba(255,107,107,0.15);}
+.be-sfx-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+.be-sfx-row label{font-size:10px;color:#888;min-width:36px;flex-shrink:0;}
+.be-sfx-input{flex:1;background:#1a1a2e;color:#eee;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:12px;}
+.be-sfx-insert-btn{width:100%;padding:8px;border-radius:6px;border:none;background:linear-gradient(135deg,#ff6b6b,#e74c3c);color:#fff;font-weight:700;font-size:13px;cursor:pointer;transition:all .15s;}
+.be-sfx-insert-btn:hover{opacity:0.85;}
 </style>
 </head>
 <body>
@@ -1385,6 +1399,67 @@ function App() {
   const PAGE_W = 700;
   const PAGE_H = 4000;
 
+  // [WebtoonSFX 추가] SFX 프리셋 정의
+  const SFX_PRESETS = {
+    hit:    {name:'타격', examples:['쾅!','퍽!','빠직!','와장창!','탁!','쿵!'], fontFamily:"'Black Han Sans',sans-serif", color:'#ff2222', stroke:'#000', strokeWidth:3, rotate:(-8), shadow:true, scale:1.2},
+    water:  {name:'물/바람', examples:['콸콸','솨아','휘이잉','쏴아','파닥'], fontFamily:"'Gaegu',cursive", color:'#2288ff', stroke:'#003366', strokeWidth:2, rotate:(-5), shadow:true, scale:1.0},
+    electric:{name:'전기/빛', examples:['찌직!','번쩍!','파지직!','치지직','스파크!'], fontFamily:"'Do Hyeon',sans-serif", color:'#ffdd00', stroke:'#ff6600', strokeWidth:3, rotate:(5), shadow:true, scale:1.1},
+    move:   {name:'이동/속도', examples:['슈우웅','휙!','부릉!','비이잉','쓩!'], fontFamily:"'Jua',sans-serif", color:'#ffffff', stroke:'#333333', strokeWidth:2, rotate:(-12), shadow:false, scale:1.0, italic:true},
+    shake:  {name:'진동/울림', examples:['우우웅','드르르','와르르','덜덜덜','부르르'], fontFamily:"'Noto Sans KR',sans-serif", color:'#bb44ff', stroke:'#220044', strokeWidth:2, rotate:(3), shadow:true, scale:1.0},
+    emotion:{name:'감정/심리', examples:['두근두근','울컥','심쿵','으으','후유'], fontFamily:"'Gaegu',cursive", color:'#ff66aa', stroke:'#660033', strokeWidth:2, rotate:(0), shadow:true, scale:1.0},
+    silence:{name:'정적/분위기', examples:['...','쉬잇','조용','싸늘','서늘'], fontFamily:"'Nanum Myeongjo',serif", color:'#cccccc', stroke:'#333333', strokeWidth:1, rotate:(0), shadow:false, scale:0.9},
+    comic:  {name:'코믹', examples:['뿅!','뽕!','삐용','뿌우','헉!'], fontFamily:"'Jua',sans-serif", color:'#ff8800', stroke:'#662200', strokeWidth:2, rotate:(-6), shadow:true, scale:1.1},
+    nature: {name:'자연/환경', examples:['우르르','번개!','추적추적','사각사각','바스락'], fontFamily:"'Nanum Myeongjo',serif", color:'#33aa55', stroke:'#003311', strokeWidth:2, rotate:(2), shadow:true, scale:1.0},
+  };
+  const [sfxPanelOpen, setSfxPanelOpen] = useState(false);
+  const [sfxPreset, setSfxPreset] = useState('hit');
+  const [sfxText, setSfxText] = useState('쾅!');
+  const [sfxColor, setSfxColor] = useState('#ff2222');
+  const [sfxStroke, setSfxStroke] = useState('#000000');
+  const [sfxFontSize, setSfxFontSize] = useState(48);
+  const [sfxRotate, setSfxRotate] = useState(-8);
+  const sfxPanelRef = React.useRef(null);
+
+  // [WebtoonSFX 추가] SFX 오브젝트를 현재 페이지에 추가
+  const addSfxToPage = () => {
+    if (editorPages.length === 0) return;
+    const preset = SFX_PRESETS[sfxPreset] || SFX_PRESETS.hit;
+    const page = editorPages[currentPageIdx];
+    const newSfx = {
+      id: 'sfx_' + Date.now(), type: 'sfx',
+      text: sfxText || preset.examples[0],
+      x: 100, y: 300,
+      w: Math.max(120, sfxText.length * sfxFontSize * 0.7),
+      h: sfxFontSize * 1.6,
+      fontSize: sfxFontSize,
+      fontFamily: preset.fontFamily,
+      color: sfxColor,
+      stroke: sfxStroke,
+      strokeWidth: preset.strokeWidth || 2,
+      rotate: sfxRotate,
+      shadow: preset.shadow !== false,
+      italic: preset.italic || false,
+      presetKey: sfxPreset,
+      zIndex: Math.max(...page.objects.map(o => o.zIndex || 1), 10) + 1
+    };
+    setEditorPages(prev => {
+      const next = [...prev];
+      next[currentPageIdx] = {...next[currentPageIdx], objects: [...next[currentPageIdx].objects, newSfx]};
+      return next;
+    });
+    setSfxPanelOpen(false);
+  };
+
+  // [WebtoonSFX 추가] 프리셋 선택 시 기본값 업데이트
+  const selectSfxPreset = (key) => {
+    const p = SFX_PRESETS[key];
+    setSfxPreset(key);
+    setSfxColor(p.color);
+    setSfxStroke(p.stroke);
+    setSfxRotate(p.rotate || 0);
+    setSfxText(p.examples[0]);
+  };
+
   // Initialize pages from panels on editor open (async to measure image dimensions)
   const PANEL_MARGIN = 10; // px margin between panels
   const initEditorPages = async () => {
@@ -1748,6 +1823,47 @@ function App() {
     ctx.restore();
   };
 
+  // [WebtoonSFX 추가] SFX 캔버스 렌더링
+  const drawSfxOnCanvas = (ctx, obj, ox, oy, scale) => {
+    ctx.save();
+    const cx = ox + obj.w * scale / 2;
+    const cy = oy + obj.h * scale / 2;
+    ctx.translate(cx, cy);
+    if (obj.rotate) ctx.rotate(obj.rotate * Math.PI / 180);
+    const fs = (obj.fontSize || 48) * scale;
+    const italic = obj.italic ? 'italic ' : '';
+    const ff = obj.fontFamily || "'Black Han Sans',sans-serif";
+    ctx.font = `${italic}900 ${fs}px ${ff}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Shadow
+    if (obj.shadow) {
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 6 * scale;
+      ctx.shadowOffsetX = 3 * scale;
+      ctx.shadowOffsetY = 3 * scale;
+    }
+    // Stroke (outline)
+    if (obj.stroke && obj.strokeWidth) {
+      ctx.strokeStyle = obj.stroke;
+      ctx.lineWidth = obj.strokeWidth * scale;
+      ctx.lineJoin = 'round';
+      ctx.miterLimit = 2;
+      const lines = (obj.text || '').split('\n');
+      const lh = fs * 1.1;
+      const startY = -(lines.length - 1) * lh / 2;
+      lines.forEach((l, i) => ctx.strokeText(l, 0, startY + i * lh));
+    }
+    // Fill
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = obj.color || '#ff2222';
+    const lines = (obj.text || '').split('\n');
+    const lh = fs * 1.1;
+    const startY = -(lines.length - 1) * lh / 2;
+    lines.forEach((l, i) => ctx.fillText(l, 0, startY + i * lh));
+    ctx.restore();
+  };
+
   // Export a single page as JPEG
   const exportPageAsJpeg = async (pageIdx) => {
     if (pageIdx < 0 || pageIdx >= editorPages.length) return null;
@@ -1772,6 +1888,9 @@ function App() {
         }
       } else if (obj.type === 'bubble') {
         drawBubbleOnCanvas(ctx, obj, obj.x, obj.y, obj.w, obj.h, 1);
+      } else if (obj.type === 'sfx') {
+        // [WebtoonSFX 추가] SFX 캔버스 렌더링
+        drawSfxOnCanvas(ctx, obj, obj.x, obj.y, 1);
       }
     }
 
@@ -3147,6 +3266,51 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
               <button key={key} className="btn btn-outline btn-sm be-btn" onClick={() => addBubbleToPage(key)}>+ {bt.name}</button>
             ))}
             <div className="be-divider" />
+            {/* [WebtoonSFX 추가] SFX 드롭다운 버튼 */}
+            <div style={{position:'relative'}} ref={sfxPanelRef}>
+              <button className="btn btn-outline btn-sm" style={{color:'#ff6b6b',borderColor:'#ff6b6b',fontSize:11,padding:'4px 10px'}}
+                onClick={() => setSfxPanelOpen(prev => !prev)}>+ 효과음(SFX)</button>
+              {sfxPanelOpen && (
+                <div className="be-sfx-dropdown" onClick={e => e.stopPropagation()}>
+                  <div style={{fontSize:12,fontWeight:700,color:'#fff',marginBottom:8}}>붓글씨 효과음 삽입</div>
+                  <div className="be-sfx-preset-grid">
+                    {Object.entries(SFX_PRESETS).map(([key, p]) => (
+                      <button key={key} className={`be-sfx-preset-btn${sfxPreset===key?' active':''}`}
+                        onClick={() => selectSfxPreset(key)}>{p.name}</button>
+                    ))}
+                  </div>
+                  {/* 예시 단어 버튼 */}
+                  <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:8}}>
+                    {(SFX_PRESETS[sfxPreset]?.examples || []).map((ex, ei) => (
+                      <button key={ei} style={{padding:'2px 8px',borderRadius:4,border:'1px solid #555',background: sfxText===ex?'rgba(255,107,107,0.2)':'#2a2a40',color: sfxText===ex?'#ff6b6b':'#aaa',fontSize:11,cursor:'pointer'}}
+                        onClick={() => setSfxText(ex)}>{ex}</button>
+                    ))}
+                  </div>
+                  <div className="be-sfx-row">
+                    <label>텍스트</label>
+                    <input className="be-sfx-input" value={sfxText} onChange={e => setSfxText(e.target.value)} placeholder="효과음 입력..." />
+                  </div>
+                  <div className="be-sfx-row">
+                    <label>크기</label>
+                    <input type="range" min="20" max="120" value={sfxFontSize} onChange={e => setSfxFontSize(parseInt(e.target.value))} style={{flex:1,height:4}} />
+                    <span style={{fontSize:10,color:'#aaa',minWidth:24}}>{sfxFontSize}</span>
+                  </div>
+                  <div className="be-sfx-row">
+                    <label>회전</label>
+                    <input type="range" min="-45" max="45" value={sfxRotate} onChange={e => setSfxRotate(parseInt(e.target.value))} style={{flex:1,height:4}} />
+                    <span style={{fontSize:10,color:'#aaa',minWidth:28}}>{sfxRotate}°</span>
+                  </div>
+                  <div className="be-sfx-row">
+                    <label>색상</label>
+                    <input type="color" value={sfxColor} onChange={e => setSfxColor(e.target.value)} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}} />
+                    <label style={{marginLeft:8}}>외곽</label>
+                    <input type="color" value={sfxStroke} onChange={e => setSfxStroke(e.target.value)} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}} />
+                  </div>
+                  <button className="be-sfx-insert-btn" onClick={addSfxToPage}>효과음 삽입</button>
+                </div>
+              )}
+            </div>
+            <div className="be-divider" />
             <button className="btn btn-outline btn-sm be-btn-img" onClick={() => imageInputRef.current?.click()}>+ 이미지 삽입</button>
             <div style={{flex:1}} />
             <div className="be-ctrl">
@@ -3315,6 +3479,42 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                               </>}
                             </div>
                           );
+                        } else if (obj.type === 'sfx') {
+                          // [WebtoonSFX 추가] SFX 오브젝트 렌더링
+                          const rot = obj.rotate || 0;
+                          const italic = obj.italic ? 'italic ' : '';
+                          const fs = (obj.fontSize || 48) * scale;
+                          return (
+                            <div key={obj.id} className={`be-sfx${isSelected ? ' selected' : ''}`}
+                              style={{left: obj.x * scale, top: obj.y * scale, width: obj.w * scale, height: obj.h * scale, zIndex: obj.zIndex || 1}}
+                              onMouseDown={(e) => {
+                                setCurrentPageIdx(pageIdx);
+                                setSelectedObjectId(obj.id);
+                                setSelectedObjectType('sfx');
+                                if (e.target.dataset.resize) return;
+                                e.preventDefault();
+                                dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y};
+                              }}>
+                              <div className="be-sfx-text" style={{
+                                transform: `rotate(${rot}deg)`,
+                                fontSize: fs,
+                                fontFamily: obj.fontFamily || "'Black Han Sans',sans-serif",
+                                fontWeight: 900,
+                                fontStyle: obj.italic ? 'italic' : 'normal',
+                                color: obj.color || '#ff2222',
+                                WebkitTextStroke: `${(obj.strokeWidth||2)*scale}px ${obj.stroke||'#000'}`,
+                                textShadow: obj.shadow ? '3px 3px 6px rgba(0,0,0,0.5)' : 'none',
+                                paintOrder: 'stroke fill',
+                              }}>{obj.text}</div>
+                              {isSelected && <>
+                                <div data-resize="true" className="be-resize"
+                                  onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
+                                    dragRef.current = {type:'resize', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origW:obj.w, origH:obj.h};
+                                  }}/>
+                                <button className="be-delete" onClick={(e) => {e.stopPropagation(); deletePageObject(pageIdx, obj.id);}}>×</button>
+                              </>}
+                            </div>
+                          );
                         }
                       })}
                     </div>
@@ -3383,6 +3583,63 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                           <button key={key} className={`be-type-btn${obj.bubbleStyle===key?' active':''}`}
                             onClick={(e) => {e.stopPropagation(); updatePageObject(currentPageIdx, obj.id, {bubbleStyle: key});}}>{t.name}</button>
                         ))}
+                      </div>
+                    </div>
+                  );
+                } else if (obj.type === 'sfx') {
+                  // [WebtoonSFX 추가] SFX 사이드바 컨트롤
+                  return (
+                    <div key={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={() => setSelectedObjectId(obj.id)}
+                      style={{borderLeft: isSelected ? '3px solid #ff6b6b' : '3px solid transparent'}}>
+                      <div className="be-item-header">
+                        <span className={`be-item-label${isSelected?' selected':''}`} style={{color: isSelected?'#ff6b6b':'#ccc'}}>{oi+1}. 효과음 ({obj.text})</span>
+                        <button className="be-item-del" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>삭제</button>
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>텍스트</label>
+                        <input className="be-sfx-input" value={obj.text} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {text: e.target.value, w: Math.max(120, e.target.value.length * (obj.fontSize||48) * 0.7)})} />
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label">크기</label>
+                        <input type="range" min="20" max="120" value={obj.fontSize||48} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {fontSize: parseInt(e.target.value), h: parseInt(e.target.value)*1.6})} style={{flex:1,height:4}}/>
+                        <span className="be-ctrl-val" style={{minWidth:20}}>{obj.fontSize||48}</span>
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label">회전</label>
+                        <input type="range" min="-45" max="45" value={obj.rotate||0} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {rotate: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
+                        <span className="be-ctrl-val" style={{minWidth:28}}>{obj.rotate||0}°</span>
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>색상</label>
+                        <input type="color" value={obj.color||'#ff2222'} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {color: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                        <label className="be-ctrl-label" style={{flexShrink:0,marginLeft:4}}>외곽</label>
+                        <input type="color" value={obj.stroke||'#000000'} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {stroke: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>외곽두께</label>
+                        <input type="range" min="0" max="8" value={obj.strokeWidth||2} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {strokeWidth: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
+                        <span className="be-ctrl-val" style={{minWidth:16}}>{obj.strokeWidth||2}</span>
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>폰트</label>
+                        <select className="be-select" value={obj.fontFamily || "'Black Han Sans',sans-serif"} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {fontFamily: e.target.value})}>
+                          {FONT_LIST.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                        </select>
+                      </div>
+                      <div style={{display:'flex',gap:6,marginTop:6}}>
+                        <label style={{fontSize:10,color:'#888',display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}>
+                          <input type="checkbox" checked={obj.shadow!==false} onChange={e => updatePageObject(currentPageIdx, obj.id, {shadow: e.target.checked})} /> 그림자
+                        </label>
+                        <label style={{fontSize:10,color:'#888',display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}>
+                          <input type="checkbox" checked={obj.italic||false} onChange={e => updatePageObject(currentPageIdx, obj.id, {italic: e.target.checked})} /> 기울임
+                        </label>
                       </div>
                     </div>
                   );
