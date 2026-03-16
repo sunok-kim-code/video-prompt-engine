@@ -1527,6 +1527,10 @@ Rules:
   const BUBBLE_TYPES = {
     speech: {name:'말풍선', tail:true, bg:'#fff', border:'#222', borderWidth:3, ellipse:true, fontWeight:500, shadow:true},
     thought: {name:'생각', tail:true, bg:'#fff', border:'#999', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, shadow:true},
+    shout: {name:'외침', tail:true, bg:'#fff', border:'#d32f2f', borderWidth:3, spiky:true, spikeCount:16, fontWeight:700, shadow:true, color:'#d32f2f'},
+    cloud: {name:'구름', tail:true, bg:'#fff', border:'#888', borderWidth:2, cloudShape:true, fontWeight:400, shadow:true},
+    box: {name:'사각형', tail:true, bg:'#fff', border:'#222', borderWidth:3, boxShape:true, radius:10, fontWeight:500, shadow:true},
+    wave: {name:'물결', tail:true, bg:'#fff', border:'#5555cc', borderWidth:2, waveShape:true, fontWeight:400, shadow:true, color:'#333'},
     narration:{name:'나레이션', tail:false, bg:'rgba(0,0,0,0.75)', border:'none', borderWidth:0, radius:4, fontWeight:500, color:'#fff', shadow:true},
     whisper:{name:'속삭임', tail:true, bg:'#f0f0f0', border:'#aaa', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, color:'#555', shadow:true},
     text:{name:'텍스트', tail:false, bg:'#ffffff', border:'none', borderWidth:0, radius:2, fontWeight:500, color:'#111', shadow:false, plainText:true},
@@ -1979,6 +1983,130 @@ Rules:
     return path.join(' ');
   };
 
+  // Build cloud-shaped bubble path with bumpy edges + tail
+  const buildCloudPath = (w, h, tailPos, tailLen, tailWid, scale) => {
+    const bumps = 10;
+    const cx = w / 2, cy = h / 2;
+    const rx = w / 2 - 4, ry = h / 2 - 4;
+    const pts = [];
+    // Generate bumpy outline
+    for (let i = 0; i <= bumps; i++) {
+      const a = (Math.PI * 2 * i) / bumps - Math.PI / 2;
+      const bumpR = 0.18 * (i % 2 === 0 ? 1 : 0.7);
+      const px = cx + Math.cos(a) * rx;
+      const py = cy + Math.sin(a) * ry;
+      const bx2 = cx + Math.cos(a) * rx * (1 + bumpR);
+      const by2 = cy + Math.sin(a) * ry * (1 + bumpR);
+      if (i === 0) {
+        pts.push(`M ${px} ${py}`);
+      } else {
+        const prevA = (Math.PI * 2 * (i - 1)) / bumps - Math.PI / 2;
+        const midA = (prevA + a) / 2;
+        const cpx = cx + Math.cos(midA) * rx * (1 + bumpR * 1.5);
+        const cpy = cy + Math.sin(midA) * ry * (1 + bumpR * 1.5);
+        pts.push(`Q ${cpx} ${cpy} ${px} ${py}`);
+      }
+    }
+    pts.push('Z');
+    let path = pts.join(' ');
+    // Add tail as separate triangle (cloud bubbles typically have round sub-bubbles as tail)
+    const tw = 10 * tailWid * scale;
+    const th = 14 * tailLen * scale;
+    const tx = w * tailPos;
+    // Add small circles as cloud tail
+    const c1x = tx, c1y = h - 2;
+    const c2x = tx + tw * 0.3, c2y = h + th * 0.35;
+    const c3x = tx + tw * 0.1, c3y = h + th * 0.7;
+    path += ` M ${c1x + 6} ${c1y} A 6 5 0 1 1 ${c1x - 6} ${c1y} A 6 5 0 1 1 ${c1x + 6} ${c1y}`;
+    path += ` M ${c2x + 4} ${c2y} A 4 3 0 1 1 ${c2x - 4} ${c2y} A 4 3 0 1 1 ${c2x + 4} ${c2y}`;
+    path += ` M ${c3x + 2.5} ${c3y} A 2.5 2 0 1 1 ${c3x - 2.5} ${c3y} A 2.5 2 0 1 1 ${c3x + 2.5} ${c3y}`;
+    return path;
+  };
+
+  // Build rounded-rectangle box bubble path with tail
+  const buildBoxPath = (w, h, r, tailPos, tailLen, tailWid, scale) => {
+    const tw = 10 * tailWid * scale;
+    const th = 16 * tailLen * scale;
+    const tx = Math.max(r + tw, Math.min(w - r - tw, w * tailPos));
+    const pts = [
+      `M ${r} 0`, `L ${w - r} 0`, `Q ${w} 0 ${w} ${r}`,
+      `L ${w} ${h - r}`, `Q ${w} ${h} ${w - r} ${h}`,
+      `L ${tx + tw} ${h}`,
+      `C ${tx + tw * 0.6} ${h} ${tx + tw * 0.2} ${h + th * 0.3} ${tx} ${h + th}`,
+      `C ${tx - tw * 0.2} ${h + th * 0.3} ${tx - tw * 0.6} ${h} ${tx - tw} ${h}`,
+      `L ${r} ${h}`, `Q 0 ${h} 0 ${h - r}`,
+      `L 0 ${r}`, `Q 0 0 ${r} 0`, 'Z'
+    ];
+    return pts.join(' ');
+  };
+
+  // Build wave-shaped bubble path with wavy edges + tail
+  const buildWavePath = (w, h, tailPos, tailLen, tailWid, scale) => {
+    const waves = 6;
+    const amp = 4 * scale;
+    const tw = 10 * tailWid * scale;
+    const th = 16 * tailLen * scale;
+    const tx = w * tailPos;
+    const pts = [`M 0 ${amp}`];
+    // Top edge (wavy)
+    for (let i = 0; i < waves; i++) {
+      const seg = w / waves;
+      const x1 = seg * i + seg * 0.25, y1 = -amp;
+      const x2 = seg * i + seg * 0.75, y2 = amp;
+      const x3 = seg * (i + 1), y3 = amp;
+      pts.push(`C ${x1} ${y1} ${x2} ${y2 * 0.3} ${x3} ${y3 * 0.5}`);
+    }
+    // Right edge (wavy)
+    for (let i = 0; i < 3; i++) {
+      const seg = h / 3;
+      const y1 = seg * i + seg * 0.25, x1 = w + amp;
+      const y2 = seg * i + seg * 0.75, x2 = w - amp;
+      const y3 = seg * (i + 1);
+      pts.push(`C ${x1} ${y1} ${x2} ${y2} ${w} ${y3}`);
+    }
+    // Bottom edge with tail
+    const rightTail = Math.min(w, tx + tw);
+    const leftTail = Math.max(0, tx - tw);
+    pts.push(`L ${rightTail} ${h}`);
+    pts.push(`C ${tx + tw * 0.5} ${h} ${tx + tw * 0.15} ${h + th * 0.4} ${tx} ${h + th}`);
+    pts.push(`C ${tx - tw * 0.15} ${h + th * 0.4} ${tx - tw * 0.5} ${h} ${leftTail} ${h}`);
+    pts.push(`L 0 ${h}`);
+    // Left edge (wavy)
+    for (let i = 2; i >= 0; i--) {
+      const seg = h / 3;
+      const y1 = seg * i + seg * 0.75, x1 = -amp;
+      const y2 = seg * i + seg * 0.25, x2 = amp;
+      const y3 = seg * i;
+      pts.push(`C ${x1} ${y1} ${x2} ${y2} 0 ${y3}`);
+    }
+    pts.push('Z');
+    return pts.join(' ');
+  };
+
+  // Build spiky/explosion bubble path with tail
+  const buildSpikyPath = (w, h, spikeCount, tailPos, tailLen, tailWid, scale) => {
+    const cx = w / 2, cy = h / 2;
+    const n = spikeCount || 16;
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const a = (Math.PI * 2 * i) / n - Math.PI / 2;
+      const outerR = i % 2 === 0 ? 1.0 : 0.65;
+      const px = cx + Math.cos(a) * (w / 2) * outerR;
+      const py = cy + Math.sin(a) * (h / 2) * outerR;
+      pts.push(i === 0 ? `M ${px} ${py}` : `L ${px} ${py}`);
+    }
+    pts.push('Z');
+    // Add tail
+    const tw = 10 * tailWid * scale;
+    const th = 16 * tailLen * scale;
+    const tx = w * tailPos;
+    pts.push(`M ${tx - tw} ${h * 0.85}`);
+    pts.push(`L ${tx} ${h + th}`);
+    pts.push(`L ${tx + tw} ${h * 0.85}`);
+    pts.push('Z');
+    return pts.join(' ');
+  };
+
   // Enhanced bubble drawing with shadows and seamless ellipse+tail
   const drawBubbleOnCanvas = (ctx, b, bx, by, bw, bh, scale) => {
     const bt = BUBBLE_TYPES[b.bubbleStyle || b.type] || BUBBLE_TYPES.speech;
@@ -2019,19 +2147,25 @@ Rules:
       ctx.beginPath();
       ctx.ellipse(bx + bw / 2, by + bh / 2, bw / 2, bh / 2, 0, 0, Math.PI * 2);
       ctx.fillStyle = effBg; ctx.fill();
-    } else if (bt.spiky) {
-      ctx.beginPath();
-      const cx = bx + bw / 2, cy = by + bh / 2;
-      for (let s = 0; s < 24; s++) {
-        const angle = (Math.PI * s) / 12 - Math.PI / 2;
-        const rx = s % 2 === 0 ? bw / 2 : bw / 2.6;
-        const ry = s % 2 === 0 ? bh / 2 : bh / 2.6;
-        const px = cx + Math.cos(angle) * rx, py = cy + Math.sin(angle) * ry;
-        s === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    } else if (bt.spiky || bt.cloudShape || bt.boxShape || bt.waveShape) {
+      // Path-based shapes: spiky, cloud, box, wave
+      let pathStr;
+      if (bt.spiky) pathStr = buildSpikyPath(bw, bh, bt.spikeCount||16, tailPos, tailLen, tailWid, scale);
+      else if (bt.cloudShape) pathStr = buildCloudPath(bw, bh, tailPos, tailLen, tailWid, scale);
+      else if (bt.boxShape) pathStr = buildBoxPath(bw, bh, (bt.radius||10)*scale, tailPos, tailLen, tailWid, scale);
+      else pathStr = buildWavePath(bw, bh, tailPos, tailLen, tailWid, scale);
+      ctx.save();
+      ctx.translate(bx, by);
+      const p2d = new Path2D(pathStr);
+      ctx.fillStyle = bt.bg; ctx.fill(p2d, bt.cloudShape || bt.spiky ? 'evenodd' : 'nonzero');
+      ctx.shadowColor = 'transparent';
+      if (bt.border !== 'none') {
+        ctx.lineWidth = (bt.borderWidth || 2) * scale;
+        ctx.strokeStyle = bt.border;
+        ctx.lineJoin = 'round';
+        ctx.stroke(p2d);
       }
-      ctx.closePath();
-      ctx.fillStyle = bt.bg; ctx.fill();
-      ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border; ctx.stroke();
+      ctx.restore();
     } else if (bt.ellipse) {
       // Ellipse with unified single-path tail (PowerPoint-style callout)
       const cx = bx + bw / 2, cy = by + bh / 2;
@@ -3949,40 +4083,46 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                                 dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:true};
                               }}>
                               <svg width={obj.w * scale} height={svgH} className="be-bubble-svg" style={{filter: bt.shadow ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' : 'none'}}>
-                                {bt.plainText && !bt.ellipse ? (
-                                  <rect x="0" y="0" width={obj.w*scale} height={obj.h*scale} rx={(bt.radius||2)*scale} ry={(bt.radius||2)*scale}
-                                    fill={effBg} stroke="none"/>
-                                ) : bt.plainText && bt.ellipse ? (
-                                  <ellipse cx={obj.w*scale/2} cy={obj.h*scale/2} rx={obj.w*scale/2} ry={obj.h*scale/2}
-                                    fill={effBg} stroke="none"/>
-                                ) : bt.spiky ? (() => {
-                                  const cx=obj.w*scale/2, cy=obj.h*scale/2, pts=[];
-                                  for(let s=0;s<24;s++){const a=(Math.PI*s)/12-Math.PI/2,rx=s%2===0?obj.w*scale/2:obj.w*scale/2.6,ry=s%2===0?obj.h*scale/2:obj.h*scale/2.6;pts.push(`${cx+Math.cos(a)*rx},${cy+Math.sin(a)*ry}`);}
-                                  return <polygon points={pts.join(' ')} fill={bt.bg} stroke={bt.border} strokeWidth={bt.borderWidth||2}/>;
-                                })() : bt.ellipse ? (() => {
-                                  const cx = obj.w*scale/2, cy = obj.h*scale/2;
-                                  const rx = obj.w*scale/2 - 2, ry = obj.h*scale/2 - 2;
-                                  const bw = bt.borderWidth || 2;
+                                {(() => {
+                                  const bw2 = bt.borderWidth || 2;
                                   const strokeColor = bt.border==='none'?'transparent':bt.border;
                                   const dash = bt.dashed ? '6 4' : 'none';
-                                  if (bt.tail) {
-                                    // Single unified path — PowerPoint-style callout
-                                    const pathD = buildBubblePath(cx, cy, rx, ry, tailPos, tailLen, tailWid, obj.w*scale, obj.h*scale, 1);
-                                    return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash} strokeLinejoin="round"/>;
+                                  const W = obj.w*scale, H = obj.h*scale;
+                                  if (bt.plainText && !bt.ellipse) {
+                                    return <rect x="0" y="0" width={W} height={H} rx={(bt.radius||2)*scale} ry={(bt.radius||2)*scale} fill={effBg} stroke="none"/>;
+                                  } else if (bt.plainText && bt.ellipse) {
+                                    return <ellipse cx={W/2} cy={H/2} rx={W/2} ry={H/2} fill={effBg} stroke="none"/>;
+                                  } else if (bt.spiky) {
+                                    const pathD = buildSpikyPath(W, H, bt.spikeCount||16, tailPos, tailLen, tailWid, 1);
+                                    return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeLinejoin="round" fillRule="evenodd"/>;
+                                  } else if (bt.cloudShape) {
+                                    const pathD = buildCloudPath(W, H, tailPos, tailLen, tailWid, 1);
+                                    return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeLinejoin="round" fillRule="evenodd"/>;
+                                  } else if (bt.boxShape) {
+                                    const pathD = buildBoxPath(W, H, (bt.radius||10)*scale, tailPos, tailLen, tailWid, 1);
+                                    return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeLinejoin="round"/>;
+                                  } else if (bt.waveShape) {
+                                    const pathD = buildWavePath(W, H, tailPos, tailLen, tailWid, scale);
+                                    return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeLinejoin="round"/>;
+                                  } else if (bt.ellipse) {
+                                    const cx = W/2, cy = H/2, rx = W/2 - 2, ry = H/2 - 2;
+                                    if (bt.tail) {
+                                      const pathD = buildBubblePath(cx, cy, rx, ry, tailPos, tailLen, tailWid, W, H, 1);
+                                      return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash} strokeLinejoin="round"/>;
+                                    } else {
+                                      return <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash}/>;
+                                    }
                                   } else {
-                                    return <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={bt.bg} stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash}/>;
+                                    return (<>
+                                      <rect x="1" y="1" width={W-2} height={H-2} rx={(bt.radius||8)*scale} ry={(bt.radius||8)*scale}
+                                        fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash}/>
+                                      {bt.tail && (() => {
+                                        const tx=W*tailPos, tw=8*tailWid*scale, th=16*tailLen*scale;
+                                        return <polygon points={`${tx-tw},${H-2} ${tx},${H+th} ${tx+tw*1.5},${H-2}`} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2}/>;
+                                      })()}
+                                    </>);
                                   }
-                                })() : (
-                                  <>
-                                    <rect x="1" y="1" width={obj.w*scale-2} height={obj.h*scale-2} rx={(bt.radius||8)*scale} ry={(bt.radius||8)*scale}
-                                      fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth={bt.borderWidth||2}
-                                      strokeDasharray={bt.dashed?'6 4':'none'}/>
-                                    {bt.tail && (() => {
-                                      const tx=obj.w*scale*tailPos, tw=8*tailWid*scale, th=16*tailLen*scale;
-                                      return <polygon points={`${tx-tw},${obj.h*scale-2} ${tx},${obj.h*scale+th} ${tx+tw*1.5},${obj.h*scale-2}`} fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth={bt.borderWidth||2}/>;
-                                    })()}
-                                  </>
-                                )}
+                                })()}
                               </svg>
                               <textarea className="be-bubble-text" value={obj.text} onChange={(e) => updatePageObject(pageIdx, obj.id, {text: e.target.value})}
                                 placeholder={bt.name+'...'} onClick={() => { setCurrentPageIdx(pageIdx); setSelectedObjectId(obj.id); }}
