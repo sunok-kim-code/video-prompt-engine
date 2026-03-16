@@ -582,10 +582,10 @@ async function callGrokImage(prompt, opts={}) {
     n: opts.n || 1,
     response_format: 'b64_json',
   };
-  // aspect ratio 지원 (grok-imagine-image 모델에서 사용 가능)
+  // aspect ratio 지원 — xAI는 size 대신 aspect_ratio 사용 (예: "3:4", "16:9")
+  // grok-2-image 지원 비율: 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 2:1, 1:2 등
   if (opts.aspectRatio) {
-    // Convert from Imagen-style "3:4" to xAI format
-    body.size = opts.aspectRatio === '3:4' ? '768x1024' : opts.aspectRatio === '1:1' ? '1024x1024' : opts.aspectRatio === '16:9' ? '1024x576' : opts.aspectRatio === '9:16' ? '576x1024' : '768x1024';
+    body.aspect_ratio = opts.aspectRatio;
   }
   const maxRetries = 3;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
