@@ -227,6 +227,30 @@ div:hover > .panel-ctrl{opacity:1 !important;}
 .be-sfx-input{flex:1;background:#1a1a2e;color:#eee;border:1px solid #444;border-radius:4px;padding:4px 8px;font-size:12px;}
 .be-sfx-insert-btn{width:100%;padding:8px;border-radius:6px;border:none;background:linear-gradient(135deg,#ff6b6b,#e74c3c);color:#fff;font-weight:700;font-size:13px;cursor:pointer;transition:all .15s;}
 .be-sfx-insert-btn:hover{opacity:0.85;}
+
+/* Prompt Helper Panel */
+.prompt-helper-toggle{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:500;background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;border:none;border-radius:8px 0 0 8px;padding:12px 6px;cursor:pointer;font-size:12px;font-weight:700;writing-mode:vertical-rl;letter-spacing:2px;box-shadow:-2px 0 12px rgba(108,92,231,0.3);transition:all .2s;}
+.prompt-helper-toggle:hover{padding-right:10px;background:linear-gradient(135deg,#5f3dc4,#845ef7);}
+.prompt-helper-panel{position:fixed;right:0;top:0;bottom:0;width:420px;background:#1a1a2e;border-left:2px solid #6c5ce7;z-index:600;display:flex;flex-direction:column;box-shadow:-4px 0 24px rgba(0,0,0,0.4);transition:transform .3s ease;overflow:hidden;}
+.prompt-helper-panel.closed{transform:translateX(100%);}
+.prompt-helper-header{display:flex;align-items:center;justify-content:space-between;padding:16px;background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;flex-shrink:0;}
+.prompt-helper-header h3{margin:0;font-size:15px;font-weight:700;}
+.prompt-helper-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;}
+.prompt-helper-section{display:flex;flex-direction:column;gap:6px;}
+.prompt-helper-label{font-size:12px;font-weight:700;color:#a29bfe;display:flex;align-items:center;gap:6px;}
+.prompt-helper-textarea{width:100%;min-height:80px;background:#2d2d44;color:#e0e0e0;border:1px solid #444;border-radius:8px;padding:10px;font-size:12px;line-height:1.6;font-family:'Noto Sans KR',sans-serif;resize:vertical;outline:none;transition:border-color .2s;}
+.prompt-helper-textarea:focus{border-color:#6c5ce7;}
+.prompt-helper-textarea.result{background:#1e2a1e;border-color:#2d6a2e;color:#a8e6a3;min-height:100px;}
+.prompt-helper-textarea.korean{background:#2a2440;border-color:#6c5ce7;color:#d4c9ff;}
+.prompt-helper-btn{padding:10px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;}
+.prompt-helper-btn.primary{background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;}
+.prompt-helper-btn.primary:hover{opacity:0.9;transform:translateY(-1px);}
+.prompt-helper-btn.primary:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
+.prompt-helper-btn.secondary{background:#2d2d44;color:#a29bfe;border:1px solid #6c5ce7;}
+.prompt-helper-btn.secondary:hover{background:#3d3d54;}
+.prompt-helper-btn.copy{background:#2d6a2e;color:#a8e6a3;}
+.prompt-helper-btn.copy:hover{background:#3d7a3e;}
+.prompt-helper-divider{border:none;border-top:1px solid #333;margin:4px 0;}
 </style>
 </head>
 <body>
@@ -1343,6 +1367,57 @@ function App() {
   // Prompt editor state: {type, id, prompt, title, onSubmit}
   const [promptEditor, setPromptEditor] = useState(null);
   const [editedPrompt, setEditedPrompt] = useState('');
+
+  // Prompt Helper Panel state
+  const [promptHelperOpen, setPromptHelperOpen] = useState(false);
+  const [phOriginalPrompt, setPhOriginalPrompt] = useState('');
+  const [phKoreanTranslation, setPhKoreanTranslation] = useState('');
+  const [phUserChanges, setPhUserChanges] = useState('');
+  const [phResultPrompt, setPhResultPrompt] = useState('');
+  const [phLoading, setPhLoading] = useState(false);
+
+  // Prompt Helper: translate English prompt to Korean
+  const phTranslateToKorean = async () => {
+    if (!phOriginalPrompt.trim()) return;
+    setPhLoading(true);
+    try {
+      const result = await callText(
+        `You are a Korean translator for image generation prompts. Translate the following English image generation prompt into natural Korean so the user can understand what the image will look like. Keep technical terms where needed but make it readable. Return ONLY the Korean translation, nothing else.`,
+        phOriginalPrompt,
+        {maxTokens: 2048}
+      );
+      setPhKoreanTranslation(result.trim());
+    } catch(e) { log('번역 실패: ' + e.message, 'error'); }
+    finally { setPhLoading(false); }
+  };
+
+  // Prompt Helper: generate optimized English prompt from Korean changes
+  const phGenerateOptimized = async () => {
+    if (!phOriginalPrompt.trim() && !phUserChanges.trim()) return;
+    setPhLoading(true);
+    try {
+      const input = `Original English prompt:\n${phOriginalPrompt}\n\n${phKoreanTranslation ? `Korean translation of original:\n${phKoreanTranslation}\n\n` : ''}User's requested changes (in Korean):\n${phUserChanges}`;
+      const result = await callText(
+        `You are an expert image generation prompt engineer for webtoon/manhwa illustration.
+
+Your task: Take the original English image prompt and apply the user's requested changes (written in Korean) to create an optimized English prompt.
+
+Rules:
+1. Output ONLY the final English prompt — no explanations, no markdown, no quotes.
+2. Keep all character appearance details (hair, outfit, face) from the original unless the user explicitly wants to change them.
+3. Apply the user's changes precisely — add, remove, or modify elements as requested.
+4. Use specific, descriptive language optimized for image generation models.
+5. Maintain the manhwa/webtoon art style keywords.
+6. NEVER include any Korean text, sound effects, or onomatopoeia in the output.
+7. NEVER include any text, letters, words, or typography instructions in the output.
+8. Structure the prompt well: [shot/angle], [character details], [pose/expression], [background], [lighting/mood], [art style].`,
+        input,
+        {maxTokens: 2048}
+      );
+      setPhResultPrompt(result.trim());
+    } catch(e) { log('프롬프트 생성 실패: ' + e.message, 'error'); }
+    finally { setPhLoading(false); }
+  };
 
   // Update a character field in analysis (appearance, outfit, refPrompt, etc.)
   const updateAnalysisChar = (charId, field, value) => {
@@ -4387,6 +4462,82 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
             <button className="btn btn-xs" onClick={(e) => {e.stopPropagation(); setLogs([]);}} style={{marginLeft:'auto'}}>초기화</button>
           </div>
           {!logCollapsed && <LogPanel logs={logs} />}
+        </div>
+      </div>
+
+      {/* Prompt Helper Toggle Button */}
+      {!promptHelperOpen && (
+        <button className="prompt-helper-toggle" onClick={() => setPromptHelperOpen(true)}>
+          프롬프트 도우미
+        </button>
+      )}
+
+      {/* Prompt Helper Panel */}
+      <div className={`prompt-helper-panel${promptHelperOpen ? '' : ' closed'}`}>
+        <div className="prompt-helper-header">
+          <h3>프롬프트 수정 도우미</h3>
+          <button onClick={() => setPromptHelperOpen(false)} style={{background:'none',border:'none',color:'#fff',fontSize:20,cursor:'pointer',padding:'0 4px'}}>×</button>
+        </div>
+        <div className="prompt-helper-body">
+          {/* Step 1: Paste original prompt */}
+          <div className="prompt-helper-section">
+            <div className="prompt-helper-label">① 기존 이미지 프롬프트 (영어)</div>
+            <textarea className="prompt-helper-textarea"
+              placeholder="기존 이미지 생성 프롬프트를 여기에 붙여넣으세요..."
+              value={phOriginalPrompt}
+              onChange={e => setPhOriginalPrompt(e.target.value)} />
+            <button className="prompt-helper-btn primary" onClick={phTranslateToKorean} disabled={phLoading || !phOriginalPrompt.trim()}>
+              {phLoading ? '번역 중...' : '한국어로 번역'}
+            </button>
+          </div>
+
+          {/* Step 2: Korean translation */}
+          {phKoreanTranslation && (
+            <div className="prompt-helper-section">
+              <div className="prompt-helper-label">② 한국어 번역 결과</div>
+              <textarea className="prompt-helper-textarea korean" value={phKoreanTranslation} readOnly />
+            </div>
+          )}
+
+          <hr className="prompt-helper-divider" />
+
+          {/* Step 3: User changes */}
+          <div className="prompt-helper-section">
+            <div className="prompt-helper-label">③ 변경하고 싶은 내용 (한국어)</div>
+            <textarea className="prompt-helper-textarea"
+              placeholder="예: 머리색을 금발로 변경, 배경을 카페로, 더 따뜻한 조명으로..."
+              value={phUserChanges}
+              onChange={e => setPhUserChanges(e.target.value)} />
+            <button className="prompt-helper-btn primary" onClick={phGenerateOptimized} disabled={phLoading || (!phOriginalPrompt.trim() && !phUserChanges.trim())}>
+              {phLoading ? '생성 중...' : '최적 프롬프트 생성'}
+            </button>
+          </div>
+
+          {/* Step 4: Result */}
+          {phResultPrompt && (
+            <div className="prompt-helper-section">
+              <div className="prompt-helper-label">④ 최적화된 프롬프트 (영어)</div>
+              <textarea className="prompt-helper-textarea result" value={phResultPrompt}
+                onChange={e => setPhResultPrompt(e.target.value)} />
+              <div style={{display:'flex',gap:8}}>
+                <button className="prompt-helper-btn copy" style={{flex:1}} onClick={() => {
+                  navigator.clipboard.writeText(phResultPrompt);
+                  log('프롬프트가 클립보드에 복사되었습니다', 'success');
+                }}>📋 복사</button>
+                <button className="prompt-helper-btn secondary" style={{flex:1}} onClick={() => {
+                  setPhOriginalPrompt(phResultPrompt);
+                  setPhKoreanTranslation('');
+                  setPhResultPrompt('');
+                  setPhUserChanges('');
+                }}>🔄 이 프롬프트로 다시 수정</button>
+              </div>
+            </div>
+          )}
+
+          <hr className="prompt-helper-divider" />
+          <button className="prompt-helper-btn secondary" style={{width:'100%'}} onClick={() => {
+            setPhOriginalPrompt(''); setPhKoreanTranslation(''); setPhUserChanges(''); setPhResultPrompt('');
+          }}>전체 초기화</button>
         </div>
       </div>
     </div>
