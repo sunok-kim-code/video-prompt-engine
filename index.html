@@ -1000,11 +1000,11 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "role": "protagonist|antagonist|supporting",
       "age": "approximate age",
       "gender": "male|female",
-      "appearance": "detailed physical description in English for image generation. MUST include ALL of: (1) hair color AND specific hairstyle (e.g. wavy shoulder-length auburn hair with side-swept bangs), (2) eye color AND shape, (3) skin tone, (4) height AND build (e.g. tall and slender, petite, muscular), (5) face shape AND distinguishing facial features (e.g. sharp jawline, round cheeks, beauty mark, freckles, scar), (6) any unique visual traits that set this character apart from ALL other characters in the story",
-      "outfit": "default outfit description in English - MUST match existing asset if reusing ID. Be specific about colors, patterns, accessories (e.g. navy blue blazer with gold buttons over white blouse, red plaid skirt, black loafers)",
+      "appearance": "EXTREMELY detailed physical description in English. MUST include ALL of: (1) HAIR: exact color (e.g. jet-black, platinum blonde, chestnut brown), exact length (e.g. chin-length, waist-length, buzz cut), exact style (e.g. straight, wavy, curly, braided), parting (center/side/none), bangs style (e.g. blunt bangs, side-swept fringe, curtain bangs, no bangs), any hair accessories (clips, ribbons, hairbands); (2) EYES: color, shape (e.g. almond, round, narrow, droopy), double/single eyelid; (3) SKIN: tone (e.g. fair porcelain, warm olive, deep brown); (4) BUILD: exact height (tall/average/short), body type (slender/athletic/muscular/curvy); (5) FACE: shape (oval/round/angular/heart), nose, lips, eyebrows, any marks (moles, scars, freckles, dimples); (6) UNIQUE TRAITS that make this character instantly recognizable",
+      "outfit": "EXTREMELY detailed default outfit in English. MUST specify ALL of: (1) TOP: exact garment type (e.g. fitted turtleneck, oversized hoodie, button-up shirt), exact color and material (e.g. cream cashmere, navy cotton); (2) BOTTOM: exact type, color, length (e.g. straight-leg black denim jeans, dark gray pleated midi skirt); (3) OUTER layer if any (jacket, cardigan, coat — type, color, length, open/closed); (4) FOOTWEAR: type and color (e.g. white leather sneakers, black ankle boots); (5) ACCESSORIES: glasses, watch, necklace, earrings, bag, belt — be specific about style and color; (6) OVERALL STYLE IMPRESSION (e.g. casual streetwear, formal business, preppy academic). This outfit MUST remain identical in every panel unless an outfitOverride is specified.",
       "personality": "brief personality in Korean",
       "distinctFeatures": "English list of 3-5 MOST distinctive visual traits that differentiate this character from every other character (e.g. 'only character with red hair, tallest character, always wears round glasses, has a visible scar on left cheek')",
-      "refPrompt": "detailed English prompt for generating a DISTINCTIVE character reference sheet. MUST follow this structure: 'Full body character reference sheet, front-facing T-pose, clean white background. [CHARACTER NAME] is a [age] [gender] [height/build]. Face: [face shape, specific facial features, eye color+shape, nose, lips]. Hair: [exact color, length, style, bangs]. Outfit: [complete outfit with colors and details]. Unique traits: [features that make this character visually distinct from others]. Maintain strong visual identity.'",
+      "refPrompt": "EXTREMELY detailed English prompt for generating a DISTINCTIVE character reference sheet. MUST follow this structure: 'Full body character reference sheet, front-facing T-pose, clean white background. [CHARACTER NAME] is a [age] [gender] [height/build]. Face: [face shape, specific jawline/cheekbones/chin, eyebrow shape and thickness, eye color+shape+eyelid type, nose shape, lip shape and fullness]. Hair: [exact color with shade, exact length in descriptive terms, exact style — straight/wavy/curly, parting direction, bangs type and length, any layers or volume details, any hair accessories]. Outfit: [complete top garment with color+material, bottom with color+length+style, outer layer if any, footwear with color+style, every accessory with color and style]. Unique traits: [features making this character visually distinct from all others]. This character must be INSTANTLY recognizable and look IDENTICAL across all panels. Maintain strong visual identity.'",
       "isExisting": false
     }
   ],
@@ -1061,12 +1061,13 @@ CRITICAL — CHARACTER VISUAL DIFFERENTIATION:
 IMPORTANT: This is a VERTICAL SCROLL webtoon.
 
 CRITICAL VISUAL CONSISTENCY RULES:
-1. Each character MUST wear their DEFAULT OUTFIT in every panel unless an outfitOverride is specified for that plot beat.
-2. Character hair style, hair color, eye color, and physical features MUST remain identical across ALL panels.
-3. Props that appear in multiple panels must look identical each time.
-4. Background locations must be visually consistent when revisited.
-5. In imagePrompt, ALWAYS include the character's full appearance + current outfit details. Never use vague descriptions.
-6. If a plot beat has outfitOverrides for a character, use the override outfit ONLY for panels in that beat. Revert to default outfit in subsequent panels unless another override exists.
+1. Each character MUST wear their EXACT DEFAULT OUTFIT in every panel unless an outfitOverride is specified for that plot beat. Copy the outfit description VERBATIM from the character data.
+2. Character HAIR (color, length, style, parting, bangs) MUST remain IDENTICAL across ALL panels. Copy the hair description VERBATIM from the character's appearance field.
+3. Character physical features (eye color/shape, face shape, skin tone, build) MUST remain identical.
+4. Props that appear in multiple panels must look identical each time.
+5. Background locations must be visually consistent when revisited.
+6. In imagePrompt, you MUST copy-paste the character's hair details and outfit details from the character data — do NOT paraphrase, summarize, or simplify them. The image model needs exact same wording every time to produce consistent visuals.
+7. If a plot beat has outfitOverrides for a character, use the override outfit ONLY for panels in that beat. Revert to default outfit in subsequent panels unless another override exists.
 
 Return ONLY a valid JSON array (no markdown):
 [
@@ -1083,7 +1084,7 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens in this panel",
-    "imagePrompt": "Detailed English prompt for image generation: [shot size], [camera angle], [character descriptions WITH FULL appearance AND current outfit details], [background/environment], [props in scene], [lighting and atmosphere], manhwa/webtoon style, detailed illustration, vibrant colors. IMPORTANT: describe exact same outfit as character reference unless overridden. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER 1 NAME]: [COPY-PASTE exact hair description from appearance — color, length, style, parting, bangs], [COPY-PASTE exact outfit from outfit field — top garment+color+material, bottom+color, outer layer, footwear+color, accessories], [pose], [expression]. [REPEAT for each character]. Background: [environment]. Lighting: [mood-appropriate]. manhwa/webtoon style, detailed illustration, vibrant colors. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography."
   }
 ]
 
@@ -1127,11 +1128,11 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "role": "protagonist|antagonist|supporting",
       "age": "approximate age",
       "gender": "male|female",
-      "appearance": "detailed physical description in English for image generation. MUST include ALL of: (1) hair color AND specific hairstyle, (2) eye color AND shape, (3) skin tone, (4) height AND build, (5) face shape AND distinguishing facial features, (6) any unique visual traits",
-      "outfit": "default outfit description in English - MUST match existing asset if reusing ID",
+      "appearance": "EXTREMELY detailed physical description in English. MUST include ALL of: (1) HAIR: exact color+shade, exact length, exact style (straight/wavy/curly), parting, bangs type, hair accessories; (2) EYES: color, shape, eyelid type; (3) SKIN: tone; (4) BUILD: height, body type; (5) FACE: shape, jawline, eyebrows, nose, lips, any marks/moles/scars; (6) UNIQUE TRAITS for instant recognition",
+      "outfit": "EXTREMELY detailed default outfit in English. MUST specify: TOP (garment type, color, material), BOTTOM (type, color, length), OUTER layer if any, FOOTWEAR (type, color), ACCESSORIES (glasses, watch, jewelry, bag — each with style and color), OVERALL STYLE. Must remain identical across all panels unless outfitOverride specified.",
       "personality": "brief personality in Korean",
       "distinctFeatures": "English list of 3-5 MOST distinctive visual traits",
-      "refPrompt": "detailed English prompt for generating a DISTINCTIVE character reference sheet. Structure: 'Full body character reference sheet, front-facing T-pose, clean white background. [CHARACTER NAME] is a [age] [gender] [height/build]. Face: [...]. Hair: [...]. Outfit: [...]. Unique traits: [...]. Maintain strong visual identity.'",
+      "refPrompt": "EXTREMELY detailed English prompt for character reference sheet. Structure: 'Full body character reference sheet, front-facing T-pose, clean white background. [NAME] is a [age] [gender] [height/build]. Face: [shape, jawline, eyebrows, eye color+shape+eyelid, nose, lips]. Hair: [exact color+shade, length, style, parting, bangs type, accessories]. Outfit: [top with color+material, bottom with color+style, outer layer, footwear with color, every accessory]. Unique traits: [...]. Must look IDENTICAL across all panels.'",
       "isExisting": false
     }
   ],
@@ -1193,12 +1194,13 @@ ABSOLUTE RULE — STRICT 1:1 SCENE-TO-PANEL MAPPING:
 - VERIFY before returning: count your panels and count the plotBeats. They MUST be equal.
 
 CRITICAL VISUAL CONSISTENCY RULES:
-1. Each character MUST wear their DEFAULT OUTFIT unless an outfitOverride is specified.
-2. Character hair, eye color, and physical features MUST remain identical across ALL panels.
-3. Props must look identical when reappearing.
-4. Background locations must be visually consistent when revisited.
-5. In imagePrompt, ALWAYS include full character appearance + current outfit details.
-6. If a plot beat has outfitOverrides, use override ONLY for that beat's panels.
+1. Each character MUST wear their EXACT DEFAULT OUTFIT unless an outfitOverride is specified. Copy outfit description VERBATIM from character data.
+2. Character HAIR (color, length, style, parting, bangs) MUST remain IDENTICAL across ALL panels. Copy hair description VERBATIM from appearance field.
+3. Character physical features (eye color/shape, face shape, skin tone, build) MUST remain identical.
+4. Props must look identical when reappearing.
+5. Background locations must be visually consistent when revisited.
+6. In imagePrompt, you MUST copy-paste the character's hair details and outfit details from the character data — do NOT paraphrase or simplify. The image model needs EXACT SAME WORDING every time.
+7. If a plot beat has outfitOverrides, use override ONLY for that beat's panels. Revert to default in subsequent panels.
 
 Return ONLY a valid JSON array (no markdown):
 [
@@ -1215,7 +1217,7 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens",
-    "imagePrompt": "Detailed English prompt: [shot size], [camera angle], [character with FULL appearance AND outfit], [background], [props], [lighting], manhwa/webtoon style, detailed illustration, vibrant colors. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER NAME]: [COPY-PASTE exact hair from appearance — color, length, style, parting, bangs], [COPY-PASTE exact outfit — top+color+material, bottom+color, outer layer, footwear+color, accessories], [pose], [expression]. Background: [environment]. Lighting: [mood]. manhwa/webtoon style, detailed illustration, vibrant colors. NEVER include any text, sound effects, or typography."
   }
 ]
 
@@ -1225,7 +1227,7 @@ Rules:
 - Use close-ups for emotional moments and dialogue
 - Use wide shots for action and establishing scenes
 - EVERY plotBeat must have at least 1 panel — verify this before returning
-- Each imagePrompt must be self-contained with full character appearance
+- Each imagePrompt must be self-contained — COPY character hair+outfit descriptions verbatim from character data
 - Include prop descriptions when they appear
 - ALL dialogue from original scenes must be present in panels
 - CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, 부르르릉, 철컥, etc.), or onomatopoeia — not in Korean, not translated to English. The generated image must be purely visual with NO text or typography of any kind. Do NOT describe sounds visually (e.g., "engine roaring", "tires screeching"). Text and sound effects will be added separately as overlays in the editor.`
@@ -2297,7 +2299,7 @@ function App() {
           if (charDescs.length > 0) {
             visualIdCards += '--- CHARACTERS ---\n';
             for (const desc of charDescs) {
-              visualIdCards += desc + '\n→ RULE: This character must look EXACTLY the same in every panel — same face shape, same hairstyle & color, same eye shape & color, same outfit & colors, same body proportions. A reader must instantly recognize this character.\n\n';
+              visualIdCards += desc + '\n→ RULE: This character must look EXACTLY the same in every panel. HAIR must be identical: same color, same length, same style (straight/wavy/curly), same parting, same bangs. OUTFIT must be identical: same garments, same colors, same accessories, same footwear. FACE must be identical: same shape, same features. A reader must instantly recognize this character.\n\n';
             }
           }
           if (propDescs.length > 0) {
