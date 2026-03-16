@@ -1356,11 +1356,10 @@ function App() {
   const BUBBLE_TYPES = {
     speech: {name:'말풍선', tail:true, bg:'#fff', border:'#222', borderWidth:3, ellipse:true, fontWeight:500, shadow:true},
     thought: {name:'생각', tail:true, bg:'#fff', border:'#999', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, shadow:true},
-    shout:  {name:'외침', tail:true, bg:'#fff', border:'#222', borderWidth:3, fontWeight:800, spiky:true, shadow:true},
     narration:{name:'나레이션', tail:false, bg:'rgba(0,0,0,0.75)', border:'none', borderWidth:0, radius:4, fontWeight:500, color:'#fff', shadow:true},
     whisper:{name:'속삭임', tail:true, bg:'#f0f0f0', border:'#aaa', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, color:'#555', shadow:true},
-    scream:{name:'절규', tail:false, bg:'#ff4444', border:'#990000', borderWidth:3, radius:4, fontWeight:900, color:'#fff', spiky:true, shadow:true},
-    text:{name:'텍스트', tail:false, bg:'rgba(255,255,255,0.95)', border:'none', borderWidth:0, radius:0, fontWeight:500, color:'#111', shadow:false, plainText:true},
+    text:{name:'텍스트', tail:false, bg:'#ffffff', border:'none', borderWidth:0, radius:2, fontWeight:500, color:'#111', shadow:false, plainText:true},
+    textCircle:{name:'텍스트원형', tail:false, bg:'#ffffff', border:'none', borderWidth:0, ellipse:true, fontWeight:500, color:'#111', shadow:false, plainText:true},
   };
   const FONT_LIST = [
     {value:"'Noto Sans KR',sans-serif", label:'기본 (Noto Sans)'},
@@ -1564,9 +1563,13 @@ function App() {
     }
 
     // plainText type: simple rect background, no border
-    if (bt.plainText) {
+    if (bt.plainText && !bt.ellipse) {
       ctx.fillStyle = bt.bg;
       ctx.fillRect(bx, by, bw, bh);
+    } else if (bt.plainText && bt.ellipse) {
+      ctx.beginPath();
+      ctx.ellipse(bx + bw / 2, by + bh / 2, bw / 2, bh / 2, 0, 0, Math.PI * 2);
+      ctx.fillStyle = bt.bg; ctx.fill();
     } else if (bt.spiky) {
       ctx.beginPath();
       const cx = bx + bw / 2, cy = by + bh / 2;
@@ -3138,8 +3141,11 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                                 dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y};
                               }}>
                               <svg width={obj.w * scale} height={svgH} className="be-bubble-svg" style={{filter: bt.shadow ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' : 'none'}}>
-                                {bt.plainText ? (
-                                  <rect x="0" y="0" width={obj.w*scale} height={obj.h*scale} rx="3" ry="3"
+                                {bt.plainText && !bt.ellipse ? (
+                                  <rect x="0" y="0" width={obj.w*scale} height={obj.h*scale} rx={(bt.radius||2)*scale} ry={(bt.radius||2)*scale}
+                                    fill={bt.bg} stroke="none"/>
+                                ) : bt.plainText && bt.ellipse ? (
+                                  <ellipse cx={obj.w*scale/2} cy={obj.h*scale/2} rx={obj.w*scale/2} ry={obj.h*scale/2}
                                     fill={bt.bg} stroke="none"/>
                                 ) : bt.spiky ? (() => {
                                   const cx=obj.w*scale/2, cy=obj.h*scale/2, pts=[];
