@@ -2618,7 +2618,6 @@ Rules:
     if (!prompt) return prompt;
     let p = prompt;
     // Remove common Korean SFX patterns (quoted or standalone): 쾅, 끼익, 부릉, 와장창, 쿵, 탁, 펑, 빠직, etc.
-    // Pattern: Korean onomatopoeia often in quotes or with exclamation marks
     p = p.replace(/['""'][가-힣]{1,6}!?['""']/g, '');
     // Remove standalone Korean SFX words with ! (e.g., 쾅!, 끼익!, 부르르릉!)
     p = p.replace(/(?:^|\s)[가-힣]{1,8}!(?:\s|$|,|\.)/g, ' ');
@@ -2629,6 +2628,79 @@ Rules:
     // Remove "onomatopoeia" mentions
     p = p.replace(/onomatopoeia\s*[:.]?\s*['""']?[^,.'""'\n]*['""']?/gi, '');
     // Clean up extra spaces
+    p = p.replace(/\s{2,}/g, ' ').trim();
+    return p;
+  };
+
+  // Grok-specific prompt sanitization — xAI has stricter content moderation
+  // Rewrites romantic/intimate BL content into neutral artistic descriptions
+  const sanitizeForGrok = (prompt) => {
+    if (!prompt) return prompt;
+    let p = prompt;
+    // Remove or neutralize romantic/intimate keywords
+    const intimatePatterns = [
+      /\bkiss(?:ing|ed|es)?\b/gi,
+      /\bembrac(?:e|ing|ed)\b/gi,
+      /\bhug(?:ging|ged|s)?\b/gi,
+      /\bcuddl(?:e|ing|ed)\b/gi,
+      /\bcaress(?:ing|ed|es)?\b/gi,
+      /\bintimate(?:ly)?\b/gi,
+      /\bromantic(?:ally)?\b/gi,
+      /\bsensual(?:ly)?\b/gi,
+      /\bseduct(?:ive|ion|ively)\b/gi,
+      /\bpassionat(?:e|ely)\b/gi,
+      /\blust(?:ful|fully)?\b/gi,
+      /\berotic(?:ally)?\b/gi,
+      /\bnaked\b/gi,
+      /\bnude\b/gi,
+      /\bshirtless\b/gi,
+      /\bundress(?:ing|ed)?\b/gi,
+      /\bbedroom\s+scene\b/gi,
+      /\bboys\s*love\b/gi,
+      /\bBL\b/g,
+      /\byaoi\b/gi,
+      /\bshounen\s*ai\b/gi,
+    ];
+    // Replace intimate actions with neutral alternatives
+    const replacements = [
+      [/\bkiss(?:ing|ed|es)?\s+(?:on\s+)?(?:the\s+)?(?:lips?|mouth|cheek|neck|forehead)\b/gi, 'looking at each other closely'],
+      [/\bkiss(?:ing|ed|es)?\b/gi, 'facing each other closely'],
+      [/\bembrac(?:e|ing|ed)\s+(?:each\s+other|him|them|tightly|warmly)\b/gi, 'standing close together'],
+      [/\bembrac(?:e|ing|ed)\b/gi, 'standing close'],
+      [/\bhug(?:ging|ged|s)?\s+(?:each\s+other|him|them|tightly|warmly)\b/gi, 'standing side by side'],
+      [/\bhug(?:ging|ged|s)?\b/gi, 'standing together'],
+      [/\bcuddl(?:e|ing|ed)\b/gi, 'sitting together'],
+      [/\bcaress(?:ing|ed|es)?\s+(?:his|their|the)\s+(?:face|cheek|hair|hand)\b/gi, 'reaching toward'],
+      [/\bcaress(?:ing|ed|es)?\b/gi, 'gentle gesture'],
+      [/\bintimate(?:ly)?\b/gi, 'emotional'],
+      [/\bromantic(?:ally)?\b/gi, 'dramatic'],
+      [/\bsensual(?:ly)?\b/gi, 'graceful'],
+      [/\bseduct(?:ive|ion|ively)\b/gi, 'charming'],
+      [/\bpassionat(?:e|ely)\b/gi, 'intense'],
+      [/\blust(?:ful|fully)?\b/gi, 'intense'],
+      [/\berotic(?:ally)?\b/gi, 'artistic'],
+      [/\bnaked\b/gi, 'in casual attire'],
+      [/\bnude\b/gi, 'in casual attire'],
+      [/\bshirtless\b/gi, 'in a fitted top'],
+      [/\bundress(?:ing|ed)?\b/gi, 'adjusting clothes'],
+      [/\bbedroom\s+scene\b/gi, 'indoor scene'],
+      [/\bboys\s*love\b/gi, 'manga style'],
+      [/\bBL\b/g, 'manga'],
+      [/\byaoi\b/gi, 'manga'],
+      [/\bshounen\s*ai\b/gi, 'manga'],
+    ];
+    for (const [pattern, replacement] of replacements) {
+      p = p.replace(pattern, replacement);
+    }
+    // Remove Korean romantic terms
+    p = p.replace(/키스/g, '가까이 마주보기');
+    p = p.replace(/포옹/g, '나란히 서기');
+    p = p.replace(/껴안/g, '가까이 서');
+    p = p.replace(/애무/g, '손짓');
+    p = p.replace(/관능/g, '감성');
+    p = p.replace(/야한/g, '드라마틱한');
+    p = p.replace(/섹시/g, '매력적인');
+    // Clean up
     p = p.replace(/\s{2,}/g, ' ').trim();
     return p;
   };
@@ -2756,15 +2828,53 @@ Rules:
         }
       }
       const noTextDirective = '\nIMPORTANT: Do NOT render any text, letters, words, sound effects, or typography in the image. Purely visual only.';
-      const cleanedPrompt = sanitizeImagePrompt(prompt);
-      const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + noTextDirective;
+      // Apply both general + Grok-specific sanitization (stricter content moderation)
+      let cleanedPrompt = sanitizeImagePrompt(prompt);
+      cleanedPrompt = sanitizeForGrok(cleanedPrompt);
+      // Also sanitize Visual ID Cards for Grok
+      const safeIdCards = sanitizeForGrok(visualIdCards);
+      const grokPrompt = stylePrefix + cleanedPrompt + safeIdCards + noTextDirective;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
       if (charCount > 0) {
         log(`Grok Image 사용 (${curStyleName} + 에셋 ID카드: 캐릭터 ${charCount}명)`, 'info');
       } else {
         log(`Grok Image 사용 (${curStyleName} 스타일 적용)`, 'info');
       }
-      return await callGrokImage(grokPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+      try {
+        return await callGrokImage(grokPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+      } catch (grokErr) {
+        const errMsg = grokErr.message || '';
+        if (errMsg.includes('content moderation') || errMsg.includes('rejected')) {
+          log('⚠️ Grok 콘텐츠 필터 거부 — 대체 모델로 자동 전환 시도 중...', 'warn');
+          // Fallback: try Imagen 4 if available, then fal.ai
+          const hasVertex = !!(localStorage.getItem('VERTEX_PROJECT_ID'));
+          if (hasVertex) {
+            log('Imagen 4로 대체 생성 중...', 'info');
+            const fallbackPrompt = stylePrefix + cleanedPrompt + safeIdCards + noTextDirective;
+            try {
+              const fallbackResult = await callImagen(fallbackPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+              log('✅ Imagen 4 대체 생성 성공', 'success');
+              return fallbackResult;
+            } catch (img4Err) {
+              log('Imagen 4 대체도 실패: ' + (img4Err.message||'').substring(0,100), 'warn');
+            }
+          }
+          if (hasFalKey()) {
+            log('fal.ai로 대체 생성 중...', 'info');
+            try {
+              const falPrompt = stylePrefix + cleanedPrompt + (opts.assetDescriptions?.length > 0 ? '\n' + opts.assetDescriptions.join('\n') : '');
+              const falResult = await callFalAI(falPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+              log('✅ fal.ai 대체 생성 성공', 'success');
+              return falResult;
+            } catch (falErr) {
+              log('fal.ai 대체도 실패: ' + (falErr.message||'').substring(0,100), 'warn');
+            }
+          }
+          // All fallbacks failed
+          throw new Error('Grok 콘텐츠 필터 거부 (대체 모델도 실패). 프롬프트를 수정하거나 다른 이미지 모델을 선택해주세요.');
+        }
+        throw grokErr; // Re-throw non-moderation errors
+      }
     }
 
     // ========== Stable Diffusion ==========
