@@ -574,7 +574,7 @@ async function callNanoBanana(prompt, opts={}) {
 // ============================================================
 async function callGrokImage(prompt, opts={}) {
   const apiKey = getXaiKey();
-  const model = opts.model || 'grok-2-image';
+  const model = opts.model || 'grok-imagine-image';
   const url = 'https://api.x.ai/v1/images/generations';
   const body = {
     model: model,
