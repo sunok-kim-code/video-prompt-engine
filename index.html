@@ -1086,7 +1086,7 @@ Rules:
 - Each imagePrompt must be self-contained (include full character appearance details, EXACT outfit, not just names)
 - Include prop descriptions in imagePrompt when props appear in scene
 - Dialogue should match the original story text
-- CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, etc.), or onomatopoeia. The generated image must be purely visual with NO text or typography of any kind. Text and sound effects will be added separately as overlays in the editor.`,
+- CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, 부르르릉, 철컥, etc.), or onomatopoeia — not in Korean, not translated to English. The generated image must be purely visual with NO text or typography of any kind. Do NOT describe sounds visually (e.g., "engine roaring", "tires screeching"). Text and sound effects will be added separately as overlays in the editor.`,
 
   ANALYZE_SCENES: `You are a webtoon scene analyst. The user provides NUMBERED scene descriptions (e.g. "1. ...", "2. ...", "3. ..."). Your job is to parse each scene into a plotBeat and extract characters, backgrounds, and props.
 
@@ -1176,7 +1176,7 @@ ABSOLUTE RULE — STRICT 1:1 SCENE-TO-PANEL MAPPING:
 - Panel 1 corresponds to plotBeat 1, Panel 2 to plotBeat 2, etc. panelNumber and plotBeat must match sequentially.
 - Each panel must capture the ENTIRE scene from its plotBeat in a single image: all characters, actions, dialogue, expressions.
 - ALL dialogue from the plotBeat summary MUST appear in the panel's "dialogue" array field. Include every speaker's line.
-- Sound effects mentioned in the plotBeat (끼익, 쾅, 부릉, etc.) should appear in the panel "description" field only, but NEVER in imagePrompt. The generated image must contain NO text, letters, or typography.
+- Sound effects / onomatopoeia mentioned in the plotBeat (끼익, 쾅, 부릉, 부르르릉, 쿵, 와장창, 펑, 빠직, 탁, 철컥, etc.) should appear in the panel "description" field only, but ABSOLUTELY NEVER in imagePrompt. The imagePrompt must describe ONLY visual elements (characters, poses, expressions, backgrounds, lighting). Do NOT translate sound effects into English either — just omit them entirely from imagePrompt.
 - The imagePrompt must describe the MOST IMPACTFUL MOMENT of the scene — choose the best camera angle and composition to capture all characters and actions in one frame.
 - If the scene has multiple speakers, show them together in the same panel with appropriate expressions.
 - VERIFY before returning: count your panels and count the plotBeats. They MUST be equal.
@@ -1217,7 +1217,7 @@ Rules:
 - Each imagePrompt must be self-contained with full character appearance
 - Include prop descriptions when they appear
 - ALL dialogue from original scenes must be present in panels
-- CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, etc.), or onomatopoeia. The generated image must be purely visual with NO text or typography of any kind. Text and sound effects will be added separately as overlays in the editor.`
+- CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, 부르르릉, 철컥, etc.), or onomatopoeia — not in Korean, not translated to English. The generated image must be purely visual with NO text or typography of any kind. Do NOT describe sounds visually (e.g., "engine roaring", "tires screeching"). Text and sound effects will be added separately as overlays in the editor.`
 };
 
 // ============================================================
@@ -2131,15 +2131,38 @@ function App() {
     return (ART_STYLES[artStyle] || ART_STYLES.naverWebtoon).prefix;
   }, [artStyle, customStylePrompt]);
 
+  // Programmatically strip Korean onomatopoeia / sound effects from image prompts
+  const sanitizeImagePrompt = (prompt) => {
+    if (!prompt) return prompt;
+    let p = prompt;
+    // Remove common Korean SFX patterns (quoted or standalone): 쾅, 끼익, 부릉, 와장창, 쿵, 탁, 펑, 빠직, etc.
+    // Pattern: Korean onomatopoeia often in quotes or with exclamation marks
+    p = p.replace(/['""'][가-힣]{1,6}!?['""']/g, '');
+    // Remove standalone Korean SFX words with ! (e.g., 쾅!, 끼익!, 부르르릉!)
+    p = p.replace(/(?:^|\s)[가-힣]{1,8}!(?:\s|$|,|\.)/g, ' ');
+    // Remove explicit sound effect phrases in English
+    p = p.replace(/sound\s*(?:effect|fx)s?\s*(?:like|such as|:)?\s*['""']?[^,.'""'\n]*['""']?/gi, '');
+    // Remove "with sound effect(s)" phrases
+    p = p.replace(/with\s+(?:the\s+)?sound\s+(?:effect|fx)s?\s+(?:of\s+)?['""']?[^,.'""'\n]*['""']?/gi, '');
+    // Remove "onomatopoeia" mentions
+    p = p.replace(/onomatopoeia\s*[:.]?\s*['""']?[^,.'""'\n]*['""']?/gi, '');
+    // Clean up extra spaces
+    p = p.replace(/\s{2,}/g, ' ').trim();
+    return p;
+  };
+
   const callImage = useCallback(async (prompt, opts={}) => {
     const stylePrefix = getStylePrefix();
     const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.naverWebtoon).name;
+
+    // Strip Korean onomatopoeia / sound effects from prompt before sending to image model
+    const cleanPrompt = sanitizeImagePrompt(prompt);
 
     // Build asset-enriched prompt: always append asset descriptions to ensure consistency
     const assetSuffix = opts.assetDescriptions?.length > 0
       ? '\n\nVISUAL CONSISTENCY - Use these EXACT asset descriptions:\n' + opts.assetDescriptions.join('\n')
       : '';
-    const basePrompt = stylePrefix + prompt + assetSuffix;
+    const basePrompt = stylePrefix + cleanPrompt + assetSuffix;
     const refs = opts.referenceImages || [];
 
     // ========== Gemini ==========
@@ -2283,8 +2306,9 @@ function App() {
       }
 
       // Build the final Imagen4 prompt: style + scene + visual ID cards + no-text directive
-      const noTextDirective = '\nIMPORTANT: Do NOT render any text, letters, words, sound effects, onomatopoeia, speech bubbles, or typography anywhere in the image. The image must be purely visual.';
-      const imagen4Prompt = stylePrefix + prompt + visualIdCards + noTextDirective;
+      const noTextDirective = '\nIMPORTANT: Do NOT render any text, letters, words, sound effects, onomatopoeia, speech bubbles, or typography anywhere in the image. The image must be purely visual. No Korean text or characters.';
+      const cleanedPrompt = sanitizeImagePrompt(prompt);
+      const imagen4Prompt = stylePrefix + cleanedPrompt + visualIdCards + noTextDirective;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
       const propCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Prop')).length;
       const bgCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Background')).length;
