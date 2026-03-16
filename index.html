@@ -1008,8 +1008,11 @@ const PROMPTS = {
   ANALYZE_STORY: `You are a webtoon story analyst. Analyze this Korean story/novel text and extract structured data for webtoon production.
 
 CRITICAL RULES FOR SHARED ASSETS:
-- If a list of EXISTING project assets is provided, you MUST reuse those asset IDs for characters/backgrounds/props that match.
-- Only create NEW IDs for truly new characters/backgrounds/props not in the existing assets.
+- If a list of EXISTING project assets is provided, you MUST reuse those EXACT asset IDs (e.g. "char_1", "bg_2") for characters/backgrounds/props that match BY NAME.
+- Match by CHARACTER NAME: if existing assets have "char_1: 민수", and the new story mentions "민수", you MUST use id "char_1" — do NOT create "char_2" or "char_3" for the same person.
+- Match by BACKGROUND NAME: if existing assets have "bg_1: 민수의 방", and the new story mentions the same location, you MUST use id "bg_1".
+- Only create NEW IDs (with numbers higher than any existing ID) for truly new characters/backgrounds/props that do NOT exist in existing assets.
+- For existing characters: COPY their appearance and outfit descriptions VERBATIM from the existing assets. Do NOT rewrite, paraphrase, or simplify them.
 - Character appearance, outfit, and visual descriptions must stay IDENTICAL to existing assets unless the story EXPLICITLY describes a change.
 - If a character's outfit changes in this episode (e.g., "그녀는 빨간 드레스를 입고 나타났다"), note it in outfitOverride. Otherwise, outfit stays as the existing asset's default.
 
@@ -1127,8 +1130,11 @@ Rules:
   ANALYZE_SCENES: `You are a webtoon scene analyst. The user provides NUMBERED scene descriptions (e.g. "1. ...", "2. ...", "3. ..."). Your job is to parse each scene into a plotBeat and extract characters, backgrounds, and props.
 
 CRITICAL RULES FOR SHARED ASSETS:
-- If a list of EXISTING project assets is provided, you MUST reuse those asset IDs for characters/backgrounds/props that match.
-- Only create NEW IDs for truly new characters/backgrounds/props not in the existing assets.
+- If a list of EXISTING project assets is provided, you MUST reuse those EXACT asset IDs (e.g. "char_1", "bg_2") for characters/backgrounds/props that match BY NAME.
+- Match by CHARACTER NAME: if existing assets have "char_1: 민수", and the new story mentions "민수", you MUST use id "char_1" — do NOT create "char_2" or "char_3" for the same person.
+- Match by BACKGROUND NAME: if existing assets have "bg_1: 민수의 방", and the new story mentions the same location, you MUST use id "bg_1".
+- Only create NEW IDs (with numbers higher than any existing ID) for truly new characters/backgrounds/props that do NOT exist in existing assets.
+- For existing characters: COPY their appearance and outfit descriptions VERBATIM from the existing assets. Do NOT rewrite, paraphrase, or simplify them.
 - Character appearance, outfit, and visual descriptions must stay IDENTICAL to existing assets unless the story EXPLICITLY describes a change.
 
 ABSOLUTE RULE — 1:1 SCENE-TO-PLOTBEAT MAPPING:
@@ -2743,15 +2749,22 @@ Rules:
     const existingBgs = Object.values(sa.backgrounds);
     const existingProps = Object.values(sa.props);
     if (existingChars.length > 0 || existingBgs.length > 0 || existingProps.length > 0) {
-      existingAssetsContext = '\n\n--- EXISTING PROJECT ASSETS (reuse these IDs if the same character/background/prop appears) ---\n';
+      existingAssetsContext = '\n\n--- EXISTING PROJECT ASSETS (YOU MUST REUSE THESE EXACT IDs FOR MATCHING CHARACTERS/BACKGROUNDS/PROPS) ---\n';
+      existingAssetsContext += 'IMPORTANT: Match existing assets BY NAME. If a character named "민수" exists as "char_1", ALL references to "민수" in the new story MUST use id "char_1". Do NOT create duplicate IDs.\n\n';
       if (existingChars.length > 0) {
-        existingAssetsContext += 'Characters:\n' + existingChars.map(c => `  ${c.assetId}: ${c.name} (${c.role}) - appearance: ${c.appearance} - default outfit: ${c.outfit}`).join('\n') + '\n';
+        existingAssetsContext += 'EXISTING Characters (MUST reuse these IDs if same character appears):\n' + existingChars.map(c =>
+          `  ID="${c.assetId}" NAME="${c.name}" (${c.role}) — appearance: ${c.appearance} — outfit: ${c.outfit}`
+        ).join('\n') + '\n\n';
       }
       if (existingBgs.length > 0) {
-        existingAssetsContext += 'Backgrounds:\n' + existingBgs.map(b => `  ${b.assetId}: ${b.name} - ${b.description}`).join('\n') + '\n';
+        existingAssetsContext += 'EXISTING Backgrounds (MUST reuse these IDs if same location appears):\n' + existingBgs.map(b =>
+          `  ID="${b.assetId}" NAME="${b.name}" — ${b.description}`
+        ).join('\n') + '\n\n';
       }
       if (existingProps.length > 0) {
-        existingAssetsContext += 'Props:\n' + existingProps.map(p => `  ${p.assetId}: ${p.name} - ${p.description}`).join('\n') + '\n';
+        existingAssetsContext += 'EXISTING Props (MUST reuse these IDs if same prop appears):\n' + existingProps.map(p =>
+          `  ID="${p.assetId}" NAME="${p.name}" — ${p.description}`
+        ).join('\n') + '\n\n';
       }
       existingAssetsContext += '--- END EXISTING ASSETS ---\n';
     }
@@ -2778,11 +2791,94 @@ Rules:
         log(`재시도 중...`, 'info');
       }
     }
-    // Mark existing assets
-    if (parsed.characters) parsed.characters.forEach(c => { if (sa.characters[c.id]) c.isExisting = true; });
-    if (parsed.backgrounds) parsed.backgrounds.forEach(b => { if (sa.backgrounds[b.id]) b.isExisting = true; });
-    if (parsed.props) parsed.props?.forEach(p => { if (sa.props[p.id]) p.isExisting = true; });
-    log(`분석 완료: 캐릭터 ${parsed.characters?.length || 0}명 (기존 ${parsed.characters?.filter(c=>c.isExisting).length || 0}), 배경 ${parsed.backgrounds?.length || 0}개, 소품 ${parsed.props?.length || 0}개, 플롯 ${parsed.plotBeats?.length || 0}개`, 'success');
+    // Auto-correct: match by name when AI generated wrong IDs for existing characters
+    const saCharsByName = {};
+    Object.values(sa.characters).forEach(c => { if (c.name) saCharsByName[c.name.trim()] = c; });
+    const saBgsByName = {};
+    Object.values(sa.backgrounds).forEach(b => { if (b.name) saBgsByName[b.name.trim()] = b; });
+    const saPropsByName = {};
+    Object.values(sa.props).forEach(p => { if (p.name) saPropsByName[p.name.trim()] = p; });
+
+    if (parsed.characters) {
+      const idRemapChar = {}; // oldId -> correctId
+      parsed.characters.forEach(c => {
+        // Already matched by ID
+        if (sa.characters[c.id]) { c.isExisting = true; return; }
+        // Try match by name
+        const match = saCharsByName[c.name?.trim()];
+        if (match && match.assetId !== c.id) {
+          const oldId = c.id;
+          idRemapChar[oldId] = match.assetId;
+          c.id = match.assetId;
+          c.isExisting = true;
+          // Preserve existing appearance/outfit to maintain visual consistency
+          c.appearance = match.appearance || c.appearance;
+          c.outfit = match.outfit || c.outfit;
+          c.refPrompt = match.refPrompt || c.refPrompt;
+          c.distinctFeatures = match.distinctFeatures || c.distinctFeatures;
+          log(`캐릭터 ID 보정: "${c.name}" ${oldId} → ${match.assetId} (이름 매칭)`, 'info');
+        }
+      });
+      // Remap character IDs in plotBeats
+      if (Object.keys(idRemapChar).length > 0 && parsed.plotBeats) {
+        parsed.plotBeats.forEach(pb => {
+          if (pb.characters) pb.characters = pb.characters.map(cid => {
+            if (typeof cid === 'string') return idRemapChar[cid] || cid;
+            if (cid.id) cid.id = idRemapChar[cid.id] || cid.id;
+            if (cid.speaker) cid.speaker = idRemapChar[cid.speaker] || cid.speaker;
+            return cid;
+          });
+          if (pb.dialogue) pb.dialogue.forEach(d => { d.speaker = idRemapChar[d.speaker] || d.speaker; });
+          if (pb.outfitOverrides) {
+            const newOO = {};
+            Object.entries(pb.outfitOverrides).forEach(([k, v]) => { newOO[idRemapChar[k] || k] = v; });
+            pb.outfitOverrides = newOO;
+          }
+        });
+      }
+    }
+
+    if (parsed.backgrounds) {
+      const idRemapBg = {};
+      parsed.backgrounds.forEach(b => {
+        if (sa.backgrounds[b.id]) { b.isExisting = true; return; }
+        const match = saBgsByName[b.name?.trim()];
+        if (match && match.assetId !== b.id) {
+          const oldId = b.id;
+          idRemapBg[oldId] = match.assetId;
+          b.id = match.assetId;
+          b.isExisting = true;
+          b.description = match.description || b.description;
+          b.refPrompt = match.refPrompt || b.refPrompt;
+          log(`배경 ID 보정: "${b.name}" ${oldId} → ${match.assetId} (이름 매칭)`, 'info');
+        }
+      });
+      if (Object.keys(idRemapBg).length > 0 && parsed.plotBeats) {
+        parsed.plotBeats.forEach(pb => { pb.location = idRemapBg[pb.location] || pb.location; });
+      }
+    }
+
+    if (parsed.props) {
+      parsed.props.forEach(p => {
+        if (sa.props[p.id]) { p.isExisting = true; return; }
+        const match = saPropsByName[p.name?.trim()];
+        if (match && match.assetId !== p.id) {
+          const oldId = p.id;
+          log(`소품 ID 보정: "${p.name}" ${oldId} → ${match.assetId} (이름 매칭)`, 'info');
+          p.id = match.assetId;
+          p.isExisting = true;
+        }
+      });
+    }
+
+    // Mark remaining existing assets by ID (for ones already matching)
+    if (parsed.characters) parsed.characters.forEach(c => { if (!c.isExisting && sa.characters[c.id]) c.isExisting = true; });
+    if (parsed.backgrounds) parsed.backgrounds.forEach(b => { if (!b.isExisting && sa.backgrounds[b.id]) b.isExisting = true; });
+    if (parsed.props) parsed.props?.forEach(p => { if (!p.isExisting && sa.props[p.id]) p.isExisting = true; });
+
+    const existingCharCount = parsed.characters?.filter(c=>c.isExisting).length || 0;
+    const newCharCount = (parsed.characters?.length || 0) - existingCharCount;
+    log(`분석 완료: 캐릭터 ${parsed.characters?.length || 0}명 (기존 ${existingCharCount}, 신규 ${newCharCount}), 배경 ${parsed.backgrounds?.length || 0}개, 소품 ${parsed.props?.length || 0}개, 플롯 ${parsed.plotBeats?.length || 0}개`, 'success');
     setAnalysis(parsed);
     setCompletedSteps(prev => new Set([...prev, 0]));
     setStep(1);
