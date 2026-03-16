@@ -705,10 +705,15 @@ async function callFalAI(prompt, opts={}) {
   const hasRefImages = validRefImages.length > 0;
   const hasLoras = opts.loras?.length > 0;
 
-  // Choose endpoint: flux-lora for LoRA, flux-general for IP-Adapter/ControlNet, flux-lora as default
+  // Choose endpoint:
+  // - flux-lora: when LoRAs are provided
+  // - flux-general: when IP-Adapter or ControlNet is needed (requires flux-general)
+  // - flux/dev: default text-to-image (fewer content restrictions than flux-general)
   const endpoint = hasLoras
     ? 'https://fal.run/fal-ai/flux-lora'
-    : 'https://fal.run/fal-ai/flux-general';
+    : (hasRefImages || opts.controlNetImage)
+      ? 'https://fal.run/fal-ai/flux-general'
+      : 'https://fal.run/fal-ai/flux/dev';
 
   // Build request body
   const body = {
@@ -792,19 +797,49 @@ async function callFalAI(prompt, opts={}) {
     }
 
     const data = await res.json();
+    // Check for NSFW flag in response (fal.ai returns has_nsfw_concepts array)
+    if (data.has_nsfw_concepts && data.has_nsfw_concepts.some(v => v === true)) {
+      console.warn('[callFalAI] NSFW flag detected in response — image may be black/blank');
+    }
     if (data.images?.length > 0) {
       // fal.ai returns image URLs, need to fetch and convert to data URL
       const imgUrl = data.images[0].url;
       try {
         const imgRes = await fetch(imgUrl);
         const blob = await imgRes.blob();
-        return [await new Promise((resolve, reject) => {
+        const dataUrl = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result);
           reader.onerror = reject;
           reader.readAsDataURL(blob);
-        })];
+        });
+        // Detect black/blank images by checking pixel data
+        const isBlack = await new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const sz = 64; // sample at small size for speed
+            canvas.width = sz; canvas.height = sz;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, sz, sz);
+            const pixels = ctx.getImageData(0, 0, sz, sz).data;
+            let totalBrightness = 0;
+            for (let i = 0; i < pixels.length; i += 4) {
+              totalBrightness += pixels[i] + pixels[i+1] + pixels[i+2]; // R+G+B
+            }
+            const avgBrightness = totalBrightness / (sz * sz * 3); // avg per channel
+            resolve(avgBrightness < 5); // nearly all black if avg < 5/255
+          };
+          img.onerror = () => resolve(false);
+          img.src = dataUrl;
+        });
+        if (isBlack) {
+          console.warn('[callFalAI] Black/blank image detected (content filter likely applied)');
+          throw new Error('fal.ai: 블랙 이미지 감지됨 (콘텐츠 필터 적용). 다른 모델을 시도하세요.');
+        }
+        return [dataUrl];
       } catch(fetchErr) {
+        if (fetchErr.message?.includes('블랙 이미지')) throw fetchErr;
         // If can't fetch image, return URL directly
         return [imgUrl];
       }
