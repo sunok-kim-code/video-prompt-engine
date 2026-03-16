@@ -1853,6 +1853,64 @@ Rules:
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
+  // Generate a unified ellipse+tail SVG path string (PowerPoint-style callout)
+  // Returns a single closed path that seamlessly integrates the tail into the ellipse outline
+  const buildBubblePath = (cx, cy, rx, ry, tailPos, tailLen, tailWid, bubbleW, bubbleH, scale) => {
+    const tw = 12 * tailWid * scale;  // tail half-width at base
+    const th = 18 * tailLen * scale;  // tail length
+    const tailBaseX = bubbleW * tailPos; // tail center X position
+    const tailTipX = tailBaseX;
+    const tailTipY = bubbleH + th;
+
+    // Calculate where tail meets the ellipse (left and right attachment points)
+    // Clamp attachment points to stay on the lower half of ellipse
+    const leftX = Math.max(cx - rx + 4, tailBaseX - tw);
+    const rightX = Math.min(cx + rx - 4, tailBaseX + tw * 0.8);
+
+    // Find Y on ellipse bottom for attachment points using ellipse equation
+    const leftRelX = (leftX - cx) / rx;
+    const rightRelX = (rightX - cx) / rx;
+    const leftY = cy + ry * Math.sqrt(Math.max(0.01, 1 - leftRelX * leftRelX));
+    const rightY = cy + ry * Math.sqrt(Math.max(0.01, 1 - rightRelX * rightRelX));
+
+    // Calculate angles on ellipse for the attachment points
+    const leftAngle = Math.atan2((leftY - cy) / ry, (leftX - cx) / rx);
+    const rightAngle = Math.atan2((rightY - cy) / ry, (rightX - cx) / rx);
+
+    // Build path: trace ellipse from right attachment → around top → to left attachment → tail tip → back
+    // We use SVG arc commands for the ellipse portions
+    // Start from right attachment point, go clockwise around the top to left attachment
+    const startAngle = rightAngle;
+    const endAngle = leftAngle;
+
+    // Ellipse arc from rightAttach → top → leftAttach (the "main body" arc, going through the top)
+    // This is the large arc going counter-clockwise from right to left through the top
+    const sweepFlag = 1; // clockwise
+    const largeArcFlag = 1; // go the long way around (through the top)
+
+    // Control points for smooth bezier tail curves
+    const ctrlL1X = leftX + (tailTipX - leftX) * 0.15;
+    const ctrlL1Y = leftY + (tailTipY - leftY) * 0.1;
+    const ctrlL2X = tailTipX - tw * 0.3;
+    const ctrlL2Y = tailTipY - th * 0.15;
+    const ctrlR1X = tailTipX + tw * 0.2;
+    const ctrlR1Y = tailTipY - th * 0.15;
+    const ctrlR2X = rightX + (tailTipX - rightX) * 0.15;
+    const ctrlR2Y = rightY + (tailTipY - rightY) * 0.1;
+
+    const path = [
+      `M ${rightX} ${rightY}`,
+      // Arc from right attachment → top → left attachment (the large part of ellipse)
+      `A ${rx} ${ry} 0 ${largeArcFlag} ${sweepFlag} ${leftX} ${leftY}`,
+      // Smooth bezier curve: left attachment → tail tip
+      `C ${ctrlL1X} ${ctrlL1Y} ${ctrlL2X} ${ctrlL2Y} ${tailTipX} ${tailTipY}`,
+      // Smooth bezier curve: tail tip → right attachment
+      `C ${ctrlR1X} ${ctrlR1Y} ${ctrlR2X} ${ctrlR2Y} ${rightX} ${rightY}`,
+      'Z'
+    ];
+    return path.join(' ');
+  };
+
   // Enhanced bubble drawing with shadows and seamless ellipse+tail
   const drawBubbleOnCanvas = (ctx, b, bx, by, bw, bh, scale) => {
     const bt = BUBBLE_TYPES[b.bubbleStyle || b.type] || BUBBLE_TYPES.speech;
@@ -1907,49 +1965,27 @@ Rules:
       ctx.fillStyle = bt.bg; ctx.fill();
       ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border; ctx.stroke();
     } else if (bt.ellipse) {
-      // Ellipse with seamless tail — layered approach for reliable fill
+      // Ellipse with unified single-path tail (PowerPoint-style callout)
       const cx = bx + bw / 2, cy = by + bh / 2;
       const rx = bw / 2 - 2 * scale, ry = bh / 2 - 2 * scale;
       if (bt.tail) {
-        const tx = bx + bw * tailPos;
-        const tw = 12 * tailWid * scale, th = 18 * tailLen * scale;
-        const tailTipX = tx, tailTipY = by + bh + th;
-        const tlx = tx - tw, trx2 = tx + tw * 0.8;
-        const tly = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((tlx - cx) / rx, 2)));
-        const trry = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((trx2 - cx) / rx, 2)));
-        // Layer 1: Fill ellipse
-        ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-        ctx.fillStyle = bt.bg; ctx.fill();
-        // Layer 2: Fill tail (overlaps ellipse bottom)
-        ctx.beginPath();
-        ctx.moveTo(tlx, tly);
-        ctx.quadraticCurveTo((tlx + tailTipX) / 2, tly + th * 0.4, tailTipX, tailTipY);
-        ctx.quadraticCurveTo((trx2 + tailTipX) / 2, trry + th * 0.4, trx2, trry);
-        ctx.closePath();
-        ctx.fillStyle = bt.bg; ctx.fill();
-        // Layer 3: Stroke ellipse border
+        // Use buildBubblePath for unified shape, then offset by bx/by
+        const pathStr = buildBubblePath(bw / 2, bh / 2, rx, ry, tailPos, tailLen, tailWid, bw, bh, 1);
+        // Apply offset transform
+        ctx.save();
+        ctx.translate(bx, by);
+        const p2d = new Path2D(pathStr);
+        ctx.fillStyle = bt.bg;
+        ctx.fill(p2d);
         ctx.shadowColor = 'transparent';
         if (bt.border !== 'none') {
-          ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-          ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border;
+          ctx.lineWidth = (bt.borderWidth || 2) * scale;
+          ctx.strokeStyle = bt.border;
           if (bt.dashed) ctx.setLineDash([6 * scale, 4 * scale]);
-          ctx.stroke(); ctx.setLineDash([]);
+          ctx.stroke(p2d);
+          ctx.setLineDash([]);
         }
-        // Layer 4: Stroke tail outer edges
-        if (bt.border !== 'none') {
-          ctx.beginPath();
-          ctx.moveTo(tlx, tly);
-          ctx.quadraticCurveTo((tlx + tailTipX) / 2, tly + th * 0.4, tailTipX, tailTipY);
-          ctx.quadraticCurveTo((trx2 + tailTipX) / 2, trry + th * 0.4, trx2, trry);
-          ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border;
-          ctx.stroke();
-        }
-        // Layer 5: Cover junction border with fill
-        ctx.beginPath();
-        ctx.moveTo(tlx + 1, tly - 1); ctx.lineTo(trx2 - 1, trry - 1);
-        ctx.lineTo(trx2 - 1, trry + 3); ctx.lineTo(tlx + 1, tly + 3);
-        ctx.closePath();
-        ctx.fillStyle = bt.bg; ctx.fill();
+        ctx.restore();
       } else {
         ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
         ctx.fillStyle = bt.bg; ctx.fill();
@@ -3792,19 +3828,9 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                                   const strokeColor = bt.border==='none'?'transparent':bt.border;
                                   const dash = bt.dashed ? '6 4' : 'none';
                                   if (bt.tail) {
-                                    const tx = obj.w*scale*tailPos;
-                                    const tw = 12*tailWid*scale, th = 18*tailLen*scale;
-                                    const tailTipX = tx, tailTipY = obj.h*scale + th;
-                                    const tlx = tx - tw, trx2 = tx + tw * 0.8;
-                                    const tly = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((tlx - cx) / rx, 2)));
-                                    const trry = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((trx2 - cx) / rx, 2)));
-                                    return (<>
-                                      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={bt.bg} stroke="none"/>
-                                      <path d={`M ${tlx} ${tly} Q ${(tlx+tailTipX)/2} ${tly+th*0.4} ${tailTipX} ${tailTipY} Q ${(trx2+tailTipX)/2} ${trry+th*0.4} ${trx2} ${trry} Z`} fill={bt.bg} stroke="none"/>
-                                      <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash}/>
-                                      <path d={`M ${tlx} ${tly} Q ${(tlx+tailTipX)/2} ${tly+th*0.4} ${tailTipX} ${tailTipY} Q ${(trx2+tailTipX)/2} ${trry+th*0.4} ${trx2} ${trry}`} fill="none" stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash}/>
-                                      <path d={`M ${tlx+1} ${tly-1} L ${trx2-1} ${trry-1} L ${trx2-1} ${trry+3} L ${tlx+1} ${tly+3} Z`} fill={bt.bg} stroke="none"/>
-                                    </>);
+                                    // Single unified path — PowerPoint-style callout
+                                    const pathD = buildBubblePath(cx, cy, rx, ry, tailPos, tailLen, tailWid, obj.w*scale, obj.h*scale, 1);
+                                    return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash} strokeLinejoin="round"/>;
                                   } else {
                                     return <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={bt.bg} stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash}/>;
                                   }
