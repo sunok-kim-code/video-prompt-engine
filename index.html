@@ -2207,14 +2207,39 @@ function App() {
     const objStart = cleaned.indexOf('{');
     if (arrStart >= 0 && (objStart < 0 || arrStart < objStart)) cleaned = cleaned.substring(arrStart);
     else if (objStart >= 0) cleaned = cleaned.substring(objStart);
+    // Smart bracket matching that skips string contents
     let depth = 0, end = 0;
     const opener = cleaned[0];
     const closer = opener === '[' ? ']' : '}';
+    let inString = false, escaped = false;
     for (let i = 0; i < cleaned.length; i++) {
-      if (cleaned[i] === opener) depth++;
-      else if (cleaned[i] === closer) { depth--; if (depth === 0) { end = i + 1; break; } }
+      const ch = cleaned[i];
+      if (escaped) { escaped = false; continue; }
+      if (ch === '\\' && inString) { escaped = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{' || ch === '[') depth++;
+      else if (ch === '}' || ch === ']') { depth--; if (depth === 0) { end = i + 1; break; } }
     }
-    return JSON.parse(cleaned.substring(0, end));
+    try {
+      return JSON.parse(cleaned.substring(0, end));
+    } catch(e) {
+      // Attempt repair: fix common issues like trailing commas, unescaped newlines in strings
+      let repaired = cleaned.substring(0, end);
+      // Remove trailing commas before } or ]
+      repaired = repaired.replace(/,\s*([\]}])/g, '$1');
+      // Fix unescaped newlines inside string values
+      repaired = repaired.replace(/"([^"]*?)"/gs, (match) => {
+        return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+      });
+      try {
+        return JSON.parse(repaired);
+      } catch(e2) {
+        console.error('JSON parse failed even after repair. First 500 chars:', repaired.substring(0, 500));
+        console.error('Last 500 chars around error:', repaired.substring(Math.max(0, end - 600), end));
+        throw e;
+      }
+    }
   };
 
   // Create new episode
