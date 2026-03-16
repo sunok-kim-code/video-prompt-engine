@@ -1532,8 +1532,8 @@ function App() {
     setLogs(prev => [...prev, {msg: `[${ts}] ${msg}`, type}]);
   }, []);
 
-  const callText = useCallback(async (system, user) => {
-    return await callGemini(system, user, {maxTokens: 16384, thinkBudget: 1024});
+  const callText = useCallback(async (system, user, extraOpts={}) => {
+    return await callGemini(system, user, {maxTokens: extraOpts.maxTokens || 16384, thinkBudget: extraOpts.thinkBudget ?? 1024});
   }, []);
 
   // Helper: build reference images & descriptions from shared assets for a panel
@@ -2087,7 +2087,7 @@ function App() {
 
     const analyzePrompt = inputMode === 'scene' ? PROMPTS.ANALYZE_SCENES : PROMPTS.ANALYZE_STORY;
     log(`분석 모드: ${inputMode === 'scene' ? '씬 설명 기반' : '웹소설 기반'}`, 'info');
-    const result = await callText(analyzePrompt, sourceText + existingAssetsContext);
+    const result = await callText(analyzePrompt, sourceText + existingAssetsContext, {maxTokens: inputMode === 'scene' ? 32768 : 16384});
     const parsed = parseJSON(result);
     // Mark existing assets
     if (parsed.characters) parsed.characters.forEach(c => { if (sa.characters[c.id]) c.isExisting = true; });
@@ -2268,8 +2268,36 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
     const storyboardPrompt = inputMode === 'scene' ? PROMPTS.CREATE_SCENE_STORYBOARD : PROMPTS.CREATE_STORYBOARD;
     log(`스토리보드 모드: ${inputMode === 'scene' ? '씬 설명 기반' : '웹소설 기반'}`, 'info');
-    const result = await callText(storyboardPrompt, userPrompt);
-    const parsed = parseJSON(result);
+
+    let parsed;
+    const BATCH_SIZE = 15;
+    const beatCount = data.plotBeats?.length || 0;
+
+    if (inputMode === 'scene' && beatCount > BATCH_SIZE) {
+      // Chunked generation for large scene counts
+      parsed = [];
+      let panelNum = 1;
+      for (let i = 0; i < beatCount; i += BATCH_SIZE) {
+        const batchBeats = data.plotBeats.slice(i, i + BATCH_SIZE);
+        const batchPlotContext = batchBeats.map(p => {
+          let s = `Beat ${p.beat}: ${p.summary} [mood: ${p.mood}, chars: ${p.characters.join(',')}, loc: ${p.location}`;
+          if (p.props?.length) s += `, props: ${p.props.join(',')}`;
+          if (p.outfitOverrides && Object.keys(p.outfitOverrides).length > 0) s += `, OUTFIT CHANGES: ${JSON.stringify(p.outfitOverrides)}`;
+          return s + ']';
+        }).join('\n');
+        const batchPrompt = `Story title: ${data.title}\nSynopsis: ${data.synopsis}\n\nCharacters:\n${charContext}\n\nBackgrounds:\n${bgContext}\n\nProps/Objects:\n${propContext || '(none)'}\n\nPlot beats (batch ${Math.floor(i/BATCH_SIZE)+1}, beats ${batchBeats[0].beat}-${batchBeats[batchBeats.length-1].beat}):\n${batchPlotContext}\n\nCreate panels for ONLY the plot beats listed above. Start panelNumber at ${panelNum}. EVERY plotBeat MUST have at least 1 panel. If a plotBeat has dialogue, create separate panels per speaker.\nEach panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details.`;
+        log(`  배치 ${Math.floor(i/BATCH_SIZE)+1}/${Math.ceil(beatCount/BATCH_SIZE)}: Beat ${batchBeats[0].beat}-${batchBeats[batchBeats.length-1].beat} 생성 중...`, 'info');
+        const batchResult = await callText(storyboardPrompt, batchPrompt, {maxTokens: 32768});
+        const batchParsed = parseJSON(batchResult);
+        // Re-number panels sequentially
+        batchParsed.forEach(p => { p.panelNumber = panelNum++; });
+        parsed.push(...batchParsed);
+        log(`  배치 완료: ${batchParsed.length}개 패널 생성`, 'success');
+      }
+    } else {
+      const result = await callText(storyboardPrompt, userPrompt, {maxTokens: 32768});
+      parsed = parseJSON(result);
+    }
     log(`스토리보드 완료: ${parsed.length}개 패널`, 'success');
     setStoryboard(parsed);
     setPanels(new Array(parsed.length).fill(null));
