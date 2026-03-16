@@ -2863,20 +2863,10 @@ Rules:
         }
       }
       const noTextDirective = '\nIMPORTANT: Do NOT render any text, letters, words, sound effects, or typography in the image. Purely visual only.';
-      // Use original prompt — preserve all visual descriptions as-is
+      // Use original prompt (no Grok-specific sanitization — preserve original descriptions)
       // Only strip Korean onomatopoeia/SFX which don't help image generation
       const cleanedPrompt = sanitizeImagePrompt(prompt);
-      // Strip genre trigger keywords from style prefix for Grok (xAI filters on labels, not content)
-      // e.g., "BL", "Boys Love", "yaoi", "bishounen" trigger content moderation
-      const grokSafePrefix = stylePrefix
-        .replace(/\bBL\b\s*/g, '')
-        .replace(/\(Boys\s*Love\)\s*/g, '')
-        .replace(/\bBoys\s*Love\b\s*/g, '')
-        .replace(/\byaoi\b\s*/gi, '')
-        .replace(/\bshounen[- ]?ai\b\s*/gi, '')
-        .replace(/\bbishounen\b/gi, 'elegant')
-        .replace(/\s{2,}/g, ' ');
-      const grokPrompt = grokSafePrefix + cleanedPrompt + visualIdCards + noTextDirective;
+      const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + noTextDirective;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
       if (charCount > 0) {
         log(`Grok Image 사용 (${curStyleName} + 에셋 ID카드: 캐릭터 ${charCount}명)`, 'info');
