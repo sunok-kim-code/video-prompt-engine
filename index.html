@@ -1344,7 +1344,14 @@ function App() {
       if (d.type === 'move') {
         updatePageObject(d.pageIdx, d.objId, {x: Math.max(0, d.origX + dx), y: Math.max(0, d.origY + dy)});
       } else if (d.type === 'resize') {
-        updatePageObject(d.pageIdx, d.objId, {w: Math.max(30, d.origW + dx), h: Math.max(30, d.origH + dy)});
+        if (d.aspectRatio) {
+          // Aspect-ratio-locked resize for panels/images
+          const newW = Math.max(30, d.origW + dx);
+          const newH = newW / d.aspectRatio;
+          updatePageObject(d.pageIdx, d.objId, {w: newW, h: Math.max(30, newH)});
+        } else {
+          updatePageObject(d.pageIdx, d.objId, {w: Math.max(30, d.origW + dx), h: Math.max(30, d.origH + dy)});
+        }
       }
     };
     const onMouseUp = () => { dragRef.current = null; };
@@ -3118,7 +3125,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                               {isSelected && <>
                                 <div data-resize="true" className="be-resize"
                                   onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
-                                    dragRef.current = {type:'resize', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origW:obj.w, origH:obj.h};
+                                    dragRef.current = {type:'resize', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origW:obj.w, origH:obj.h, aspectRatio: obj.w / obj.h};
                                   }}/>
                                 <button className="be-delete" onClick={(e) => {e.stopPropagation(); deletePageObject(pageIdx, obj.id);}}>×</button>
                               </>}
