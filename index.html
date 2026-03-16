@@ -1344,6 +1344,23 @@ function App() {
   const [promptEditor, setPromptEditor] = useState(null);
   const [editedPrompt, setEditedPrompt] = useState('');
 
+  // Update a character field in analysis (appearance, outfit, refPrompt, etc.)
+  const updateAnalysisChar = (charId, field, value) => {
+    setAnalysis(prev => {
+      if (!prev) return prev;
+      const chars = prev.characters.map(c => c.id === charId ? {...c, [field]: value} : c);
+      return {...prev, characters: chars};
+    });
+  };
+  // Update a background field in analysis
+  const updateAnalysisBg = (bgId, field, value) => {
+    setAnalysis(prev => {
+      if (!prev) return prev;
+      const bgs = prev.backgrounds.map(b => b.id === bgId ? {...b, [field]: value} : b);
+      return {...prev, backgrounds: bgs};
+    });
+  };
+
   const openPromptEditor = (type, id, prompt, title, onSubmit, onSaveOnly) => {
     setPromptEditor({type, id, title, onSubmit, onSaveOnly});
     setEditedPrompt(prompt);
@@ -4129,14 +4146,24 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                                 {loraModels[c.id]?.status === 'training' && <span className="tag" style={{fontSize:9,background:'#fff3cd',color:'#856404',marginLeft:4,animation:'pulse 1.5s infinite'}}>학습중</span>}
                                 {loraModels[c.id]?.status === 'failed' && <span className="tag" style={{fontSize:9,background:'#f8d7da',color:'#721c24',marginLeft:4}}>실패</span>}
                               </div>
-                              <div className="ref-card-desc">{c.appearance}</div>
+                              <details style={{marginTop:4}} open={!references.characters[c.id]}>
+                                <summary style={{fontSize:11,color:'var(--accent)',cursor:'pointer',fontWeight:600}}>외형 (appearance)</summary>
+                                <textarea className="form-input" style={{width:'100%',minHeight:60,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
+                                  value={c.appearance || ''} onChange={e => updateAnalysisChar(c.id, 'appearance', e.target.value)} />
+                              </details>
+                              <details style={{marginTop:4}} open={!references.characters[c.id]}>
+                                <summary style={{fontSize:11,color:'var(--accent)',cursor:'pointer',fontWeight:600}}>의상 (outfit)</summary>
+                                <textarea className="form-input" style={{width:'100%',minHeight:50,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
+                                  value={c.outfit || ''} onChange={e => updateAnalysisChar(c.id, 'outfit', e.target.value)} />
+                              </details>
                               <details style={{marginTop:4}}>
-                                <summary className="prompt-badge">프롬프트</summary>
-                                <div className="text-xs" style={{padding:'4px 0',lineHeight:1.4,fontFamily:'monospace'}}>{c.refPrompt}</div>
+                                <summary style={{fontSize:11,color:'#e17055',cursor:'pointer',fontWeight:600}}>레퍼런스 프롬프트 (refPrompt)</summary>
+                                <textarea className="form-input" style={{width:'100%',minHeight:70,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
+                                  value={c.refPrompt || ''} onChange={e => updateAnalysisChar(c.id, 'refPrompt', e.target.value)} />
                               </details>
                               <div className="action-bar" style={{marginTop:6}}>
                                 <button className="btn btn-outline btn-xs"
-                                  onClick={() => openPromptEditor('charRef', c.id, c.refPrompt + getCharSuffix(), c.name, (p) => regenerateCharRef(c.id, p))} disabled={running}>수정</button>
+                                  onClick={() => openPromptEditor('charRef', c.id, c.refPrompt + getCharSuffix(), c.name, (p) => regenerateCharRef(c.id, p))} disabled={running}>프롬프트 편집 후 생성</button>
                                 <button className="btn btn-outline btn-xs"
                                   onClick={()=>regenerateCharRef(c.id)} disabled={running}>재생성</button>
                               </div>
@@ -4164,14 +4191,19 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                             )}
                             <div className="ref-card-info">
                               <div className="ref-card-name">{b.name}</div>
-                              <div className="ref-card-desc">{b.description}</div>
+                              <details style={{marginTop:4}} open={!references.backgrounds[b.id]}>
+                                <summary style={{fontSize:11,color:'var(--accent)',cursor:'pointer',fontWeight:600}}>설명 (description)</summary>
+                                <textarea className="form-input" style={{width:'100%',minHeight:50,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
+                                  value={b.description || ''} onChange={e => updateAnalysisBg(b.id, 'description', e.target.value)} />
+                              </details>
                               <details style={{marginTop:4}}>
-                                <summary className="prompt-badge">프롬프트</summary>
-                                <div className="text-xs" style={{padding:'4px 0',lineHeight:1.4,fontFamily:'monospace'}}>{b.refPrompt}</div>
+                                <summary style={{fontSize:11,color:'#e17055',cursor:'pointer',fontWeight:600}}>레퍼런스 프롬프트 (refPrompt)</summary>
+                                <textarea className="form-input" style={{width:'100%',minHeight:50,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
+                                  value={b.refPrompt || ''} onChange={e => updateAnalysisBg(b.id, 'refPrompt', e.target.value)} />
                               </details>
                               <div className="action-bar mt-8">
                                 <button className="btn btn-outline btn-xs"
-                                  onClick={() => openPromptEditor('bgRef', b.id, b.refPrompt + getBgSuffix(), b.name, (p) => regenerateAsset('backgrounds', b.id, p))} disabled={running}>수정</button>
+                                  onClick={() => openPromptEditor('bgRef', b.id, b.refPrompt + getBgSuffix(), b.name, (p) => regenerateAsset('backgrounds', b.id, p))} disabled={running}>프롬프트 편집 후 생성</button>
                                 <button className="btn btn-outline btn-xs"
                                   onClick={()=>regenerateAsset('backgrounds', b.id)} disabled={running}>재생성</button>
                               </div>
