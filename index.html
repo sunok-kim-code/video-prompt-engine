@@ -1070,7 +1070,7 @@ CRITICAL RULES FOR SHARED ASSETS:
 
 ABSOLUTE RULE — 1:1 SCENE-TO-PLOTBEAT MAPPING:
 - Each numbered scene in the input MUST become EXACTLY one plotBeat. No merging, no skipping, no summarizing multiple scenes into one.
-- If the user provides 50 numbered scenes, you MUST return exactly 50 plotBeats.
+- There is NO upper limit on the number of plotBeats. If the user provides 50 scenes, return 50 plotBeats. If 100 scenes, return 100 plotBeats.
 - The plotBeat "beat" number must match the scene number from the input.
 - Each plotBeat "summary" must FAITHFULLY preserve ALL details from that scene: character actions, expressions, movements, sound effects (끼익, 쾅, 부릉), stage directions, parenthetical descriptions, and EVERY line of dialogue.
 - Do NOT paraphrase or condense. Copy the scene content as closely as possible into the summary field.
@@ -1142,8 +1142,8 @@ CRITICAL — CHARACTER VISUAL DIFFERENTIATION:
 IMPORTANT: This is a VERTICAL SCROLL webtoon.
 
 ABSOLUTE RULE — SCENE-TO-PANEL MAPPING:
-- You MUST create at least 1 panel for EVERY plotBeat. No exceptions. No skipping.
-- If there are N plotBeats, the total number of panels MUST be >= N.
+- You MUST create at least 1 panel for EVERY plotBeat. No exceptions. No skipping. There is NO upper limit on panels.
+- If there are N plotBeats, the total number of panels MUST be >= N. If there are 50 plotBeats, produce 50+ panels.
 - If a plotBeat contains dialogue (check dialogueCount or look for dialogue in the summary), create SEPARATE panels for each speaker's line. Example: if plotBeat 3 has 2 characters speaking, create at least 2-3 panels for that beat.
 - ALL dialogue from the plotBeat summary MUST appear in panel "dialogue" fields. Do not omit ANY dialogue line.
 - Sound effects mentioned in the plotBeat (끼익, 쾅, 부릉, etc.) MUST appear in the panel "description" and be incorporated into imagePrompt.
@@ -2257,7 +2257,7 @@ Plot beats:
 ${plotContext}
 
 Original story text:
-${sourceText.substring(0, 6000)}
+${inputMode === 'scene' ? sourceText : sourceText.substring(0, 6000)}
 
 ` + (inputMode === 'scene'
   ? `Create a webtoon storyboard with at least ${data.plotBeats?.length || 1} panels (one or more per plotBeat). EVERY plotBeat MUST have at least 1 panel. If a plotBeat has dialogue, create separate panels for each speaker. Total panels MUST be >= ${data.plotBeats?.length || 1}.
