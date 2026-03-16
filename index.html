@@ -1401,18 +1401,66 @@ function App() {
         const ratio = img.height / img.width;
         panelH = Math.round(panelW * ratio);
       } catch(e) { console.warn('Failed to measure panel', i); }
-      // Check if panel fits on current page
-      if (yPos + panelH + PANEL_MARGIN > PAGE_H && currentPageObj.objects.length > 0) {
+
+      // Get dialogue/narration from storyboard data for this panel
+      const sbPanel = storyboard[i] || {};
+      const dialogues = sbPanel.dialogue || [];
+      const narrationText = sbPanel.narration || '';
+
+      // Estimate total height needed: panel + bubbles
+      const bubbleCount = dialogues.length + (narrationText ? 1 : 0);
+      const bubbleAreaH = bubbleCount * 90;
+      const totalNeeded = panelH + bubbleAreaH + PANEL_MARGIN;
+
+      // Check if panel + its bubbles fit on current page
+      if (yPos + totalNeeded + PANEL_MARGIN > PAGE_H && currentPageObj.objects.length > 0) {
         newPages.push(currentPageObj);
         currentPageObj = {id:'p_'+(Date.now()+i), width:PAGE_W, height:PAGE_H, objects:[]};
         yPos = PANEL_MARGIN;
       }
-      const objId = 'obj_'+i+'_'+Date.now();
+      const ts = Date.now();
+      const objId = 'obj_'+i+'_'+ts;
       currentPageObj.objects.push({
         id: objId, type: 'panel', src: panelSrc,
         x: PANEL_MARGIN, y: yPos, w: panelW, h: panelH,
         zIndex: 1, panelIndex: i
       });
+
+      // Auto-add speech bubbles for dialogue lines
+      let bubbleY = yPos + panelH * 0.55;
+      const bubbleSpacing = 85;
+      dialogues.forEach((d, di) => {
+        const speakerText = d.speaker ? `${d.speaker}: ${d.text}` : d.text;
+        const bw = Math.min(280, panelW * 0.6);
+        const bh = 70;
+        // Alternate left/right placement for multiple speakers
+        const bx = PANEL_MARGIN + (di % 2 === 0 ? panelW * 0.05 : panelW - bw - panelW * 0.05);
+        currentPageObj.objects.push({
+          id: 'b_'+i+'_d'+di+'_'+ts, type: 'bubble', bubbleStyle: 'speech',
+          text: speakerText, x: bx, y: bubbleY,
+          w: bw, h: bh, fontSize: 13,
+          fontFamily: "'Noto Sans KR',sans-serif",
+          tailPos: di % 2 === 0 ? 0.3 : 0.7, tailSize: 1.0,
+          zIndex: 10 + di
+        });
+        bubbleY += bubbleSpacing;
+      });
+
+      // Auto-add narration box
+      if (narrationText) {
+        const nw = Math.min(400, panelW * 0.8);
+        const nh = 40;
+        const nx = PANEL_MARGIN + (panelW - nw) / 2;
+        currentPageObj.objects.push({
+          id: 'n_'+i+'_'+ts, type: 'bubble', bubbleStyle: 'narration',
+          text: narrationText, x: nx, y: yPos + 10,
+          w: nw, h: nh, fontSize: 13,
+          fontFamily: "'Noto Sans KR',sans-serif",
+          tailPos: 0.3, tailSize: 1.0,
+          zIndex: 10 + dialogues.length
+        });
+      }
+
       yPos += panelH + PANEL_MARGIN;
     }
     if (currentPageObj.objects.length > 0) newPages.push(currentPageObj);
