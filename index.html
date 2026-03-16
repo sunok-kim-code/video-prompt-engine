@@ -13,7 +13,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gaegu:wght@400;700&family=Gothic+A1:wght@400;700&family=Jua&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gaegu:wght@400;700&family=Gothic+A1:wght@400;700&family=Jua&family=Nanum+Brush+Script&family=Nanum+Pen+Script&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -1108,6 +1108,7 @@ Return ONLY a valid JSON array (no markdown):
     "background": "bg_1",
     "props": ["prop_1"],
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
+    "soundEffects": ["쾅!", "끼익"],
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens in this panel",
@@ -1125,6 +1126,7 @@ Rules:
 - Each imagePrompt must be self-contained (include full character appearance details, EXACT outfit, not just names)
 - Include prop descriptions in imagePrompt when props appear in scene
 - Dialogue should match the original story text
+- Extract ALL sound effects / onomatopoeia (끼익, 쾅, 부릉, 부르르릉, 철컥, 와장창, 펑, 빠직, 탁, 쿵, 두근두근, 콸콸, 찌직, 번쩍, etc.) from the scene into the "soundEffects" array field. Include Korean onomatopoeia exactly as written. Each sound effect should be a separate string in the array. If no sound effects, use an empty array [].
 - CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, 부르르릉, 철컥, etc.), or onomatopoeia — not in Korean, not translated to English. The generated image must be purely visual with NO text or typography of any kind. Do NOT describe sounds visually (e.g., "engine roaring", "tires screeching"). Text and sound effects will be added separately as overlays in the editor.`,
 
   ANALYZE_SCENES: `You are a webtoon scene analyst. The user provides NUMBERED scene descriptions (e.g. "1. ...", "2. ...", "3. ..."). Your job is to parse each scene into a plotBeat and extract characters, backgrounds, and props.
@@ -1244,6 +1246,7 @@ Return ONLY a valid JSON array (no markdown):
     "background": "bg_1",
     "props": ["prop_1"],
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
+    "soundEffects": ["쾅!", "끼익"],
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens",
@@ -1260,6 +1263,7 @@ Rules:
 - Each imagePrompt must be self-contained — COPY character hair+outfit descriptions verbatim from character data
 - Include prop descriptions when they appear
 - ALL dialogue from original scenes must be present in panels
+- Extract ALL sound effects / onomatopoeia (끼익, 쾅, 부릉, 부르르릉, 철컥, 와장창, 펑, 빠직, 탁, 쿵, 두근두근, 콸콸, 찌직, 번쩍, etc.) from the scene into the "soundEffects" array field. Include Korean onomatopoeia exactly as written. Each sound effect should be a separate string in the array. If no sound effects, use an empty array [].
 - CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, 부르르릉, 철컥, etc.), or onomatopoeia — not in Korean, not translated to English. The generated image must be purely visual with NO text or typography of any kind. Do NOT describe sounds visually (e.g., "engine roaring", "tires screeching"). Text and sound effects will be added separately as overlays in the editor.`
 };
 
@@ -1524,53 +1528,69 @@ Rules:
     {value:"'Jua',sans-serif", label:'주아'},
     {value:"'Do Hyeon',sans-serif", label:'도현'},
     {value:"'Gaegu',cursive", label:'개구'},
+    {value:"'Nanum Brush Script',cursive", label:'나눔붓체'},
+    {value:"'Nanum Pen Script',cursive", label:'나눔펜체'},
     {value:"monospace", label:'모노스페이스'},
   ];
 
   const PAGE_W = 700;
   const PAGE_H = 4000;
 
-  // [WebtoonSFX 추가] SFX 프리셋 정의
+  // [WebtoonSFX] 붓글씨 스타일 SFX 프리셋 (CSS filter 기반)
   const SFX_PRESETS = {
-    hit:    {name:'타격', examples:['쾅!','퍽!','빠직!','와장창!','탁!','쿵!'], fontFamily:"'Black Han Sans',sans-serif", color:'#ff2222', stroke:'#000', strokeWidth:3, rotate:(-8), shadow:true, scale:1.2},
-    water:  {name:'물/바람', examples:['콸콸','솨아','휘이잉','쏴아','파닥'], fontFamily:"'Gaegu',cursive", color:'#2288ff', stroke:'#003366', strokeWidth:2, rotate:(-5), shadow:true, scale:1.0},
-    electric:{name:'전기/빛', examples:['찌직!','번쩍!','파지직!','치지직','스파크!'], fontFamily:"'Do Hyeon',sans-serif", color:'#ffdd00', stroke:'#ff6600', strokeWidth:3, rotate:(5), shadow:true, scale:1.1},
-    move:   {name:'이동/속도', examples:['슈우웅','휙!','부릉!','비이잉','쓩!'], fontFamily:"'Jua',sans-serif", color:'#ffffff', stroke:'#333333', strokeWidth:2, rotate:(-12), shadow:false, scale:1.0, italic:true},
-    shake:  {name:'진동/울림', examples:['우우웅','드르르','와르르','덜덜덜','부르르'], fontFamily:"'Noto Sans KR',sans-serif", color:'#bb44ff', stroke:'#220044', strokeWidth:2, rotate:(3), shadow:true, scale:1.0},
-    emotion:{name:'감정/심리', examples:['두근두근','울컥','심쿵','으으','후유'], fontFamily:"'Gaegu',cursive", color:'#ff66aa', stroke:'#660033', strokeWidth:2, rotate:(0), shadow:true, scale:1.0},
-    silence:{name:'정적/분위기', examples:['...','쉬잇','조용','싸늘','서늘'], fontFamily:"'Nanum Myeongjo',serif", color:'#cccccc', stroke:'#333333', strokeWidth:1, rotate:(0), shadow:false, scale:0.9},
-    comic:  {name:'코믹', examples:['뿅!','뽕!','삐용','뿌우','헉!'], fontFamily:"'Jua',sans-serif", color:'#ff8800', stroke:'#662200', strokeWidth:2, rotate:(-6), shadow:true, scale:1.1},
-    nature: {name:'자연/환경', examples:['우르르','번개!','추적추적','사각사각','바스락'], fontFamily:"'Nanum Myeongjo',serif", color:'#33aa55', stroke:'#003311', strokeWidth:2, rotate:(2), shadow:true, scale:1.0},
+    impact:  {name:'타격', examples:['쾅!','퍽!','빠직!','와장창!','탁!','쿵!'], fontFamily:"'Nanum Brush Script',cursive", color:'#cc2200', stroke:'#5c0000', strokeWidth:1.5, skew:0, rotate:(-5), filterType:'outline', scale:1.2},
+    water:   {name:'물/바람', examples:['콸콸','솨아','휘이잉','쏴아','파닥'], fontFamily:"'Nanum Brush Script',cursive", color:'#1565c0', stroke:'#0d3b86', strokeWidth:1.5, skew:(-8), rotate:(-3), filterType:'shake', scale:1.0},
+    electric:{name:'전기/빛', examples:['찌직!','번쩍!','파지직!','치지직','스파크!'], fontFamily:"'Nanum Brush Script',cursive", color:'#ffe100', stroke:'#c87000', strokeWidth:1.5, skew:(-14), rotate:(0), filterType:'glow', scale:1.1},
+    speed:   {name:'이동/속도', examples:['슈우웅','휙!','부릉!','비이잉','쓩!'], fontFamily:"'Nanum Brush Script',cursive", color:'#1a1814', stroke:'#000000', strokeWidth:1, skew:(-20), rotate:(0), filterType:'motion', scale:1.0},
+    rumble:  {name:'진동/울림', examples:['우우웅','드르르','와르르','덜덜덜','부르르','쿵'], fontFamily:"'Nanum Brush Script',cursive", color:'#3e1000', stroke:'#1a0800', strokeWidth:1.5, skew:(-3), rotate:(-2), filterType:'outline', scale:1.0},
+    emotion: {name:'감정/심리', examples:['두근두근','울컥','심쿵','으으','후유'], fontFamily:"'Nanum Pen Script',cursive", color:'#ff66aa', stroke:'#660033', strokeWidth:1, skew:(0), rotate:(0), filterType:'outline', scale:1.0},
+    silence: {name:'정적/분위기', examples:['...','쉬잇','조용','싸늘','서늘'], fontFamily:"'Nanum Pen Script',cursive", color:'#888888', stroke:'#333333', strokeWidth:0.5, skew:(0), rotate:(0), filterType:'', scale:0.9},
+    comic:   {name:'코믹', examples:['뿅!','뽕!','삐용','뿌우','헉!'], fontFamily:"'Nanum Brush Script',cursive", color:'#ff8800', stroke:'#662200', strokeWidth:1.5, skew:(-6), rotate:(-4), filterType:'outline', scale:1.1},
+    nature:  {name:'자연/환경', examples:['우르르','번개!','추적추적','사각사각','바스락'], fontFamily:"'Nanum Brush Script',cursive", color:'#33aa55', stroke:'#003311', strokeWidth:1, skew:(2), rotate:(0), filterType:'shake', scale:1.0},
+  };
+
+  // CSS filter 생성 함수 (붓글씨 효과음용)
+  const getSfxCssFilter = (filterType, strokeColor, color) => {
+    const filters = {
+      'shake':   `drop-shadow(2px 2px 0 ${strokeColor})`,
+      'motion':  `drop-shadow(4px 0 3px ${strokeColor}66)`,
+      'glow':    `drop-shadow(0 0 8px ${color})`,
+      'outline': `drop-shadow(3px 3px 0 ${strokeColor})`,
+      '':        '',
+    };
+    return filters[filterType] || '';
   };
   const [sfxPanelOpen, setSfxPanelOpen] = useState(false);
-  const [sfxPreset, setSfxPreset] = useState('hit');
+  const [sfxPreset, setSfxPreset] = useState('impact');
   const [sfxText, setSfxText] = useState('쾅!');
-  const [sfxColor, setSfxColor] = useState('#ff2222');
-  const [sfxStroke, setSfxStroke] = useState('#000000');
+  const [sfxColor, setSfxColor] = useState('#cc2200');
+  const [sfxStroke, setSfxStroke] = useState('#5c0000');
   const [sfxFontSize, setSfxFontSize] = useState(48);
-  const [sfxRotate, setSfxRotate] = useState(-8);
+  const [sfxRotate, setSfxRotate] = useState(-5);
+  const [sfxSkew, setSfxSkew] = useState(0);
   const sfxPanelRef = React.useRef(null);
 
   // [WebtoonSFX 추가] SFX 오브젝트를 현재 페이지에 추가
-  const addSfxToPage = () => {
+  const addSfxToPage = (overrideText) => {
     if (editorPages.length === 0) return;
-    const preset = SFX_PRESETS[sfxPreset] || SFX_PRESETS.hit;
+    const preset = SFX_PRESETS[sfxPreset] || SFX_PRESETS.impact;
     const page = editorPages[currentPageIdx];
     const pos = getInsertPosition();
+    const text = overrideText || sfxText || preset.examples[0];
     const newSfx = {
       id: 'sfx_' + Date.now(), type: 'sfx',
-      text: sfxText || preset.examples[0],
+      text: text,
       x: pos.x, y: pos.y,
-      w: Math.max(120, sfxText.length * sfxFontSize * 0.7),
+      w: Math.max(120, text.length * sfxFontSize * 0.7),
       h: sfxFontSize * 1.6,
       fontSize: sfxFontSize,
       fontFamily: preset.fontFamily,
       color: sfxColor,
       stroke: sfxStroke,
-      strokeWidth: preset.strokeWidth || 2,
+      strokeWidth: preset.strokeWidth || 1.5,
       rotate: sfxRotate,
-      shadow: preset.shadow !== false,
-      italic: preset.italic || false,
+      skew: sfxSkew,
+      filterType: preset.filterType || 'outline',
       presetKey: sfxPreset,
       zIndex: Math.max(...page.objects.map(o => o.zIndex || 1), 10) + 1
     };
@@ -1589,6 +1609,7 @@ Rules:
     setSfxColor(p.color);
     setSfxStroke(p.stroke);
     setSfxRotate(p.rotate || 0);
+    setSfxSkew(p.skew || 0);
     setSfxText(p.examples[0]);
   };
 
@@ -1653,6 +1674,40 @@ Rules:
           zIndex: 10 + di
         });
         bubbleY += bubbleSpacing;
+      });
+
+      // Auto-add SFX from storyboard soundEffects
+      const sfxList = sbPanel.soundEffects || [];
+      sfxList.forEach((sfxTxt, si) => {
+        if (!sfxTxt || !sfxTxt.trim()) return;
+        // Auto-detect best preset based on text
+        let bestPreset = 'impact';
+        for (const [key, preset] of Object.entries(SFX_PRESETS)) {
+          if (preset.examples.some(ex => sfxTxt.includes(ex.replace('!','')) || ex.replace('!','').includes(sfxTxt.replace('!','')))) {
+            bestPreset = key;
+            break;
+          }
+        }
+        const preset = SFX_PRESETS[bestPreset];
+        const sfxFs = 42;
+        const sfxW = Math.max(120, sfxTxt.length * sfxFs * 0.7);
+        const sfxH = sfxFs * 1.6;
+        // Place SFX scattered around the panel
+        const sfxX = PANEL_MARGIN + panelW * (0.5 + (si % 2 === 0 ? 0.2 : -0.2)) - sfxW / 2;
+        const sfxY = yPos + panelH * (0.2 + si * 0.15);
+        currentPageObj.objects.push({
+          id: 'sfx_'+i+'_s'+si+'_'+ts, type: 'sfx',
+          text: sfxTxt, x: sfxX, y: sfxY,
+          w: sfxW, h: sfxH, fontSize: sfxFs,
+          fontFamily: preset.fontFamily,
+          color: preset.color, stroke: preset.stroke,
+          strokeWidth: preset.strokeWidth || 1.5,
+          rotate: preset.rotate || 0,
+          skew: preset.skew || 0,
+          filterType: preset.filterType || 'outline',
+          presetKey: bestPreset,
+          zIndex: 8 + si
+        });
       });
 
       // Auto-add narration box
@@ -2042,23 +2097,45 @@ Rules:
     const cy = oy + obj.h * scale / 2;
     ctx.translate(cx, cy);
     if (obj.rotate) ctx.rotate(obj.rotate * Math.PI / 180);
+    // Apply skew transform via setTransform (Canvas doesn't have skewX)
+    if (obj.skew) {
+      const skewRad = Math.tan((obj.skew || 0) * Math.PI / 180);
+      ctx.transform(1, 0, skewRad, 1, 0, 0);
+    }
     const fs = (obj.fontSize || 48) * scale;
-    const italic = obj.italic ? 'italic ' : '';
-    const ff = obj.fontFamily || "'Black Han Sans',sans-serif";
-    ctx.font = `${italic}900 ${fs}px ${ff}`;
+    const ff = obj.fontFamily || "'Nanum Brush Script',cursive";
+    ctx.font = `900 ${fs}px ${ff}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Shadow
-    if (obj.shadow) {
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 6 * scale;
+    // Apply filter-like effects via shadow (Canvas equivalent of CSS filter drop-shadow)
+    const filterType = obj.filterType || '';
+    const strokeColor = obj.stroke || '#5c0000';
+    const fillColor = obj.color || '#cc2200';
+    if (filterType === 'shake') {
+      ctx.shadowColor = strokeColor;
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 2 * scale;
+      ctx.shadowOffsetY = 2 * scale;
+    } else if (filterType === 'motion') {
+      ctx.shadowColor = strokeColor + '66';
+      ctx.shadowBlur = 3 * scale;
+      ctx.shadowOffsetX = 4 * scale;
+      ctx.shadowOffsetY = 0;
+    } else if (filterType === 'glow') {
+      ctx.shadowColor = fillColor;
+      ctx.shadowBlur = 8 * scale;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    } else if (filterType === 'outline') {
+      ctx.shadowColor = strokeColor;
+      ctx.shadowBlur = 0;
       ctx.shadowOffsetX = 3 * scale;
       ctx.shadowOffsetY = 3 * scale;
     }
-    // Stroke (outline)
+    // Stroke (outline) — paint stroke first for paint-order:stroke fill effect
     if (obj.stroke && obj.strokeWidth) {
       ctx.strokeStyle = obj.stroke;
-      ctx.lineWidth = obj.strokeWidth * scale;
+      ctx.lineWidth = (obj.strokeWidth || 1.5) * scale * 2;
       ctx.lineJoin = 'round';
       ctx.miterLimit = 2;
       const lines = (obj.text || '').split('\n');
@@ -2068,7 +2145,7 @@ Rules:
     }
     // Fill
     ctx.shadowColor = 'transparent';
-    ctx.fillStyle = obj.color || '#ff2222';
+    ctx.fillStyle = fillColor;
     const lines = (obj.text || '').split('\n');
     const lh = fs * 1.1;
     const startY = -(lines.length - 1) * lh / 2;
@@ -3693,6 +3770,11 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                     <span style={{fontSize:10,color:'#aaa',minWidth:28}}>{sfxRotate}°</span>
                   </div>
                   <div className="be-sfx-row">
+                    <label>기울기</label>
+                    <input type="range" min="-30" max="30" value={sfxSkew} onChange={e => setSfxSkew(parseInt(e.target.value))} style={{flex:1,height:4}} />
+                    <span style={{fontSize:10,color:'#aaa',minWidth:28}}>{sfxSkew}°</span>
+                  </div>
+                  <div className="be-sfx-row">
                     <label>색상</label>
                     <input type="color" value={sfxColor} onChange={e => setSfxColor(e.target.value)} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}} />
                     <label style={{marginLeft:8}}>외곽</label>
@@ -3877,10 +3959,11 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                             </div>
                           );
                         } else if (obj.type === 'sfx') {
-                          // [WebtoonSFX 추가] SFX 오브젝트 렌더링
+                          // [WebtoonSFX 추가] 붓글씨 스타일 SFX 렌더링
                           const rot = obj.rotate || 0;
-                          const italic = obj.italic ? 'italic ' : '';
+                          const skw = obj.skew || 0;
                           const fs = (obj.fontSize || 48) * scale;
+                          const cssFilter = getSfxCssFilter(obj.filterType || '', obj.stroke || '#000', obj.color || '#ff2222');
                           return (
                             <div key={obj.id} className={`be-sfx${isSelected ? ' selected' : ''}`}
                               style={{left: obj.x * scale, top: obj.y * scale, width: obj.w * scale, height: obj.h * scale, zIndex: obj.zIndex || 1}}
@@ -3893,15 +3976,15 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                                 dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:true};
                               }}>
                               <div className="be-sfx-text" style={{
-                                transform: `rotate(${rot}deg)`,
+                                transform: `rotate(${rot}deg) skewX(${skw}deg)`,
                                 fontSize: fs,
-                                fontFamily: obj.fontFamily || "'Black Han Sans',sans-serif",
+                                fontFamily: obj.fontFamily || "'Nanum Brush Script',cursive",
                                 fontWeight: 900,
-                                fontStyle: obj.italic ? 'italic' : 'normal',
-                                color: obj.color || '#ff2222',
-                                WebkitTextStroke: `${(obj.strokeWidth||2)*scale}px ${obj.stroke||'#000'}`,
-                                textShadow: obj.shadow ? '3px 3px 6px rgba(0,0,0,0.5)' : 'none',
+                                color: obj.color || '#cc2200',
+                                WebkitTextStroke: `${(obj.strokeWidth||1.5)*scale}px ${obj.stroke||'#5c0000'}`,
                                 paintOrder: 'stroke fill',
+                                filter: cssFilter,
+                                lineHeight: 1.1,
                               }}>{obj.text}</div>
                               {isSelected && <>
                                 <div data-resize="true" className="be-resize"
@@ -4030,13 +4113,22 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                           {FONT_LIST.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                         </select>
                       </div>
-                      <div style={{display:'flex',gap:6,marginTop:6}}>
-                        <label style={{fontSize:10,color:'#888',display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}>
-                          <input type="checkbox" checked={obj.shadow!==false} onChange={e => updatePageObject(currentPageIdx, obj.id, {shadow: e.target.checked})} /> 그림자
-                        </label>
-                        <label style={{fontSize:10,color:'#888',display:'flex',alignItems:'center',gap:4,cursor:'pointer'}}>
-                          <input type="checkbox" checked={obj.italic||false} onChange={e => updatePageObject(currentPageIdx, obj.id, {italic: e.target.checked})} /> 기울임
-                        </label>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label">기울기</label>
+                        <input type="range" min="-30" max="30" value={obj.skew||0} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {skew: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
+                        <span className="be-ctrl-val" style={{minWidth:28}}>{obj.skew||0}°</span>
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>효과</label>
+                        <select className="be-select" value={obj.filterType || 'outline'} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {filterType: e.target.value})}>
+                          <option value="outline">외곽선</option>
+                          <option value="shake">진동</option>
+                          <option value="motion">모션</option>
+                          <option value="glow">발광</option>
+                          <option value="">없음</option>
+                        </select>
                       </div>
                     </div>
                   );
