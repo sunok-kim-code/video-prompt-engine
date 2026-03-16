@@ -1370,10 +1370,14 @@ function App() {
           updatePageObject(d.pageIdx, d.objId, {w: Math.max(30, d.origW + dx), h: Math.max(30, d.origH + dy)});
         }
       } else if (d.type === 'tail_pos') {
-        // Drag tail tip: horizontal = tailPos (0~1), vertical = tailSize
+        // Drag tail tip: horizontal = tailPos, vertical = tailLength
         const newPos = Math.max(0.05, Math.min(0.95, d.origTailPos + dx / d.objW));
-        const newSize = Math.max(0.3, Math.min(3.0, d.origTailSize + dy / 60));
-        updatePageObject(d.pageIdx, d.objId, {tailPos: newPos, tailSize: newSize});
+        const newLen = Math.max(0.3, Math.min(4.0, d.origTailLength + dy / 50));
+        updatePageObject(d.pageIdx, d.objId, {tailPos: newPos, tailLength: newLen});
+      } else if (d.type === 'tail_width') {
+        // Drag tail width handle: horizontal = tailWidth
+        const newWidth = Math.max(0.2, Math.min(4.0, d.origTailWidth + dx / 30));
+        updatePageObject(d.pageIdx, d.objId, {tailWidth: newWidth});
       }
     };
     const onMouseUp = () => {
@@ -1743,6 +1747,8 @@ function App() {
     const bt = BUBBLE_TYPES[b.bubbleStyle || b.type] || BUBBLE_TYPES.speech;
     const tailPos = b.tailPos ?? 0.3;
     const tailSz = b.tailSize ?? 1.0;
+    const tailLen = b.tailLength ?? tailSz;
+    const tailWid = b.tailWidth ?? tailSz;
     ctx.save();
 
     // Add drop shadow
@@ -1795,7 +1801,7 @@ function App() {
       const rx = bw / 2 - 2 * scale, ry = bh / 2 - 2 * scale;
       if (bt.tail) {
         const tx = bx + bw * tailPos;
-        const tw = 12 * tailSz * scale, th = 18 * tailSz * scale;
+        const tw = 12 * tailWid * scale, th = 18 * tailLen * scale;
         const tailTipX = tx, tailTipY = by + bh + th;
         const tlx = tx - tw, trx2 = tx + tw * 0.8;
         const tly = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((tlx - cx) / rx, 2)));
@@ -1855,7 +1861,7 @@ function App() {
       // Non-ellipse tail for rounded rect types
       if (bt.tail) {
         const tx = bx + bw * tailPos, ty = by + bh;
-        const tw = 8 * tailSz * scale, th = 16 * tailSz * scale;
+        const tw = 8 * tailWid * scale, th = 16 * tailLen * scale;
         ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(tx - tw, ty - 2 * scale);
@@ -3508,7 +3514,9 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                           const bt = BUBBLE_TYPES[obj.bubbleStyle] || BUBBLE_TYPES.speech;
                           const tailPos = obj.tailPos ?? 0.3;
                           const tailSz = obj.tailSize ?? 1.0;
-                          const svgH = (obj.h + (bt.tail ? 18 * tailSz : 0)) * scale;
+                          const tailLen = obj.tailLength ?? tailSz;
+                          const tailWid = obj.tailWidth ?? tailSz;
+                          const svgH = (obj.h + (bt.tail ? 18 * tailLen : 0)) * scale;
                           // Compute effective bg color: use customBg+opacity for plainText types
                           const effBg = (() => {
                             if (bt.plainText && obj.customBg) {
@@ -3553,21 +3561,16 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                                   const dash = bt.dashed ? '6 4' : 'none';
                                   if (bt.tail) {
                                     const tx = obj.w*scale*tailPos;
-                                    const tw = 12*tailSz*scale, th = 18*tailSz*scale;
+                                    const tw = 12*tailWid*scale, th = 18*tailLen*scale;
                                     const tailTipX = tx, tailTipY = obj.h*scale + th;
-                                    // Tail base contact points on ellipse bottom
                                     const tlx = tx - tw, trx2 = tx + tw * 0.8;
                                     const tly = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((tlx - cx) / rx, 2)));
                                     const trry = cy + ry * Math.sqrt(Math.max(0, 1 - Math.pow((trx2 - cx) / rx, 2)));
                                     return (<>
-                                      {/* Fill layers: ellipse + tail, same color, overlapping */}
                                       <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill={bt.bg} stroke="none"/>
                                       <path d={`M ${tlx} ${tly} Q ${(tlx+tailTipX)/2} ${tly+th*0.4} ${tailTipX} ${tailTipY} Q ${(trx2+tailTipX)/2} ${trry+th*0.4} ${trx2} ${trry} Z`} fill={bt.bg} stroke="none"/>
-                                      {/* Border: ellipse outline */}
                                       <ellipse cx={cx} cy={cy} rx={rx} ry={ry} fill="none" stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash}/>
-                                      {/* Border: tail outer edges only (no base line) */}
                                       <path d={`M ${tlx} ${tly} Q ${(tlx+tailTipX)/2} ${tly+th*0.4} ${tailTipX} ${tailTipY} Q ${(trx2+tailTipX)/2} ${trry+th*0.4} ${trx2} ${trry}`} fill="none" stroke={strokeColor} strokeWidth={bw} strokeDasharray={dash}/>
-                                      {/* Cover junction: white fill strip to hide ellipse border where tail meets */}
                                       <path d={`M ${tlx+1} ${tly-1} L ${trx2-1} ${trry-1} L ${trx2-1} ${trry+3} L ${tlx+1} ${tly+3} Z`} fill={bt.bg} stroke="none"/>
                                     </>);
                                   } else {
@@ -3579,7 +3582,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                                       fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth={bt.borderWidth||2}
                                       strokeDasharray={bt.dashed?'6 4':'none'}/>
                                     {bt.tail && (() => {
-                                      const tx=obj.w*scale*tailPos, tw=8*tailSz*scale, th=16*tailSz*scale;
+                                      const tx=obj.w*scale*tailPos, tw=8*tailWid*scale, th=16*tailLen*scale;
                                       return <polygon points={`${tx-tw},${obj.h*scale-2} ${tx},${obj.h*scale+th} ${tx+tw*1.5},${obj.h*scale-2}`} fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth={bt.borderWidth||2}/>;
                                     })()}
                                   </>
@@ -3595,11 +3598,21 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                                   }}/>
                                 {bt.tail && (() => {
                                   const tx = obj.w * scale * tailPos;
-                                  const ty = obj.h * scale + 16 * tailSz * scale;
-                                  return <div style={{position:'absolute', left:tx-7, top:ty-7, width:14, height:14, background:'#ff6b6b', border:'2px solid #fff', borderRadius:'50%', cursor:'grab', zIndex:31, boxShadow:'0 1px 4px rgba(0,0,0,0.5)'}}
-                                    onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
-                                      dragRef.current = {type:'tail_pos', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origTailPos:tailPos, origTailSize:tailSz, objW:obj.w};
-                                    }} title="꼬리 드래그" />;
+                                  const tipY = obj.h * scale + 18 * tailLen * scale;
+                                  const midY = obj.h * scale + 9 * tailLen * scale;
+                                  const midX = tx + 12 * tailWid * scale * 0.5;
+                                  return <>
+                                    {/* Tail tip handle: drag to change position (horizontal) and length (vertical) */}
+                                    <div style={{position:'absolute', left:tx-7, top:tipY-7, width:14, height:14, background:'#ff6b6b', border:'2px solid #fff', borderRadius:'50%', cursor:'grab', zIndex:31, boxShadow:'0 1px 4px rgba(0,0,0,0.5)'}}
+                                      onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
+                                        dragRef.current = {type:'tail_pos', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origTailPos:tailPos, origTailLength:tailLen, objW:obj.w};
+                                      }} title="위치/길이" />
+                                    {/* Tail width handle: drag horizontally to change thickness */}
+                                    <div style={{position:'absolute', left:midX-6, top:midY-6, width:12, height:12, background:'#ffaa33', border:'2px solid #fff', borderRadius:'50%', cursor:'ew-resize', zIndex:31, boxShadow:'0 1px 4px rgba(0,0,0,0.5)'}}
+                                      onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
+                                        dragRef.current = {type:'tail_width', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origTailWidth:tailWid};
+                                      }} title="두께" />
+                                  </>;
                                 })()}
                                 <button className="be-delete" onClick={(e) => {e.stopPropagation(); deletePageObject(pageIdx, obj.id);}}>×</button>
                               </>}
