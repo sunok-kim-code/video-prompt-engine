@@ -2321,15 +2321,28 @@ function App() {
   }, []);
 
   const parseJSON = (text) => {
+    // Step 1: Strip markdown fences and leading text
     let cleaned = text.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
     const arrStart = cleaned.indexOf('[');
     const objStart = cleaned.indexOf('{');
     if (arrStart >= 0 && (objStart < 0 || arrStart < objStart)) cleaned = cleaned.substring(arrStart);
     else if (objStart >= 0) cleaned = cleaned.substring(objStart);
-    // Smart bracket matching that skips string contents
+
+    // Step 2: Pre-clean control characters inside string values before bracket matching
+    // Replace raw control chars (except already-escaped ones) inside JSON strings
+    cleaned = cleaned.replace(/[\x00-\x1f]/g, (ch) => {
+      if (ch === '\n') return '\\n';
+      if (ch === '\r') return '\\r';
+      if (ch === '\t') return '\\t';
+      return '';
+    });
+
+    // Step 3: Smart bracket matching that skips string contents
     let depth = 0, end = 0;
     const opener = cleaned[0];
-    const closer = opener === '[' ? ']' : '}';
+    if (!opener || (opener !== '[' && opener !== '{')) {
+      throw new Error('No JSON array or object found in response');
+    }
     let inString = false, escaped = false;
     for (let i = 0; i < cleaned.length; i++) {
       const ch = cleaned[i];
@@ -2340,23 +2353,37 @@ function App() {
       if (ch === '{' || ch === '[') depth++;
       else if (ch === '}' || ch === ']') { depth--; if (depth === 0) { end = i + 1; break; } }
     }
+    if (end === 0) end = cleaned.length;
+
+    // Step 4: Try parsing
+    let jsonStr = cleaned.substring(0, end);
     try {
-      return JSON.parse(cleaned.substring(0, end));
+      return JSON.parse(jsonStr);
     } catch(e) {
-      // Attempt repair: fix common issues like trailing commas, unescaped newlines in strings
-      let repaired = cleaned.substring(0, end);
-      // Remove trailing commas before } or ]
+      console.warn('JSON parse attempt 1 failed:', e.message, '| Repairing...');
+      // Step 5: Aggressive repair
+      let repaired = jsonStr;
+      // 5a: Remove trailing commas before } or ]
       repaired = repaired.replace(/,\s*([\]}])/g, '$1');
-      // Fix unescaped newlines inside string values
-      repaired = repaired.replace(/"([^"]*?)"/gs, (match) => {
-        return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-      });
+      // 5b: Fix unescaped quotes inside string values (heuristic: replace \" patterns that got double-escaped)
+      repaired = repaired.replace(/\\\\"/g, '\\"');
+      // 5c: Fix single quotes used as string delimiters
+      // Only replace single quotes that appear to be JSON string delimiters (after : or , or [ or at start)
+      repaired = repaired.replace(/([:\[,]\s*)'([^']*)'/g, '$1"$2"');
+      // 5d: Remove any BOM or zero-width chars
+      repaired = repaired.replace(/[\uFEFF\u200B\u200C\u200D]/g, '');
       try {
         return JSON.parse(repaired);
       } catch(e2) {
-        console.error('JSON parse failed even after repair. First 500 chars:', repaired.substring(0, 500));
-        console.error('Last 500 chars around error:', repaired.substring(Math.max(0, end - 600), end));
-        throw e;
+        console.error('JSON parse failed after repair. Error:', e2.message);
+        // Extract position from error message for debugging
+        const posMatch = e2.message.match(/position (\d+)/);
+        if (posMatch) {
+          const pos = parseInt(posMatch[1]);
+          console.error('Around error position:', repaired.substring(Math.max(0, pos - 60), pos + 60));
+        }
+        console.error('First 300 chars:', repaired.substring(0, 300));
+        throw new Error('JSON 파싱 실패: ' + e.message + ' (자동 수리도 실패)');
       }
     }
   };
@@ -2537,8 +2564,19 @@ function App() {
 
     const analyzePrompt = inputMode === 'scene' ? PROMPTS.ANALYZE_SCENES : PROMPTS.ANALYZE_STORY;
     log(`분석 모드: ${inputMode === 'scene' ? '씬 설명 기반' : '웹소설 기반'}`, 'info');
-    const result = await callText(analyzePrompt, sourceText + existingAssetsContext, {maxTokens: inputMode === 'scene' ? 32768 : 16384});
-    const parsed = parseJSON(result);
+    // Retry up to 2 times on JSON parse failure
+    let result, parsed;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        result = await callText(analyzePrompt, sourceText + existingAssetsContext, {maxTokens: inputMode === 'scene' ? 32768 : 16384});
+        parsed = parseJSON(result);
+        break;
+      } catch(parseErr) {
+        log(`분석 JSON 파싱 실패 (시도 ${attempt+1}/3): ${parseErr.message}`, 'warn');
+        if (attempt === 2) throw parseErr;
+        log(`재시도 중...`, 'info');
+      }
+    }
     // Mark existing assets
     if (parsed.characters) parsed.characters.forEach(c => { if (sa.characters[c.id]) c.isExisting = true; });
     if (parsed.backgrounds) parsed.backgrounds.forEach(b => { if (sa.backgrounds[b.id]) b.isExisting = true; });
@@ -2738,16 +2776,37 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
         }).join('\n');
         const batchPrompt = `Story title: ${data.title}\nSynopsis: ${data.synopsis}\n\nCharacters:\n${charContext}\n\nBackgrounds:\n${bgContext}\n\nProps/Objects:\n${propContext || '(none)'}\n\nPlot beats (batch ${Math.floor(i/BATCH_SIZE)+1}, beats ${batchBeats[0].beat}-${batchBeats[batchBeats.length-1].beat}):\n${batchPlotContext}\n\nCreate EXACTLY ${batchBeats.length} panels — one panel per plotBeat listed above. Start panelNumber at ${panelNum}. Do NOT create more or fewer panels than plotBeats. Each panel captures one scene entirely.\nEach panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details. Include ALL dialogue in the dialogue array.`;
         log(`  배치 ${Math.floor(i/BATCH_SIZE)+1}/${Math.ceil(beatCount/BATCH_SIZE)}: Beat ${batchBeats[0].beat}-${batchBeats[batchBeats.length-1].beat} 생성 중...`, 'info');
-        const batchResult = await callText(storyboardPrompt, batchPrompt, {maxTokens: 32768});
-        const batchParsed = parseJSON(batchResult);
+        // Retry up to 2 times on JSON parse failure
+        let batchParsed = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            const batchResult = await callText(storyboardPrompt, batchPrompt, {maxTokens: 32768});
+            batchParsed = parseJSON(batchResult);
+            break;
+          } catch(parseErr) {
+            log(`  배치 JSON 파싱 실패 (시도 ${attempt+1}/3): ${parseErr.message}`, 'warn');
+            if (attempt === 2) throw parseErr;
+            log(`  재시도 중...`, 'info');
+          }
+        }
         // Re-number panels sequentially
         batchParsed.forEach(p => { p.panelNumber = panelNum++; });
         parsed.push(...batchParsed);
         log(`  배치 완료: ${batchParsed.length}개 패널 생성`, 'success');
       }
     } else {
-      const result = await callText(storyboardPrompt, userPrompt, {maxTokens: 32768});
-      parsed = parseJSON(result);
+      // Retry up to 2 times on JSON parse failure
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const result = await callText(storyboardPrompt, userPrompt, {maxTokens: 32768});
+          parsed = parseJSON(result);
+          break;
+        } catch(parseErr) {
+          log(`스토리보드 JSON 파싱 실패 (시도 ${attempt+1}/3): ${parseErr.message}`, 'warn');
+          if (attempt === 2) throw parseErr;
+          log(`재시도 중...`, 'info');
+        }
+      }
     }
     // Scene mode: validate and log panel count vs plotBeat count
     if (inputMode === 'scene') {
