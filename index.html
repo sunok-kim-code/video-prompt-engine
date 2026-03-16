@@ -570,6 +570,53 @@ async function callNanoBanana(prompt, opts={}) {
 }
 
 // ============================================================
+// GROK (xAI) IMAGE GENERATION API
+// ============================================================
+async function callGrokImage(prompt, opts={}) {
+  const apiKey = getXaiKey();
+  const model = opts.model || 'grok-2-image';
+  const url = 'https://api.x.ai/v1/images/generations';
+  const body = {
+    model: model,
+    prompt: prompt.substring(0, 4000),
+    n: opts.n || 1,
+    response_format: 'b64_json',
+  };
+  // aspect ratio 지원 (grok-imagine-image 모델에서 사용 가능)
+  if (opts.aspectRatio) {
+    // Convert from Imagen-style "3:4" to xAI format
+    body.size = opts.aspectRatio === '3:4' ? '768x1024' : opts.aspectRatio === '1:1' ? '1024x1024' : opts.aspectRatio === '16:9' ? '1024x576' : opts.aspectRatio === '9:16' ? '576x1024' : '768x1024';
+  }
+  const maxRetries = 3;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey},
+      body: JSON.stringify(body)
+    });
+    if (res.status === 429) {
+      const wait = Math.min(15000 * Math.pow(2, attempt), 60000);
+      console.warn('Grok 429 rate limit, waiting '+wait/1000+'s (attempt '+(attempt+1)+'/'+maxRetries+')...');
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error('Grok Image ' + res.status + ': ' + errText.substring(0, 300));
+    }
+    const data = await res.json();
+    if (!data.data?.length) throw new Error('Grok: 이미지가 생성되지 않았습니다.');
+    return data.data.map(img => {
+      const b64 = img.b64_json || '';
+      // xAI may return with or without data URI prefix
+      if (b64.startsWith('data:')) return b64;
+      return 'data:image/png;base64,' + b64;
+    });
+  }
+  throw new Error('Grok Image: Rate limit exceeded after ' + maxRetries + ' retries');
+}
+
+// ============================================================
 // STABLE DIFFUSION API (Stability AI)
 // ============================================================
 function getStabilityKey() { const k=localStorage.getItem('STABILITY_API_KEY'); if(!k)throw new Error('Stability AI API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
@@ -1326,8 +1373,8 @@ function ApiKeyModal({onClose}) {
       <div style={{marginBottom:12}}><label className="form-label">Location</label><input className="modal-input" value={vl} onChange={e=>setVl(e.target.value)}/></div>
       <div style={{marginBottom:12}}><label className="form-label">Access Token</label><input className="modal-input" type="password" value={vt} onChange={e=>setVt(e.target.value)}/></div>
       <div className="key-status"><div className={`dot ${hasGeminiKey()?'on':''}`}/><span>Vertex AI {hasGeminiKey()?'설정됨':'미설정'}</span></div>
-      <div style={{marginBottom:12}}><label className="form-label">xAI (Grok) Key</label><input className="modal-input" type="password" value={xk} onChange={e=>setXk(e.target.value)}/></div>
-      <div className="key-status"><div className={`dot ${hasXaiKey()?'on':''}`}/><span>xAI {hasXaiKey()?'설정됨':'미설정'}</span></div>
+      <div style={{marginBottom:12}}><label className="form-label">xAI API Key (Grok Image 이미지 생성)</label><input className="modal-input" type="password" value={xk} onChange={e=>setXk(e.target.value)} placeholder="xai-..."/></div>
+      <div className="key-status"><div className={`dot ${hasXaiKey()?'on':''}`}/><span>xAI Grok {hasXaiKey()?'설정됨':'미설정'}</span></div>
       <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">Stability AI API Key (Stable Diffusion)</label><input className="modal-input" type="password" value={sk} onChange={e=>setSk(e.target.value)} placeholder="sk-..."/></div>
       <div className="key-status"><div className={`dot ${hasStabilityKey()?'on':''}`}/><span>Stability AI {hasStabilityKey()?'설정됨':'미설정'}</span></div>
       <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">fal.ai API Key (FLUX + ControlNet)</label><input className="modal-input" type="password" value={fk} onChange={e=>setFk(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx:xxxxxxxx"/></div>
@@ -2684,6 +2731,42 @@ Rules:
       return await callFalAI(styledPrompt, falOpts);
     }
 
+    // ========== Grok Image (xAI) ==========
+    if (imageProvider === 'grokImage') {
+      if (!hasXaiKey()) { log('xAI API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
+      // Build Visual ID Cards (same approach as Imagen 4 — text-only model)
+      let visualIdCards = '';
+      if (opts.assetDescriptions?.length > 0) {
+        const charDescs = opts.assetDescriptions.filter(d => d.startsWith('[Character'));
+        const propDescs = opts.assetDescriptions.filter(d => d.startsWith('[Prop'));
+        const bgDescs = opts.assetDescriptions.filter(d => d.startsWith('[Background'));
+        if (charDescs.length + propDescs.length + bgDescs.length > 0) {
+          visualIdCards = '\n\n=== VISUAL ID CARDS ===\n' +
+            'CRITICAL: Render EVERY character, prop, and background EXACTLY as described:\n\n';
+          if (charDescs.length > 0) {
+            visualIdCards += charDescs.map(d => d + '\n→ Keep hair, outfit, face IDENTICAL across all panels.').join('\n\n') + '\n\n';
+          }
+          if (propDescs.length > 0) {
+            visualIdCards += propDescs.join('\n') + '\n\n';
+          }
+          if (bgDescs.length > 0) {
+            visualIdCards += bgDescs.join('\n') + '\n\n';
+          }
+          visualIdCards += '=== END VISUAL ID CARDS ===\n';
+        }
+      }
+      const noTextDirective = '\nIMPORTANT: Do NOT render any text, letters, words, sound effects, or typography in the image. Purely visual only.';
+      const cleanedPrompt = sanitizeImagePrompt(prompt);
+      const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + noTextDirective;
+      const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
+      if (charCount > 0) {
+        log(`Grok Image 사용 (${curStyleName} + 에셋 ID카드: 캐릭터 ${charCount}명)`, 'info');
+      } else {
+        log(`Grok Image 사용 (${curStyleName} 스타일 적용)`, 'info');
+      }
+      return await callGrokImage(grokPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+    }
+
     // ========== Stable Diffusion ==========
     if (imageProvider === 'stableDiffusion') {
       const sdOpts = {aspectRatio: opts.aspectRatio || '3:4'};
@@ -3957,6 +4040,7 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
       <div className="toolbar">
         <label>이미지 생성</label>
         <select className="form-select" style={{width:160}} value={imageProvider} onChange={e=>setImageProvider(e.target.value)}>
+          <option value="grokImage">Grok Image (xAI 고품질)</option>
           <option value="falAI">FLUX + ControlNet (fal.ai)</option>
           <option value="stableDiffusion">Stable Diffusion 3.5</option>
           <option value="imagen4">Imagen 4 (고품질)</option>
