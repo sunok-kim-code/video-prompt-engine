@@ -173,13 +173,16 @@ div:hover > .panel-ctrl{opacity:1 !important;}
 .be-ctrl-label{font-size:10px;color:#888;}
 .be-ctrl-val{font-size:10px;color:#aaa;}
 .be-body{display:flex;flex:1;overflow:hidden;}
-.be-canvas{flex:1;overflow:auto;background:#111;display:flex;justify-content:center;padding-bottom:20px;}
-.be-page-canvas{position:relative;background:#222;box-shadow:0 0 30px rgba(0,0,0,0.8);margin:20px auto;}
-.be-page-tabs{display:flex;gap:4px;padding:8px 20px;background:#0a0a0e;border-bottom:1px solid #333;flex-wrap:wrap;align-items:center;}
-.be-page-tab{padding:6px 12px;background:#2a2a40;border:1px solid #444;color:#aaa;cursor:pointer;border-radius:4px;font-size:11px;font-weight:600;transition:all .15s;}
-.be-page-tab.active{background:#4fc3f7;border-color:#4fc3f7;color:#000;}
-.be-page-tab:hover{border-color:#666;}
-.be-page-add{padding:6px 12px;background:#0f4c5c;border:1px solid #4fc3f7;color:#4fc3f7;cursor:pointer;border-radius:4px;font-size:11px;font-weight:600;}
+.be-canvas{flex:1;overflow:auto;background:#111;display:flex;flex-direction:column;align-items:center;padding-bottom:40px;}
+.be-page-canvas{position:relative;background:#fff;box-shadow:0 0 30px rgba(0,0,0,0.5);flex-shrink:0;}
+.be-page-canvas.focused{outline:2px solid #4fc3f7;outline-offset:0;}
+.be-page-bar{display:flex;align-items:center;gap:8px;padding:6px 16px;background:#1a1a2e;border:1px solid #333;border-radius:6px 6px 0 0;margin-top:20px;color:#ccc;font-size:12px;cursor:pointer;transition:all .15s;}
+.be-page-bar.focused{background:#2a2a50;border-color:#4fc3f7;color:#fff;}
+.be-page-bar-btn{border:none;background:rgba(79,195,247,0.15);color:#4fc3f7;font-size:10px;padding:3px 10px;border-radius:4px;cursor:pointer;font-weight:600;}
+.be-page-bar-btn.del{background:rgba(231,76,60,0.15);color:#e74c3c;}
+.be-page-bar-btn:hover{opacity:0.8;}
+.be-add-page-bottom{margin:20px auto;padding:16px 40px;background:#1a1a2e;border:2px dashed #4fc3f7;color:#4fc3f7;font-size:14px;font-weight:700;text-align:center;cursor:pointer;border-radius:8px;transition:all .15s;}
+.be-add-page-bottom:hover{background:#2a2a50;}
 .be-strip{position:relative;flex-shrink:0;}
 .be-panel{position:relative;user-select:none;}
 .be-panel-badge{position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.7);color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;z-index:15;}
@@ -2922,134 +2925,140 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
             </div>
             <div className="be-divider" />
             <button className="btn btn-outline btn-sm be-btn-export" onClick={async () => {
-              const page = editorPages[currentPageIdx];
-              const allObjects = page.objects.filter(o => o.type === 'bubble');
-              const jpegUrl = await exportPageAsJpeg(currentPageIdx);
-              if (jpegUrl) { downloadDataUrl(jpegUrl, `${analysis?.title || 'page'}_${currentPageIdx+1}.jpg`); log('페이지 JPEG 내보내기 완료', 'success'); }
-            }}>현재 페이지 JPG</button>
-            <button className="btn btn-outline btn-sm be-btn-export" onClick={async () => {
               for (let i = 0; i < editorPages.length; i++) {
                 const jpegUrl = await exportPageAsJpeg(i);
                 if (jpegUrl) downloadDataUrl(jpegUrl, `${analysis?.title || 'page'}_${i+1}.jpg`);
               }
               log(`전체 ${editorPages.length}페이지 JPG 내보내기 완료`, 'success');
-            }}>전체 페이지 JPG</button>
+            }}>전체 페이지 JPG 내보내기</button>
             <button className="btn btn-success btn-sm" onClick={closeBubbleEditor} style={{fontSize:12}}>완료</button>
           </div>
 
-          {/* Page tabs */}
-          <div className="be-page-tabs">
-            {editorPages.map((page, idx) => (
-              <button key={page.id} className={`be-page-tab${idx === currentPageIdx ? ' active' : ''}`}
-                onClick={() => setCurrentPageIdx(idx)}>
-                페이지 {idx + 1}
-              </button>
-            ))}
-            <button className="be-page-add" onClick={addPage}>+ 새 페이지</button>
-            {editorPages.length > 1 && (
-              <button className="btn btn-outline btn-sm" style={{marginLeft:'auto'}} onClick={() => deletePage(currentPageIdx)}>페이지 삭제</button>
-            )}
-          </div>
-
           <div className="be-body">
-            {/* Main canvas area */}
+            {/* Main canvas area — all pages stacked vertically */}
             <div className="be-canvas" ref={editorCanvasRef}>
-              {editorPages.length > 0 && (() => {
-                const page = editorPages[currentPageIdx];
+              {editorPages.map((page, pageIdx) => {
                 const scale = editorPanelScale / 100;
                 const displayW = PAGE_W * scale;
                 const displayH = PAGE_H * scale;
+                const isFocused = pageIdx === currentPageIdx;
                 return (
-                  <div className="be-page-canvas" style={{width: displayW, height: displayH, position:'relative'}}>
-                    {/* Render all objects in z-order */}
-                    {[...page.objects].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1)).map(obj => {
-                      const isSelected = selectedObjectId === obj.id;
-                      if (obj.type === 'panel' || obj.type === 'image') {
-                        return (
-                          <div key={obj.id} className={`be-obj${isSelected ? ' selected' : ''}`}
-                            style={{
-                              left: obj.x * scale, top: obj.y * scale, width: obj.w * scale, height: obj.h * scale,
-                              zIndex: obj.zIndex || 1
-                            }}
-                            onMouseDown={(e) => {
-                              setSelectedObjectId(obj.id);
-                              setSelectedObjectType(obj.type);
-                              if (['TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.dataset.resize) return;
-                              e.preventDefault();
-                              const sx = e.clientX, sy = e.clientY, ox = obj.x, oy = obj.y;
-                              const onMove = (ev) => updatePageObject(currentPageIdx, obj.id, {x: Math.max(0, ox + (ev.clientX - sx) / scale), y: Math.max(0, oy + (ev.clientY - sy) / scale)});
-                              const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-                              window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-                            }}>
-                            <img src={obj.src} className="be-obj-img" draggable={false} />
-                            {isSelected && <>
-                              <div data-resize="true" className="be-resize"
-                                onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
-                                  const sx=e.clientX,sy=e.clientY,ow=obj.w,oh=obj.h;
-                                  const onMove=(ev)=>updatePageObject(currentPageIdx, obj.id,{w:Math.max(50,ow+(ev.clientX-sx)/scale),h:Math.max(50,oh+(ev.clientY-sy)/scale)});
-                                  const onUp=()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
-                                  window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);}}/>
-                              <button className="be-delete" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>×</button>
-                            </>}
-                          </div>
-                        );
-                      } else if (obj.type === 'bubble') {
-                        const bt = BUBBLE_TYPES[obj.bubbleStyle] || BUBBLE_TYPES.speech;
-                        const tailPos = obj.tailPos ?? 0.3;
-                        const tailSz = obj.tailSize ?? 1.0;
-                        const svgH = (obj.h + (bt.tail ? 18 * tailSz : 0)) * scale;
-                        return (
-                          <div key={obj.id} className={`be-bubble${isSelected ? ' selected' : ''}`}
-                            style={{left: obj.x * scale, top: obj.y * scale, width: obj.w * scale, height: svgH, zIndex: obj.zIndex || 1}}
-                            onMouseDown={(e) => {
-                              setSelectedObjectId(obj.id);
-                              setSelectedObjectType('bubble');
-                              if (['TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.dataset.resize) return;
-                              e.preventDefault();
-                              const sx = e.clientX, sy = e.clientY, ox = obj.x, oy = obj.y;
-                              const onMove = (ev) => updatePageObject(currentPageIdx, obj.id, {x: Math.max(0, ox + (ev.clientX - sx) / scale), y: Math.max(0, oy + (ev.clientY - sy) / scale)});
-                              const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-                              window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-                            }}>
-                            <svg width={obj.w * scale} height={svgH} className="be-bubble-svg" style={{filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'}}>
-                              {bt.spiky ? (() => {
-                                const cx=obj.w*scale/2, cy=obj.h*scale/2, pts=[];
-                                for(let s=0;s<24;s++){const a=(Math.PI*s)/12-Math.PI/2,rx=s%2===0?obj.w*scale/2:obj.w*scale/2.6,ry=s%2===0?obj.h*scale/2:obj.h*scale/2.6;pts.push(`${cx+Math.cos(a)*rx},${cy+Math.sin(a)*ry}`);}
-                                return <polygon points={pts.join(' ')} fill={bt.bg} stroke={bt.border} strokeWidth="2"/>;
-                              })() : (
-                                <rect x="1" y="1" width={obj.w*scale-2} height={obj.h*scale-2} rx={bt.radius*scale} ry={bt.radius*scale}
-                                  fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth="2"
-                                  strokeDasharray={bt.dashed?'6 4':'none'}/>
-                              )}
-                              {bt.tail && (() => {
-                                const tx=obj.w*scale*tailPos, tw=8*tailSz*scale, th=16*tailSz*scale;
-                                return <polygon points={`${tx-tw},${obj.h*scale-2} ${tx},${obj.h*scale+th} ${tx+tw*1.5},${obj.h*scale-2}`} fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth="2"/>;
-                              })()}
-                            </svg>
-                            <textarea className="be-bubble-text" value={obj.text} onChange={(e) => updatePageObject(currentPageIdx, obj.id, {text: e.target.value})}
-                              placeholder={bt.name+'...'} onClick={() => setSelectedObjectId(obj.id)}
-                              style={{width:obj.w*scale-12, height:obj.h*scale-8, fontWeight:bt.fontWeight, fontSize:(obj.fontSize||14)*scale, color:bt.color||'#111', fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif"}}/>
-                            {isSelected && <>
-                              <div data-resize="true" className="be-resize"
-                                onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
-                                  const sx=e.clientX,sy=e.clientY,ow=obj.w,oh=obj.h;
-                                  const onMove=(ev)=>updatePageObject(currentPageIdx, obj.id,{w:Math.max(50,ow+(ev.clientX-sx)/scale),h:Math.max(28,oh+(ev.clientY-sy)/scale)});
-                                  const onUp=()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
-                                  window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);}}/>
-                              <button className="be-delete" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>×</button>
-                            </>}
-                          </div>
-                        );
-                      }
-                    })}
-                  </div>
+                  <React.Fragment key={page.id}>
+                    {/* Page header bar */}
+                    <div className={`be-page-bar${isFocused ? ' focused' : ''}`}
+                      onClick={() => setCurrentPageIdx(pageIdx)}>
+                      <span style={{fontWeight:700}}>페이지 {pageIdx + 1}</span>
+                      <span style={{fontSize:10,color:'#888'}}>({page.objects.length}개 객체)</span>
+                      <div style={{flex:1}} />
+                      <button className="be-page-bar-btn" onClick={async (e) => {
+                        e.stopPropagation();
+                        const jpegUrl = await exportPageAsJpeg(pageIdx);
+                        if (jpegUrl) { downloadDataUrl(jpegUrl, `${analysis?.title || 'page'}_${pageIdx+1}.jpg`); log(`페이지 ${pageIdx+1} JPG 내보내기 완료`, 'success'); }
+                      }}>JPG 저장</button>
+                      {editorPages.length > 1 && (
+                        <button className="be-page-bar-btn del" onClick={(e) => { e.stopPropagation(); deletePage(pageIdx); }}>삭제</button>
+                      )}
+                    </div>
+                    {/* Page canvas */}
+                    <div className={`be-page-canvas${isFocused ? ' focused' : ''}`}
+                      style={{width: displayW, height: displayH, position:'relative'}}
+                      onClick={() => setCurrentPageIdx(pageIdx)}>
+                      {/* Render all objects in z-order */}
+                      {[...page.objects].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1)).map(obj => {
+                        const isSelected = selectedObjectId === obj.id;
+                        if (obj.type === 'panel' || obj.type === 'image') {
+                          return (
+                            <div key={obj.id} className={`be-obj${isSelected ? ' selected' : ''}`}
+                              style={{
+                                left: obj.x * scale, top: obj.y * scale, width: obj.w * scale, height: obj.h * scale,
+                                zIndex: obj.zIndex || 1
+                              }}
+                              onMouseDown={(e) => {
+                                setCurrentPageIdx(pageIdx);
+                                setSelectedObjectId(obj.id);
+                                setSelectedObjectType(obj.type);
+                                if (['TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.dataset.resize) return;
+                                e.preventDefault();
+                                const sx = e.clientX, sy = e.clientY, ox = obj.x, oy = obj.y;
+                                const onMove = (ev) => updatePageObject(pageIdx, obj.id, {x: Math.max(0, ox + (ev.clientX - sx) / scale), y: Math.max(0, oy + (ev.clientY - sy) / scale)});
+                                const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                                window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+                              }}>
+                              <img src={obj.src} className="be-obj-img" draggable={false} />
+                              {isSelected && <>
+                                <div data-resize="true" className="be-resize"
+                                  onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
+                                    const sx=e.clientX,sy=e.clientY,ow=obj.w,oh=obj.h;
+                                    const onMove=(ev)=>updatePageObject(pageIdx, obj.id,{w:Math.max(50,ow+(ev.clientX-sx)/scale),h:Math.max(50,oh+(ev.clientY-sy)/scale)});
+                                    const onUp=()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
+                                    window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);}}/>
+                                <button className="be-delete" onClick={(e) => {e.stopPropagation(); deletePageObject(pageIdx, obj.id);}}>×</button>
+                              </>}
+                            </div>
+                          );
+                        } else if (obj.type === 'bubble') {
+                          const bt = BUBBLE_TYPES[obj.bubbleStyle] || BUBBLE_TYPES.speech;
+                          const tailPos = obj.tailPos ?? 0.3;
+                          const tailSz = obj.tailSize ?? 1.0;
+                          const svgH = (obj.h + (bt.tail ? 18 * tailSz : 0)) * scale;
+                          return (
+                            <div key={obj.id} className={`be-bubble${isSelected ? ' selected' : ''}`}
+                              style={{left: obj.x * scale, top: obj.y * scale, width: obj.w * scale, height: svgH, zIndex: obj.zIndex || 1}}
+                              onMouseDown={(e) => {
+                                setCurrentPageIdx(pageIdx);
+                                setSelectedObjectId(obj.id);
+                                setSelectedObjectType('bubble');
+                                if (['TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.dataset.resize) return;
+                                e.preventDefault();
+                                const sx = e.clientX, sy = e.clientY, ox = obj.x, oy = obj.y;
+                                const onMove = (ev) => updatePageObject(pageIdx, obj.id, {x: Math.max(0, ox + (ev.clientX - sx) / scale), y: Math.max(0, oy + (ev.clientY - sy) / scale)});
+                                const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+                                window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+                              }}>
+                              <svg width={obj.w * scale} height={svgH} className="be-bubble-svg" style={{filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.4))'}}>
+                                {bt.spiky ? (() => {
+                                  const cx=obj.w*scale/2, cy=obj.h*scale/2, pts=[];
+                                  for(let s=0;s<24;s++){const a=(Math.PI*s)/12-Math.PI/2,rx=s%2===0?obj.w*scale/2:obj.w*scale/2.6,ry=s%2===0?obj.h*scale/2:obj.h*scale/2.6;pts.push(`${cx+Math.cos(a)*rx},${cy+Math.sin(a)*ry}`);}
+                                  return <polygon points={pts.join(' ')} fill={bt.bg} stroke={bt.border} strokeWidth="2"/>;
+                                })() : (
+                                  <rect x="1" y="1" width={obj.w*scale-2} height={obj.h*scale-2} rx={bt.radius*scale} ry={bt.radius*scale}
+                                    fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth="2"
+                                    strokeDasharray={bt.dashed?'6 4':'none'}/>
+                                )}
+                                {bt.tail && (() => {
+                                  const tx=obj.w*scale*tailPos, tw=8*tailSz*scale, th=16*tailSz*scale;
+                                  return <polygon points={`${tx-tw},${obj.h*scale-2} ${tx},${obj.h*scale+th} ${tx+tw*1.5},${obj.h*scale-2}`} fill={bt.bg} stroke={bt.border==='none'?'transparent':bt.border} strokeWidth="2"/>;
+                                })()}
+                              </svg>
+                              <textarea className="be-bubble-text" value={obj.text} onChange={(e) => updatePageObject(pageIdx, obj.id, {text: e.target.value})}
+                                placeholder={bt.name+'...'} onClick={() => { setCurrentPageIdx(pageIdx); setSelectedObjectId(obj.id); }}
+                                style={{width:obj.w*scale-12, height:obj.h*scale-8, fontWeight:bt.fontWeight, fontSize:(obj.fontSize||14)*scale, color:bt.color||'#111', fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif"}}/>
+                              {isSelected && <>
+                                <div data-resize="true" className="be-resize"
+                                  onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
+                                    const sx=e.clientX,sy=e.clientY,ow=obj.w,oh=obj.h;
+                                    const onMove=(ev)=>updatePageObject(pageIdx, obj.id,{w:Math.max(50,ow+(ev.clientX-sx)/scale),h:Math.max(28,oh+(ev.clientY-sy)/scale)});
+                                    const onUp=()=>{window.removeEventListener('mousemove',onMove);window.removeEventListener('mouseup',onUp);};
+                                    window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);}}/>
+                                <button className="be-delete" onClick={(e) => {e.stopPropagation(); deletePageObject(pageIdx, obj.id);}}>×</button>
+                              </>}
+                            </div>
+                          );
+                        }
+                      })}
+                    </div>
+                  </React.Fragment>
                 );
-              })()}
+              })}
+              {/* Add page button at bottom */}
+              <div className="be-add-page-bottom" onClick={addPage}>
+                + 새 페이지 추가
+              </div>
             </div>
 
-            {/* Right sidebar */}
+            {/* Right sidebar — shows focused page objects */}
             <div className="be-sidebar">
-              <div className="be-sidebar-title">페이지 객체</div>
+              <div className="be-sidebar-title">페이지 {currentPageIdx + 1} 객체</div>
               {editorPages[currentPageIdx]?.objects.length === 0 && <div className="be-sidebar-empty">상단 버튼으로 말풍선이나 이미지를 추가하세요.</div>}
               {editorPages[currentPageIdx]?.objects.map((obj, oi) => {
                 const isSelected = selectedObjectId === obj.id;
@@ -3099,10 +3108,10 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
                   return (
                     <div key={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={() => setSelectedObjectId(obj.id)}>
                       <div className="be-item-header">
-                        <span className={`be-item-label${isSelected?' selected':''}`}>{oi+1}. 이미지</span>
+                        <span className={`be-item-label${isSelected?' selected':''}`}>{oi+1}. {obj.type === 'panel' ? '패널' : '이미지'}</span>
                         <button className="be-item-del" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>삭제</button>
                       </div>
-                      <div style={{fontSize:11,color:'#aaa',padding:6}}>크기: {obj.w}x{obj.h} | 위치: ({obj.x}, {obj.y})</div>
+                      <div style={{fontSize:11,color:'#aaa',padding:6}}>크기: {Math.round(obj.w)}×{Math.round(obj.h)} | 위치: ({Math.round(obj.x)}, {Math.round(obj.y)})</div>
                     </div>
                   );
                 }
