@@ -2828,12 +2828,10 @@ Rules:
         }
       }
       const noTextDirective = '\nIMPORTANT: Do NOT render any text, letters, words, sound effects, or typography in the image. Purely visual only.';
-      // Apply both general + Grok-specific sanitization (stricter content moderation)
-      let cleanedPrompt = sanitizeImagePrompt(prompt);
-      cleanedPrompt = sanitizeForGrok(cleanedPrompt);
-      // Also sanitize Visual ID Cards for Grok
-      const safeIdCards = sanitizeForGrok(visualIdCards);
-      const grokPrompt = stylePrefix + cleanedPrompt + safeIdCards + noTextDirective;
+      // Use original prompt (no Grok-specific sanitization — preserve original descriptions)
+      // Only strip Korean onomatopoeia/SFX which don't help image generation
+      const cleanedPrompt = sanitizeImagePrompt(prompt);
+      const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + noTextDirective;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
       if (charCount > 0) {
         log(`Grok Image 사용 (${curStyleName} + 에셋 ID카드: 캐릭터 ${charCount}명)`, 'info');
@@ -2847,10 +2845,22 @@ Rules:
         if (errMsg.includes('content moderation') || errMsg.includes('rejected')) {
           log('⚠️ Grok 콘텐츠 필터 거부 — 대체 모델로 자동 전환 시도 중...', 'warn');
           // Fallback: try Imagen 4 if available, then fal.ai
+          // Fallback with ORIGINAL prompt (no sanitization — preserve creative intent)
           const hasVertex = !!(localStorage.getItem('VERTEX_PROJECT_ID'));
+          if (hasFalKey()) {
+            log('fal.ai (Flux)로 대체 생성 중... (원본 프롬프트 유지)', 'info');
+            try {
+              const falPrompt = stylePrefix + cleanedPrompt + (opts.assetDescriptions?.length > 0 ? '\n\nVISUAL CONSISTENCY:\n' + opts.assetDescriptions.join('\n') : '');
+              const falResult = await callFalAI(falPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+              log('✅ fal.ai 대체 생성 성공', 'success');
+              return falResult;
+            } catch (falErr) {
+              log('fal.ai 대체도 실패: ' + (falErr.message||'').substring(0,100), 'warn');
+            }
+          }
           if (hasVertex) {
             log('Imagen 4로 대체 생성 중...', 'info');
-            const fallbackPrompt = stylePrefix + cleanedPrompt + safeIdCards + noTextDirective;
+            const fallbackPrompt = stylePrefix + cleanedPrompt + visualIdCards + noTextDirective;
             try {
               const fallbackResult = await callImagen(fallbackPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
               log('✅ Imagen 4 대체 생성 성공', 'success');
@@ -2859,19 +2869,8 @@ Rules:
               log('Imagen 4 대체도 실패: ' + (img4Err.message||'').substring(0,100), 'warn');
             }
           }
-          if (hasFalKey()) {
-            log('fal.ai로 대체 생성 중...', 'info');
-            try {
-              const falPrompt = stylePrefix + cleanedPrompt + (opts.assetDescriptions?.length > 0 ? '\n' + opts.assetDescriptions.join('\n') : '');
-              const falResult = await callFalAI(falPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
-              log('✅ fal.ai 대체 생성 성공', 'success');
-              return falResult;
-            } catch (falErr) {
-              log('fal.ai 대체도 실패: ' + (falErr.message||'').substring(0,100), 'warn');
-            }
-          }
           // All fallbacks failed
-          throw new Error('Grok 콘텐츠 필터 거부 (대체 모델도 실패). 프롬프트를 수정하거나 다른 이미지 모델을 선택해주세요.');
+          throw new Error('Grok 콘텐츠 필터 거부. fal.ai 또는 다른 이미지 모델을 직접 선택해주세요.');
         }
         throw grokErr; // Re-throw non-moderation errors
       }
