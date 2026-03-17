@@ -616,6 +616,55 @@ async function callGrokImage(prompt, opts={}) {
   throw new Error('Grok Image: Rate limit exceeded after ' + maxRetries + ' retries');
 }
 
+// Grok Image Edit — /v1/images/edits endpoint
+// Accepts reference images (up to 3) for style/character/background consistency
+async function callGrokEdit(prompt, refImages, opts={}) {
+  const apiKey = getXaiKey();
+  const model = opts.model || 'grok-imagine-image';
+  const url = 'https://api.x.ai/v1/images/edits';
+  const body = {
+    model: model,
+    prompt: prompt.substring(0, 4000),
+    n: opts.n || 1,
+    response_format: 'b64_json',
+  };
+  if (opts.aspectRatio) {
+    body.aspect_ratio = opts.aspectRatio;
+  }
+  // Single image → "image" field; multiple images → "images" array
+  if (refImages.length === 1) {
+    body.image = { url: refImages[0], type: 'image_url' };
+  } else if (refImages.length > 1) {
+    body.images = refImages.slice(0, 3).map(img => ({ url: img, type: 'image_url' }));
+  }
+  const maxRetries = 3;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey},
+      body: JSON.stringify(body)
+    });
+    if (res.status === 429) {
+      const wait = Math.min(15000 * Math.pow(2, attempt), 60000);
+      console.warn('GrokEdit 429, waiting '+wait/1000+'s (attempt '+(attempt+1)+'/'+maxRetries+')...');
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error('Grok Edit ' + res.status + ': ' + errText.substring(0, 300));
+    }
+    const data = await res.json();
+    if (!data.data?.length) throw new Error('Grok Edit: 이미지가 생성되지 않았습니다.');
+    return data.data.map(img => {
+      const b64 = img.b64_json || '';
+      if (b64.startsWith('data:')) return b64;
+      return 'data:image/png;base64,' + b64;
+    });
+  }
+  throw new Error('Grok Edit: Rate limit exceeded after ' + maxRetries + ' retries');
+}
+
 // ============================================================
 // STABLE DIFFUSION API (Stability AI)
 // ============================================================
@@ -2915,6 +2964,43 @@ Rules:
         '=== END RENDERING CONSISTENCY ===\n';
       const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
+
+      // Collect reference images for Grok Edit (character + background, max 3)
+      const grokRefImages = [];
+      if (opts.referenceImages?.length > 0) {
+        for (const ref of opts.referenceImages) {
+          if (grokRefImages.length >= 3) break;
+          const img = ref.image || ref;
+          if (typeof img === 'string' && img.startsWith('data:')) {
+            grokRefImages.push(img);
+          }
+        }
+      }
+
+      if (grokRefImages.length > 0) {
+        // Use Grok Edit API with reference images for better consistency
+        const refLabels = [];
+        if (opts.referenceImages) {
+          opts.referenceImages.forEach((ref, idx) => {
+            const desc = ref.description || '';
+            if (desc.startsWith('character')) refLabels.push(`image ${idx+1}: character reference`);
+            else if (desc.startsWith('background')) refLabels.push(`image ${idx+1}: background reference`);
+            else refLabels.push(`image ${idx+1}: reference`);
+          });
+        }
+        const refContext = refLabels.length > 0
+          ? `\n\nReference images provided: ${refLabels.join(', ')}. Maintain the EXACT same character appearances, art style, color palette, and rendering quality from these reference images. `
+          : '';
+        const editPrompt = stylePrefix + cleanedPrompt + refContext + visualIdCards + toneDirective + noTextDirective;
+        log(`Grok Edit 사용 (레퍼런스 ${grokRefImages.length}개 + ${curStyleName}${charCount > 0 ? ' + 캐릭터 '+charCount+'명' : ''})`, 'info');
+        try {
+          return await callGrokEdit(editPrompt, grokRefImages, {aspectRatio: opts.aspectRatio || '3:4'});
+        } catch (editErr) {
+          log(`Grok Edit 실패: ${(editErr.message||'').substring(0,100)} — 텍스트 전용으로 재시도...`, 'warn');
+          // Fall through to text-only generation
+        }
+      }
+
       if (charCount > 0) {
         log(`Grok Image 사용 (${curStyleName} + 에셋 ID카드: 캐릭터 ${charCount}명)`, 'info');
       } else {
