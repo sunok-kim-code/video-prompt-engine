@@ -4194,7 +4194,10 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null); // {current, total, episode, step}
   const [showBatchModal, setShowBatchModal] = useState(false);
-  const [batchConfig, setBatchConfig] = useState({step12Provider:'imagen4', step34Provider:'grokImage', artStyleOverride:''});
+  const [batchConfig, setBatchConfig] = useState({
+    step1Provider:'imagen4', step2Provider:'imagen4', step3Provider:'grokImage', step4Provider:'grokImage',
+    step1ArtStyle:'', step2ArtStyle:'', step3ArtStyle:'', step4ArtStyle:'',
+  });
   const [batchEpisodeList, setBatchEpisodeList] = useState([]);
   // Storyboard editing state
   const [editingSbPanel, setEditingSbPanel] = useState(null); // index of panel being edited
@@ -4215,13 +4218,9 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     let completedCount = 0;
 
     log(`\n===== 연속 실행 모드 시작: ${targetEpisodes.length}개 에피소드 =====`, 'info');
-    log(`설정: Step 1,2 → ${config.step12Provider || 'imagen4'} / Step 3,4 → ${config.step34Provider || 'grokImage'} / 스타일: ${config.artStyleOverride || artStyle}`, 'info');
+    log(`설정: Step1 ${config.step1Provider}/${config.step1ArtStyle||artStyle}, Step2 ${config.step2Provider}/${config.step2ArtStyle||artStyle}, Step3 ${config.step3Provider}/${config.step3ArtStyle||artStyle}, Step4 ${config.step4Provider}/${config.step4ArtStyle||artStyle}`, 'info');
 
     try {
-      // Apply art style override if specified
-      if (config.artStyleOverride) {
-        setArtStyle(config.artStyleOverride);
-      }
 
       for (let i = 0; i < targetEpisodes.length; i++) {
         if (abortRef.current) { log('연속 실행 중단됨', 'warn'); break; }
@@ -4259,31 +4258,35 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         setInputMode(epInputMode);
 
         try {
-          // Step 1: Story Analysis (uses text model, provider doesn't matter)
+          // Step 1: Story Analysis
           setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 1: 스토리 분석'});
-          setImageProvider(config.step12Provider || 'imagen4');
-          log(`${epNum}화 Step 1: 스토리 분석 (${config.step12Provider || 'imagen4'})`, 'info');
+          setImageProvider(config.step1Provider || 'imagen4');
+          if (config.step1ArtStyle) setArtStyle(config.step1ArtStyle);
+          log(`${epNum}화 Step 1: 스토리 분석 (${config.step1Provider} / ${ART_STYLES[config.step1ArtStyle || artStyle]?.name})`, 'info');
           const analysisResult = await runStep1();
           if (abortRef.current) break;
 
-          // Step 2: Reference Generation (Imagen4 for TL compatibility)
+          // Step 2: Reference Generation
           setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 2: 레퍼런스 생성'});
-          setImageProvider(config.step12Provider || 'imagen4');
-          log(`${epNum}화 Step 2: 레퍼런스 생성 (${config.step12Provider || 'imagen4'})`, 'info');
+          setImageProvider(config.step2Provider || 'imagen4');
+          if (config.step2ArtStyle) setArtStyle(config.step2ArtStyle);
+          log(`${epNum}화 Step 2: 레퍼런스 생성 (${config.step2Provider} / ${ART_STYLES[config.step2ArtStyle || artStyle]?.name})`, 'info');
           const refsResult = await runStep2(analysisResult);
           if (abortRef.current) break;
 
-          // Step 3: Storyboard (uses text model, but set provider for step 4 consistency)
+          // Step 3: Storyboard
           setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 3: 스토리보드'});
-          setImageProvider(config.step34Provider || 'grokImage');
-          log(`${epNum}화 Step 3: 스토리보드 생성`, 'info');
+          setImageProvider(config.step3Provider || 'grokImage');
+          if (config.step3ArtStyle) setArtStyle(config.step3ArtStyle);
+          log(`${epNum}화 Step 3: 스토리보드 생성 (${config.step3Provider} / ${ART_STYLES[config.step3ArtStyle || artStyle]?.name})`, 'info');
           const sbResult = await runStep3(analysisResult);
           if (abortRef.current) break;
 
-          // Step 4: Panel Generation (Grok for quality)
+          // Step 4: Panel Generation
           setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 4: 패널 이미지 생성'});
-          setImageProvider(config.step34Provider || 'grokImage');
-          log(`${epNum}화 Step 4: 패널 이미지 생성 (${config.step34Provider || 'grokImage'})`, 'info');
+          setImageProvider(config.step4Provider || 'grokImage');
+          if (config.step4ArtStyle) setArtStyle(config.step4ArtStyle);
+          log(`${epNum}화 Step 4: 패널 이미지 생성 (${config.step4Provider} / ${ART_STYLES[config.step4ArtStyle || artStyle]?.name})`, 'info');
           await runStep4(sbResult, refsResult);
           if (abortRef.current) break;
 
@@ -4311,7 +4314,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     } finally {
       // Restore original settings
       setImageProvider(originalProvider);
-      if (!config.artStyleOverride) setArtStyle(originalArtStyle);
+      setArtStyle(originalArtStyle);
       setBatchRunning(false);
       setRunning(false);
       setBatchProgress(null);
@@ -4349,9 +4352,10 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     setShowBatchModal(false);
     runBatchPipeline({
       episodes: selectedEps,
-      step12Provider: batchConfig.step12Provider,
-      step34Provider: batchConfig.step34Provider,
-      artStyleOverride: batchConfig.artStyleOverride || undefined,
+      step1Provider: batchConfig.step1Provider, step2Provider: batchConfig.step2Provider,
+      step3Provider: batchConfig.step3Provider, step4Provider: batchConfig.step4Provider,
+      step1ArtStyle: batchConfig.step1ArtStyle || undefined, step2ArtStyle: batchConfig.step2ArtStyle || undefined,
+      step3ArtStyle: batchConfig.step3ArtStyle || undefined, step4ArtStyle: batchConfig.step4ArtStyle || undefined,
     });
   };
 
@@ -5934,34 +5938,38 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
             </div>
 
             <div className="batch-modal-body">
-              {/* Provider config */}
-              <div className="batch-config-section">
-                <div className="batch-config-label">Step 1-2 프로바이더 (스토리 분석 + 레퍼런스)</div>
-                <select className="form-select" style={{width:'100%'}} value={batchConfig.step12Provider} onChange={e => setBatchConfig(prev => ({...prev, step12Provider: e.target.value}))}>
-                  <option value="imagen4">Imagen 4 (고품질, 추천)</option>
-                  <option value="grokImage">Grok Image (xAI)</option>
-                  <option value="falAI">FLUX (fal.ai)</option>
-                </select>
-              </div>
-
-              <div className="batch-config-section">
-                <div className="batch-config-label">Step 3-4 프로바이더 (스토리보드 + 패널)</div>
-                <select className="form-select" style={{width:'100%'}} value={batchConfig.step34Provider} onChange={e => setBatchConfig(prev => ({...prev, step34Provider: e.target.value}))}>
-                  <option value="grokImage">Grok Image (xAI, 추천)</option>
-                  <option value="imagen4">Imagen 4 (고품질)</option>
-                  <option value="falAI">FLUX (fal.ai)</option>
-                </select>
-              </div>
-
-              <div className="batch-config-section">
-                <div className="batch-config-label">아트 스타일 (비우면 현재 설정 사용: {ART_STYLES[artStyle]?.name})</div>
-                <select className="form-select" style={{width:'100%'}} value={batchConfig.artStyleOverride} onChange={e => setBatchConfig(prev => ({...prev, artStyleOverride: e.target.value}))}>
-                  <option value="">현재 설정 유지</option>
-                  {Object.entries(ART_STYLES).map(([key, style]) => (
-                    <option key={key} value={key}>{style.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Per-step config */}
+              {[
+                {num: 1, label: 'Step 1: 스토리 분석', provKey: 'step1Provider', artKey: 'step1ArtStyle', defProv: 'imagen4'},
+                {num: 2, label: 'Step 2: 레퍼런스 생성', provKey: 'step2Provider', artKey: 'step2ArtStyle', defProv: 'imagen4'},
+                {num: 3, label: 'Step 3: 스토리보드', provKey: 'step3Provider', artKey: 'step3ArtStyle', defProv: 'grokImage'},
+                {num: 4, label: 'Step 4: 패널 이미지', provKey: 'step4Provider', artKey: 'step4ArtStyle', defProv: 'grokImage'},
+              ].map(st => (
+                <div key={st.num} className="batch-config-section" style={{padding:10,background:'var(--surface2)',borderRadius:8}}>
+                  <div className="batch-config-label" style={{fontSize:13,fontWeight:700,marginBottom:6}}>{st.label}</div>
+                  <div style={{display:'flex',gap:8}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:10,color:'var(--text2)',marginBottom:2}}>이미지 모델</div>
+                      <select className="form-select" style={{width:'100%',fontSize:12}} value={batchConfig[st.provKey]} onChange={e => setBatchConfig(prev => ({...prev, [st.provKey]: e.target.value}))}>
+                        <option value="imagen4">Imagen 4</option>
+                        <option value="grokImage">Grok Image (xAI)</option>
+                        <option value="falAI">FLUX (fal.ai)</option>
+                        <option value="stableDiffusion">Stable Diffusion 3.5</option>
+                        <option value="nanoBanana">Gemini (레퍼런스)</option>
+                      </select>
+                    </div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:10,color:'var(--text2)',marginBottom:2}}>아트 스타일</div>
+                      <select className="form-select" style={{width:'100%',fontSize:12}} value={batchConfig[st.artKey]} onChange={e => setBatchConfig(prev => ({...prev, [st.artKey]: e.target.value}))}>
+                        <option value="">현재 ({ART_STYLES[artStyle]?.name})</option>
+                        {Object.entries(ART_STYLES).map(([key, style]) => (
+                          <option key={key} value={key}>{style.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
 
               {/* Episode list */}
               <div className="batch-config-section">
