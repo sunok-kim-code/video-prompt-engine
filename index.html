@@ -4212,6 +4212,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
   const [batchConfig, setBatchConfig] = useState({
     step1Provider:'imagen4', step2Provider:'imagen4', step3Provider:'grokImage', step4Provider:'grokImage',
     step1ArtStyle:'', step2ArtStyle:'', step3ArtStyle:'', step4ArtStyle:'',
+    forceRerun: false, // 이미 완료된 에피소드도 강제 재실행
   });
   const [batchEpisodeList, setBatchEpisodeList] = useState([]);
   // Storyboard editing state
@@ -4260,12 +4261,21 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           continue;
         }
 
-        // Check if already completed (all 4 steps done)
-        const s4Data = await fbLoadPhase(projectId, epNum, 'step4_panels');
-        if (s4Data?.panels?.filter(Boolean).length > 0) {
-          log(`${epNum}화: 이미 완료됨 — 건너뜀`, 'info');
-          completedCount++;
-          continue;
+        // Check if already fully completed (ALL panels generated)
+        if (!config.forceRerun) {
+          const s4Data = await fbLoadPhase(projectId, epNum, 'step4_panels');
+          const panelArr = s4Data?.panels || [];
+          const generated = panelArr.filter(Boolean).length;
+          const total = panelArr.length;
+          if (total > 0 && generated === total) {
+            log(`${epNum}화: 이미 완료됨 (${generated}/${total} 패널) — 건너뜀`, 'info');
+            completedCount++;
+            continue;
+          } else if (generated > 0) {
+            log(`${epNum}화: 미완료 (${generated}/${total} 패널) — 처음부터 재실행`, 'info');
+          }
+        } else {
+          log(`${epNum}화: 강제 재실행 모드`, 'info');
         }
 
         // Set source text for this episode
@@ -4345,28 +4355,42 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     }
   };
 
-  // Find episodes with sourceText but not completed (for batch run UI)
-  const getUnprocessedEpisodes = useCallback(async () => {
+  // Find episodes with sourceText for batch run UI
+  // forceAll=true: show all episodes with sourceText (including completed ones)
+  const getUnprocessedEpisodes = useCallback(async (forceAll = false) => {
     if (!projectId) return [];
-    const unprocessed = [];
+    const result = [];
     for (const ep of episodes) {
       try {
         const s1 = await fbLoadPhase(projectId, ep.number, 'step1_analysis');
         const s4 = await fbLoadPhase(projectId, ep.number, 'step4_panels');
+        const s3 = await fbLoadPhase(projectId, ep.number, 'step3_storyboard');
         const hasSource = !!(s1?.sourceText?.trim());
-        const hasAnalysisOnly = !!(s1?.analysis);
-        const isComplete = !!(s4?.panels?.filter(Boolean).length > 0);
-        if (hasSource && !isComplete) {
-          unprocessed.push({number: ep.number, title: ep.title || `${ep.number}화`, hasAnalysis: hasAnalysisOnly, hasSource});
+        const hasAnalysis = !!(s1?.analysis);
+        const hasStoryboard = !!(s3?.storyboard?.length > 0);
+        const panelArr = s4?.panels || [];
+        const generatedPanels = panelArr.filter(Boolean).length;
+        const totalPanels = panelArr.length;
+        // "Complete" means ALL panels are generated (not just some)
+        const isFullyComplete = totalPanels > 0 && generatedPanels === totalPanels;
+        const status = isFullyComplete ? 'complete' : hasStoryboard ? 'step3' : hasAnalysis ? 'step1' : 'none';
+
+        if (hasSource && (forceAll || !isFullyComplete)) {
+          result.push({
+            number: ep.number,
+            title: ep.title || `${ep.number}화`,
+            hasAnalysis, hasSource, hasStoryboard, isFullyComplete,
+            generatedPanels, totalPanels, status,
+          });
         }
       } catch(e) { /* skip */ }
     }
-    return unprocessed;
+    return result;
   }, [projectId, episodes]);
 
   const openBatchModal = async () => {
-    const eps = await getUnprocessedEpisodes();
-    setBatchEpisodeList(eps.map(e => ({...e, selected: true})));
+    const eps = await getUnprocessedEpisodes(batchConfig.forceRerun);
+    setBatchEpisodeList(eps.map(e => ({...e, selected: !e.isFullyComplete})));
     setShowBatchModal(true);
   };
 
@@ -4380,6 +4404,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       step3Provider: batchConfig.step3Provider, step4Provider: batchConfig.step4Provider,
       step1ArtStyle: batchConfig.step1ArtStyle || undefined, step2ArtStyle: batchConfig.step2ArtStyle || undefined,
       step3ArtStyle: batchConfig.step3ArtStyle || undefined, step4ArtStyle: batchConfig.step4ArtStyle || undefined,
+      forceRerun: batchConfig.forceRerun,
     });
   };
 
@@ -6014,6 +6039,23 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                 </div>
               ))}
 
+              {/* Force rerun toggle */}
+              <div style={{padding:'8px 10px',background:'var(--surface2)',borderRadius:8,display:'flex',alignItems:'center',gap:8}}>
+                <label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',fontSize:13}}>
+                  <input type="checkbox" checked={!!batchConfig.forceRerun}
+                    onChange={e => {
+                      const val = e.target.checked;
+                      setBatchConfig(prev => ({...prev, forceRerun: val}));
+                      // Refresh episode list with new force setting
+                      getUnprocessedEpisodes(val).then(eps => {
+                        setBatchEpisodeList(eps.map(ep => ({...ep, selected: !ep.isFullyComplete})));
+                      });
+                    }} />
+                  <span style={{fontWeight:600}}>완료된 에피소드도 강제 재실행</span>
+                </label>
+                <span style={{fontSize:10,color:'var(--text2)'}}>이미 패널이 생성된 에피소드를 처음부터 다시 실행</span>
+              </div>
+
               {/* Episode list */}
               <div className="batch-config-section">
                 <div className="batch-config-label" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -6035,7 +6077,10 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                           onChange={() => setBatchEpisodeList(prev => prev.map((e, i) => i === idx ? {...e, selected: !e.selected} : e))} />
                         <span className="batch-ep-num">{ep.number}화</span>
                         <span className="batch-ep-title">{ep.title}</span>
-                        {ep.hasAnalysis && <span className="batch-ep-badge">분석완료</span>}
+                        {ep.status === 'complete' && <span className="batch-ep-badge" style={{background:'#d4edda',color:'#155724'}}>완료 ({ep.generatedPanels}패널)</span>}
+                        {ep.status === 'step3' && <span className="batch-ep-badge" style={{background:'#fff3cd',color:'#856404'}}>스토리보드 {ep.generatedPanels > 0 ? `(${ep.generatedPanels}/${ep.totalPanels})` : ''}</span>}
+                        {ep.status === 'step1' && <span className="batch-ep-badge" style={{background:'#cce5ff',color:'#004085'}}>분석완료</span>}
+                        {ep.status === 'none' && <span className="batch-ep-badge" style={{background:'#f8d7da',color:'#721c24'}}>미처리</span>}
                       </label>
                     ))}
                   </div>
