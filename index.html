@@ -108,6 +108,28 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .project-title-bar{font-weight:700;font-size:14px;color:var(--text);margin-right:12px;display:flex;align-items:center;gap:8px;}
 .episode-delete{position:absolute;top:-4px;right:-4px;width:16px;height:16px;border-radius:50%;background:var(--err);color:#fff;border:none;font-size:10px;cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1;}
 .episode-pill:hover .episode-delete{display:flex;}
+/* Batch Run */
+.batch-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:300;display:flex;align-items:center;justify-content:center;}
+.batch-modal{background:var(--surface);border-radius:16px;width:min(500px,90vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.batch-modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);}
+.batch-modal-body{padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px;}
+.batch-modal-footer{display:flex;justify-content:flex-end;gap:8px;padding:16px 20px;border-top:1px solid var(--border);}
+.batch-config-section{display:flex;flex-direction:column;gap:6px;}
+.batch-config-label{font-size:12px;font-weight:600;color:var(--text2);}
+.batch-episode-list{display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px;}
+.batch-episode-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:13px;transition:background .15s;}
+.batch-episode-item:hover{background:var(--surface2);}
+.batch-episode-item.selected{background:rgba(108,92,231,.1);}
+.batch-episode-item input[type=checkbox]{accent-color:var(--accent);}
+.batch-ep-num{font-weight:700;min-width:36px;}
+.batch-ep-title{flex:1;color:var(--text2);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.batch-ep-badge{font-size:10px;padding:2px 6px;border-radius:4px;background:#d5f5e3;color:#1e8449;font-weight:600;}
+.batch-progress-bar{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:250;background:var(--surface);border:1px solid var(--accent);border-radius:12px;box-shadow:0 8px 32px rgba(108,92,231,.3);padding:12px 20px;min-width:360px;max-width:90vw;}
+.batch-progress-inner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.batch-progress-text{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;}
+.batch-progress-step{font-size:11px;color:var(--accent);font-weight:600;white-space:nowrap;}
+.batch-progress-track{flex:1;min-width:80px;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+.batch-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width .5s ease;}
 /* Asset Library */
 .asset-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;display:flex;}
 .asset-panel{width:min(90vw,800px);margin:auto;background:var(--surface);border-radius:16px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:24px;}
@@ -4043,6 +4065,167 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     } finally { setRunning(false); }
   };
 
+  // ======== Batch Sequential Run (연속 실행 모드) ========
+  // Runs full pipeline across multiple episodes with per-step provider overrides
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(null); // {current, total, episode, step}
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [batchConfig, setBatchConfig] = useState({step12Provider:'imagen4', step34Provider:'grokImage', artStyleOverride:''});
+  const [batchEpisodeList, setBatchEpisodeList] = useState([]);
+
+  const runBatchPipeline = async (config) => {
+    // config: { episodes: [episodeNum, ...], step1Provider, step2Provider, step3Provider, step4Provider, artStyle }
+    if (!projectId) { log('프로젝트를 먼저 선택하세요.', 'error'); return; }
+    setBatchRunning(true);
+    setRunning(true);
+    abortRef.current = false;
+
+    const targetEpisodes = config.episodes || [];
+    const originalProvider = imageProvider;
+    const originalArtStyle = artStyle;
+    let completedCount = 0;
+
+    log(`\n===== 연속 실행 모드 시작: ${targetEpisodes.length}개 에피소드 =====`, 'info');
+    log(`설정: Step 1,2 → ${config.step12Provider || 'imagen4'} / Step 3,4 → ${config.step34Provider || 'grokImage'} / 스타일: ${config.artStyleOverride || artStyle}`, 'info');
+
+    try {
+      // Apply art style override if specified
+      if (config.artStyleOverride) {
+        setArtStyle(config.artStyleOverride);
+      }
+
+      for (let i = 0; i < targetEpisodes.length; i++) {
+        if (abortRef.current) { log('연속 실행 중단됨', 'warn'); break; }
+
+        const epNum = targetEpisodes[i];
+        setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: '로드 중'});
+        log(`\n----- ${epNum}화 시작 (${i+1}/${targetEpisodes.length}) -----`, 'info');
+
+        // Load episode
+        setCurrentEpisode(epNum);
+        await loadEpisode(epNum);
+        // Wait for state to settle
+        await new Promise(r => setTimeout(r, 1000));
+
+        // Check if sourceText exists (loaded from Firebase)
+        const s1Data = await fbLoadPhase(projectId, epNum, 'step1_analysis');
+        const epSourceText = s1Data?.sourceText || '';
+        const epInputMode = s1Data?.inputMode || 'scene';
+
+        if (!epSourceText.trim()) {
+          log(`${epNum}화: 소스 텍스트 없음 — 건너뜀`, 'warn');
+          continue;
+        }
+
+        // Check if already completed (all 4 steps done)
+        const s4Data = await fbLoadPhase(projectId, epNum, 'step4_panels');
+        if (s4Data?.panels?.filter(Boolean).length > 0) {
+          log(`${epNum}화: 이미 완료됨 — 건너뜀`, 'info');
+          completedCount++;
+          continue;
+        }
+
+        // Set source text for this episode
+        setSourceText(epSourceText);
+        setInputMode(epInputMode);
+
+        try {
+          // Step 1: Story Analysis (uses text model, provider doesn't matter)
+          setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 1: 스토리 분석'});
+          setImageProvider(config.step12Provider || 'imagen4');
+          log(`${epNum}화 Step 1: 스토리 분석 (${config.step12Provider || 'imagen4'})`, 'info');
+          const analysisResult = await runStep1();
+          if (abortRef.current) break;
+
+          // Step 2: Reference Generation (Imagen4 for TL compatibility)
+          setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 2: 레퍼런스 생성'});
+          setImageProvider(config.step12Provider || 'imagen4');
+          log(`${epNum}화 Step 2: 레퍼런스 생성 (${config.step12Provider || 'imagen4'})`, 'info');
+          const refsResult = await runStep2(analysisResult);
+          if (abortRef.current) break;
+
+          // Step 3: Storyboard (uses text model, but set provider for step 4 consistency)
+          setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 3: 스토리보드'});
+          setImageProvider(config.step34Provider || 'grokImage');
+          log(`${epNum}화 Step 3: 스토리보드 생성`, 'info');
+          const sbResult = await runStep3(analysisResult);
+          if (abortRef.current) break;
+
+          // Step 4: Panel Generation (Grok for quality)
+          setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 4: 패널 이미지 생성'});
+          setImageProvider(config.step34Provider || 'grokImage');
+          log(`${epNum}화 Step 4: 패널 이미지 생성 (${config.step34Provider || 'grokImage'})`, 'info');
+          await runStep4(sbResult, refsResult);
+          if (abortRef.current) break;
+
+          // Save completion
+          await fbSaveEpisode(projectId, epNum, {step: 4, completedSteps: [0,1,2,3,4]});
+          completedCount++;
+          log(`${epNum}화 완료! ✅`, 'success');
+
+        } catch(epErr) {
+          log(`${epNum}화 오류: ${epErr.message}`, 'error');
+          // Continue to next episode on error
+          continue;
+        }
+
+        // Delay between episodes to avoid rate limits
+        if (i < targetEpisodes.length - 1) {
+          log('다음 에피소드 대기 중 (5초)...', 'info');
+          await new Promise(r => setTimeout(r, 5000));
+        }
+      }
+
+      log(`\n===== 연속 실행 완료: ${completedCount}/${targetEpisodes.length}개 에피소드 완료 =====`, 'success');
+    } catch(e) {
+      log('연속 실행 오류: ' + e.message, 'error');
+    } finally {
+      // Restore original settings
+      setImageProvider(originalProvider);
+      if (!config.artStyleOverride) setArtStyle(originalArtStyle);
+      setBatchRunning(false);
+      setRunning(false);
+      setBatchProgress(null);
+    }
+  };
+
+  // Find episodes with sourceText but not completed (for batch run UI)
+  const getUnprocessedEpisodes = useCallback(async () => {
+    if (!projectId) return [];
+    const unprocessed = [];
+    for (const ep of episodes) {
+      try {
+        const s1 = await fbLoadPhase(projectId, ep.number, 'step1_analysis');
+        const s4 = await fbLoadPhase(projectId, ep.number, 'step4_panels');
+        const hasSource = !!(s1?.sourceText?.trim());
+        const hasAnalysisOnly = !!(s1?.analysis);
+        const isComplete = !!(s4?.panels?.filter(Boolean).length > 0);
+        if (hasSource && !isComplete) {
+          unprocessed.push({number: ep.number, title: ep.title || `${ep.number}화`, hasAnalysis: hasAnalysisOnly, hasSource});
+        }
+      } catch(e) { /* skip */ }
+    }
+    return unprocessed;
+  }, [projectId, episodes]);
+
+  const openBatchModal = async () => {
+    const eps = await getUnprocessedEpisodes();
+    setBatchEpisodeList(eps.map(e => ({...e, selected: true})));
+    setShowBatchModal(true);
+  };
+
+  const startBatchRun = () => {
+    const selectedEps = batchEpisodeList.filter(e => e.selected).map(e => e.number);
+    if (selectedEps.length === 0) { log('실행할 에피소드를 선택하세요.', 'warn'); return; }
+    setShowBatchModal(false);
+    runBatchPipeline({
+      episodes: selectedEps,
+      step12Provider: batchConfig.step12Provider,
+      step34Provider: batchConfig.step34Provider,
+      artStyleOverride: batchConfig.artStyleOverride || undefined,
+    });
+  };
+
   // ======== Run Single Step ========
   const runSingleStep = async (stepIdx) => {
     setRunning(true); setErrorMsg(''); abortRef.current = false;
@@ -5093,6 +5276,9 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                       <button className="btn btn-primary" onClick={runFullPipeline} disabled={!sourceText.trim() || running}>
                         {running ? '생성 중...' : '전체 자동 생성'}
                       </button>
+                      <button className="btn btn-sm" style={{background:'linear-gradient(135deg,#6c5ce7,#a29bfe)',color:'#fff',border:'none'}} onClick={openBatchModal} disabled={running || !projectId}>
+                        연속 실행
+                      </button>
                       <button className="btn btn-outline btn-sm" onClick={()=>runSingleStep(0)} disabled={!sourceText.trim() || running}>Step 1만 실행</button>
                       {running && <button className="btn btn-danger btn-sm" onClick={()=>{abortRef.current=true;}}>중지</button>}
                       <button className="btn btn-outline btn-sm" style={{marginLeft:'auto'}} onClick={saveProject} disabled={running}>저장</button>
@@ -5510,6 +5696,101 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           }}>전체 초기화</button>
         </div>
       </div>
+
+      {/* ===== Batch Progress Floating Bar ===== */}
+      {batchRunning && batchProgress && (
+        <div className="batch-progress-bar">
+          <div className="batch-progress-inner">
+            <div className="batch-progress-text">
+              <strong>연속 실행 중</strong> — {batchProgress.episode}화 ({batchProgress.current}/{batchProgress.total})
+            </div>
+            <div className="batch-progress-step">{batchProgress.step}</div>
+            <div className="batch-progress-track">
+              <div className="batch-progress-fill" style={{width: `${((batchProgress.current - 1) / batchProgress.total) * 100}%`}} />
+            </div>
+            <button className="btn btn-danger btn-xs" onClick={() => { abortRef.current = true; }}>중지</button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Batch Configuration Modal ===== */}
+      {showBatchModal && (
+        <div className="batch-overlay" onClick={() => setShowBatchModal(false)}>
+          <div className="batch-modal" onClick={e => e.stopPropagation()}>
+            <div className="batch-modal-header">
+              <h3 style={{margin:0,fontSize:16}}>연속 실행 설정</h3>
+              <button style={{background:'none',border:'none',color:'var(--text2)',fontSize:20,cursor:'pointer'}} onClick={() => setShowBatchModal(false)}>×</button>
+            </div>
+
+            <div className="batch-modal-body">
+              {/* Provider config */}
+              <div className="batch-config-section">
+                <div className="batch-config-label">Step 1-2 프로바이더 (스토리 분석 + 레퍼런스)</div>
+                <select className="form-select" style={{width:'100%'}} value={batchConfig.step12Provider} onChange={e => setBatchConfig(prev => ({...prev, step12Provider: e.target.value}))}>
+                  <option value="imagen4">Imagen 4 (고품질, 추천)</option>
+                  <option value="grokImage">Grok Image (xAI)</option>
+                  <option value="falAI">FLUX (fal.ai)</option>
+                </select>
+              </div>
+
+              <div className="batch-config-section">
+                <div className="batch-config-label">Step 3-4 프로바이더 (스토리보드 + 패널)</div>
+                <select className="form-select" style={{width:'100%'}} value={batchConfig.step34Provider} onChange={e => setBatchConfig(prev => ({...prev, step34Provider: e.target.value}))}>
+                  <option value="grokImage">Grok Image (xAI, 추천)</option>
+                  <option value="imagen4">Imagen 4 (고품질)</option>
+                  <option value="falAI">FLUX (fal.ai)</option>
+                </select>
+              </div>
+
+              <div className="batch-config-section">
+                <div className="batch-config-label">아트 스타일 (비우면 현재 설정 사용: {ART_STYLES[artStyle]?.name})</div>
+                <select className="form-select" style={{width:'100%'}} value={batchConfig.artStyleOverride} onChange={e => setBatchConfig(prev => ({...prev, artStyleOverride: e.target.value}))}>
+                  <option value="">현재 설정 유지</option>
+                  {Object.entries(ART_STYLES).map(([key, style]) => (
+                    <option key={key} value={key}>{style.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Episode list */}
+              <div className="batch-config-section">
+                <div className="batch-config-label" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <span>대상 에피소드 ({batchEpisodeList.filter(e => e.selected).length}/{batchEpisodeList.length} 선택)</span>
+                  <button className="btn btn-xs btn-outline" onClick={() => {
+                    const allSelected = batchEpisodeList.every(e => e.selected);
+                    setBatchEpisodeList(prev => prev.map(e => ({...e, selected: !allSelected})));
+                  }}>{batchEpisodeList.every(e => e.selected) ? '전체 해제' : '전체 선택'}</button>
+                </div>
+                {batchEpisodeList.length === 0 ? (
+                  <div style={{padding:16,textAlign:'center',color:'var(--text2)',fontSize:13}}>
+                    미처리 에피소드가 없습니다. 에피소드에 소스 텍스트를 먼저 입력하세요.
+                  </div>
+                ) : (
+                  <div className="batch-episode-list">
+                    {batchEpisodeList.map((ep, idx) => (
+                      <label key={ep.number} className={`batch-episode-item ${ep.selected ? 'selected' : ''}`}>
+                        <input type="checkbox" checked={!!ep.selected}
+                          onChange={() => setBatchEpisodeList(prev => prev.map((e, i) => i === idx ? {...e, selected: !e.selected} : e))} />
+                        <span className="batch-ep-num">{ep.number}화</span>
+                        <span className="batch-ep-title">{ep.title}</span>
+                        {ep.hasAnalysis && <span className="batch-ep-badge">분석완료</span>}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="batch-modal-footer">
+              <button className="btn btn-outline btn-sm" onClick={() => setShowBatchModal(false)}>취소</button>
+              <button className="btn btn-primary" onClick={startBatchRun}
+                disabled={batchEpisodeList.filter(e => e.selected).length === 0}>
+                {batchEpisodeList.filter(e => e.selected).length}개 에피소드 연속 실행
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
