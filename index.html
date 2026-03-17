@@ -2882,7 +2882,18 @@ Rules:
       // Use original prompt (no Grok-specific sanitization — preserve original descriptions)
       // Only strip Korean onomatopoeia/SFX which don't help image generation
       const cleanedPrompt = sanitizeImagePrompt(prompt);
-      const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + noTextDirective;
+      // Tone consistency directive — forces uniform rendering across all panels
+      const toneDirective = '\n\n=== RENDERING CONSISTENCY ===\n' +
+        'CRITICAL: Maintain IDENTICAL rendering style across all images in this series:\n' +
+        '- Color palette: Use the SAME color temperature and saturation level. Do NOT shift between warm/cool tones randomly.\n' +
+        '- Linework: Consistent line weight and thickness throughout.\n' +
+        '- Shading: Use the SAME shading technique (soft gradient OR cel-shading — one style only).\n' +
+        '- Skin rendering: Same smooth digital painting style for all characters, consistent highlight/shadow.\n' +
+        '- Background detail: Consistent level of detail and blur across panels.\n' +
+        '- Lighting: Same approach (direction, softness, contrast) unless scene mood explicitly changes.\n' +
+        '- This is ONE webtoon episode — every panel must look like the same artist drew it.\n' +
+        '=== END RENDERING CONSISTENCY ===\n';
+      const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
       if (charCount > 0) {
         log(`Grok Image 사용 (${curStyleName} + 에셋 ID카드: 캐릭터 ${charCount}명)`, 'info');
@@ -2983,10 +2994,16 @@ Rules:
         }
       }
 
-      // Build the final Imagen4 prompt: style + scene + visual ID cards + no-text directive
+      // Build the final Imagen4 prompt: style + scene + visual ID cards + tone consistency + no-text directive
       const noTextDirective = '\nIMPORTANT: Do NOT render any text, letters, words, sound effects, onomatopoeia, speech bubbles, or typography anywhere in the image. The image must be purely visual. No Korean text or characters.';
       const cleanedPrompt = sanitizeImagePrompt(prompt);
-      const imagen4Prompt = stylePrefix + cleanedPrompt + visualIdCards + noTextDirective;
+      const toneDirective = '\n\n=== RENDERING CONSISTENCY ===\n' +
+        'Maintain IDENTICAL rendering style across all images in this series:\n' +
+        '- Same color temperature, saturation, linework weight, shading technique, skin rendering.\n' +
+        '- Consistent background detail level and lighting approach.\n' +
+        '- Every panel must look like the same artist drew it in one session.\n' +
+        '=== END RENDERING CONSISTENCY ===\n';
+      const imagen4Prompt = stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
       const propCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Prop')).length;
       const bgCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Background')).length;
@@ -3751,27 +3768,53 @@ CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is 
 
     const newPanels = [...(panels.length === sb.length ? panels : new Array(sb.length).fill(null))];
 
+    // Style anchor: capture the first successful panel's style description
+    // and prepend it to subsequent panels for tone consistency
+    let styleAnchor = '';
+
     for (let i = 0; i < sb.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
-      if (newPanels[i]) { log(`패널 ${i+1} 이미 생성됨, 건너뜀`); continue; }
+      if (newPanels[i]) {
+        // If first panel already exists, extract its style as anchor
+        if (!styleAnchor && sb[i]?.imagePrompt) {
+          const ip = sb[i].imagePrompt;
+          // Extract style-related tail (usually after "Background:" or at end)
+          const styleMatch = ip.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
+          if (styleMatch) styleAnchor = styleMatch[0];
+        }
+        log(`패널 ${i+1} 이미 생성됨, 건너뜀`); continue;
+      }
 
       const panel = sb[i];
+      // Append style anchor from first panel to maintain tone consistency
+      const anchoredPrompt = styleAnchor
+        ? panel.imagePrompt + ' Maintain consistent style: ' + styleAnchor
+        : panel.imagePrompt;
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
 
       const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs);
       log(`패널 ${i+1}: 레퍼런스 이미지 ${refImages.length}개, 에셋 설명 ${assetDescriptions.length}개, 캐릭터 ${panelCharIds.length}명`);
 
       try {
-        const images = await callImage(panel.imagePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
+        const images = await callImage(anchoredPrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
         newPanels[i] = images[0];
+        // Capture style anchor from first successful panel
+        if (!styleAnchor && panel.imagePrompt) {
+          const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
+          if (sm) { styleAnchor = sm[0]; log(`스타일 앵커 설정: "${styleAnchor}"`, 'info'); }
+        }
         log(`패널 ${i+1} 완료 (레퍼런스 ${refImages.length}개 사용)`, 'success');
       } catch(e) {
         log(`패널 ${i+1} 실패: ${e.message}`, 'error');
         if (e.message.includes('429')) await new Promise(r => setTimeout(r, 10000));
         try {
-          // Retry without reference images but keep asset descriptions
-          const images = await callImage(panel.imagePrompt, {assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
+          // Retry without reference images but keep asset descriptions + style anchor
+          const images = await callImage(anchoredPrompt, {assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
           newPanels[i] = images[0];
+          if (!styleAnchor && panel.imagePrompt) {
+            const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
+            if (sm) { styleAnchor = sm[0]; log(`스타일 앵커 설정: "${styleAnchor}"`, 'info'); }
+          }
           log(`패널 ${i+1} 레퍼런스 없이 재생성 완료`, 'success');
         } catch(e2) {
           log(`패널 ${i+1} 최종 실패: ${e2.message}`, 'error');
