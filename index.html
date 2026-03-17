@@ -1308,7 +1308,7 @@ CRITICAL VISUAL CONSISTENCY RULES:
 4. Props that appear in multiple panels must look identical each time.
 5. Background locations must be visually consistent when revisited.
 6. In imagePrompt, you MUST copy-paste the character's hair details and outfit details from the character data — do NOT paraphrase, summarize, or simplify them. The image model needs exact same wording every time to produce consistent visuals.
-7. If a plot beat has outfitOverrides for a character, use the override outfit ONLY for panels in that beat. Revert to default outfit in subsequent panels unless another override exists.
+7. OUTFIT PERSISTENCE: Once a character's outfit changes via outfitOverride in a plot beat, that NEW outfit MUST PERSIST in ALL subsequent panels for the rest of the episode — until another outfitOverride explicitly changes it again. Do NOT revert to the default outfit after an override. Track each character's current outfit state as you generate panels sequentially.
 
 Return ONLY a valid JSON array (no markdown):
 [
@@ -1465,7 +1465,7 @@ CRITICAL VISUAL CONSISTENCY RULES:
 4. Props must look identical when reappearing.
 5. Background locations must be visually consistent when revisited.
 6. In imagePrompt, you MUST copy-paste the character's hair details and outfit details from the character data — do NOT paraphrase or simplify. The image model needs EXACT SAME WORDING every time.
-7. If a plot beat has outfitOverrides, use override ONLY for that beat's panels. Revert to default in subsequent panels.
+7. OUTFIT PERSISTENCE: Once a character's outfit changes via outfitOverride, that NEW outfit MUST PERSIST in ALL subsequent panels for the rest of the episode — until another outfitOverride explicitly changes it again. Do NOT revert to the default outfit. Track each character's current outfit state sequentially.
 
 Return ONLY a valid JSON array (no markdown):
 [
@@ -2701,7 +2701,8 @@ Rules:
   }, []);
 
   // Helper: build reference images & descriptions from shared assets for a panel
-  const buildPanelRefs = useCallback((panel, sa, analysisData, episodeRefs) => {
+  // outfitState: optional {charId: 'current outfit description'} — tracks cumulative outfit changes across panels
+  const buildPanelRefs = useCallback((panel, sa, analysisData, episodeRefs, outfitState) => {
     const refImages = [];
     const assetDescriptions = [];
     if (!panel.characters || !analysisData) {
@@ -2726,7 +2727,8 @@ Rules:
       const charImg = saCharImg || epCharImg;
       const charInfo = analysisData.characters?.find(c => c.id === charId);
       const saCharData = sa?.characters?.[charId];
-      const outfitDesc = pc.outfitOverride || charInfo?.outfit || '';
+      // Outfit priority: panel-level override > cumulative state from previous panels > default outfit
+      const outfitDesc = pc.outfitOverride || outfitState?.[charId] || charInfo?.outfit || '';
       const appearanceDesc = charInfo?.appearance || charId;
       // Build detailed Visual ID Card: combine all available description fields
       const detailParts = [appearanceDesc];
@@ -3894,9 +3896,10 @@ ${sourceTextRef.current}
   ? `Create EXACTLY ${data.plotBeats?.length || 1} panels — one panel per plotBeat, no more, no less. Panel count MUST equal ${data.plotBeats?.length || 1}.
 Each panel captures ONE scene entirely in a single image. Include ALL dialogue from that scene in the panel's dialogue array.
 Each panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details.
-CRITICAL: Do NOT split scenes into multiple panels. Do NOT skip any scene. Return exactly ${data.plotBeats?.length || 1} panels.`
+CRITICAL: Do NOT split scenes into multiple panels. Do NOT skip any scene. Return exactly ${data.plotBeats?.length || 1} panels.
+OUTFIT RULE: Once a character changes outfit (outfitOverride), that outfit persists for ALL subsequent panels until another change occurs. Include outfitOverride in each panel's character entry to reflect the current outfit state.`
   : `Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details (not just IDs).
-CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is explicitly specified in the plot beat. Include prop descriptions when they appear in a scene.`);
+CRITICAL: Characters start with their DEFAULT OUTFIT. When an outfitOverride changes their outfit, that new outfit PERSISTS for ALL subsequent panels until another override. Include outfitOverride field in each panel's character entry to reflect current outfit. Include prop descriptions when they appear in a scene.`);
 
     let storyboardPrompt = inputModeRef.current === 'scene' ? PROMPTS.CREATE_SCENE_STORYBOARD : PROMPTS.CREATE_STORYBOARD;
     // TL mode: add mature content directive to storyboard prompt
@@ -4042,8 +4045,24 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     // and prepend it to subsequent panels for tone consistency
     let styleAnchor = '';
 
+    // Track cumulative outfit state: {charId: 'current outfit description'}
+    // Once an outfitOverride appears, that outfit persists for subsequent panels
+    const outfitState = {};
+
     for (let i = 0; i < sb.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
+
+      // Always update outfit state even for already-generated panels
+      const curPanel = sb[i];
+      if (curPanel.characters) {
+        for (const pc of curPanel.characters) {
+          const cid = pc.id || pc;
+          if (pc.outfitOverride) {
+            outfitState[cid] = pc.outfitOverride;
+          }
+        }
+      }
+
       if (newPanels[i]) {
         // If first panel already exists, extract its style as anchor
         if (!styleAnchor && sb[i]?.imagePrompt) {
@@ -4062,7 +4081,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         : panel.imagePrompt;
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
 
-      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs);
+      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, outfitState);
       log(`패널 ${i+1}: 레퍼런스 이미지 ${refImages.length}개, 에셋 설명 ${assetDescriptions.length}개, 캐릭터 ${panelCharIds.length}명`);
 
       try {
@@ -4436,7 +4455,18 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         newSb[idx] = {...newSb[idx], imagePrompt: customPrompt};
         setStoryboard(newSb);
       }
-      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, references);
+      // Build cumulative outfit state from all panels before this one
+      const outfitState = {};
+      for (let j = 0; j < idx; j++) {
+        const prevPanel = storyboard[j];
+        if (prevPanel?.characters) {
+          for (const pc of prevPanel.characters) {
+            const cid = pc.id || pc;
+            if (pc.outfitOverride) outfitState[cid] = pc.outfitOverride;
+          }
+        }
+      }
+      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, references, outfitState);
       log(`패널 ${idx+1} 재생성 중... (asset ${assetDescriptions.length}개 참조)`);
       const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
       const newPanels = [...panels];
