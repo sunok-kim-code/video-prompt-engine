@@ -1168,6 +1168,14 @@ Break the story into 8-20 plot beats that capture the narrative arc. Each plot b
 
 For outfitOverrides: ONLY include if the story text explicitly describes a costume/clothing change. Normal scenes without clothing mentions = no override = character wears default outfit.
 
+CRITICAL — USE CHARACTER DESCRIPTIONS FROM THE STORY:
+- If the story text contains ANY physical description of a character (hair color, eye color, height, build, clothing, accessories, scars, tattoos, etc.), you MUST incorporate those descriptions EXACTLY into the character's "appearance" and "outfit" fields.
+- Story descriptions take HIGHEST PRIORITY. Do NOT ignore or override what the author wrote.
+- Example: if the story says "키가 크고 은발에 날카로운 눈매를 가진 남자" → appearance MUST include "tall, silver/white hair, sharp narrow eyes".
+- Example: if the story says "검은 가죽 자켓을 입은 채" → outfit MUST include "black leather jacket".
+- For details NOT mentioned in the story, you may create them to fill in gaps — but NEVER contradict what the story explicitly states.
+- Search the ENTIRE input text for any character descriptions, even if they appear far from where the character is first introduced.
+
 CRITICAL — CHARACTER VISUAL DIFFERENTIATION:
 - Every character MUST be visually distinct and instantly recognizable in silhouette alone.
 - NEVER give two characters the same hair color. If the story doesn't specify, assign contrasting colors (e.g. black, auburn, platinum blonde, dark brown, silver).
@@ -1297,6 +1305,14 @@ Return ONLY a valid JSON object (no markdown, no explanation):
 }
 
 Extract ALL characters mentioned. Create backgrounds for each distinct location. Extract important props.
+
+CRITICAL — USE CHARACTER DESCRIPTIONS FROM THE STORY:
+- If the scene descriptions contain ANY physical description of a character (hair color, eye color, height, build, clothing, accessories, scars, tattoos, etc.), you MUST incorporate those descriptions EXACTLY into the character's "appearance" and "outfit" fields.
+- Story/scene descriptions take HIGHEST PRIORITY. Do NOT ignore or override what the author wrote.
+- Example: if a scene says "키가 크고 은발에 날카로운 눈매를 가진 남자" → appearance MUST include "tall, silver/white hair, sharp narrow eyes".
+- Example: if a scene says "검은 가죽 자켓을 입은 채" → outfit MUST include "black leather jacket".
+- For details NOT mentioned in the scenes, you may create them to fill in gaps — but NEVER contradict what the scene explicitly states.
+- Search ALL scene descriptions for any character descriptions, even if they appear in later scenes.
 
 CRITICAL — CHARACTER VISUAL DIFFERENTIATION:
 - Every character MUST be visually distinct and instantly recognizable.
