@@ -1105,6 +1105,16 @@ const ART_STYLES = {
       {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.7},
     ],
   },
+  tlWebtoon: {
+    name: 'TL 웹툰 (성인)',
+    prefix: 'Korean adult webtoon (TL/mature) style, semi-realistic detailed art, anatomically accurate and expressive character rendering, sensual atmosphere, rich skin tones with detailed highlights and shadows on bare skin, intimate close-up compositions, soft warm cinematic lighting emphasizing body contours, smooth gradient shading, high detail on facial expressions and body language, mature romance illustration. ',
+    charSuffix: ', anatomically accurate semi-realistic proportions, detailed skin rendering with natural highlights and shadows, expressive eyes and lips, sensual body proportions, smooth skin texture, mature character design, high quality',
+    bgSuffix: ', intimate atmospheric lighting, warm soft tones, cinematic depth of field, mood-driven environment, private indoor settings with rich detail, high quality',
+    propSuffix: ', delicate detailed rendering, soft warm lighting, intimate object illustration',
+    loras: [
+      {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.6},
+    ],
+  },
   realistic: {
     name: '사실적 (Realistic)',
     prefix: 'Photorealistic digital art, cinematic lighting, highly detailed textures and materials, professional illustration quality. ',
@@ -3509,11 +3519,17 @@ Rules:
       genderDirective = `\n\n--- ART STYLE GENDER DIRECTIVE ---\nThe selected art style is "${curStyle.name}". Unless the story EXPLICITLY states a character is female, ALL characters must default to gender: "${curStyle.defaultGender}". Apply this to every character.\n--- END DIRECTIVE ---\n`;
       log(`아트 스타일 성별 기본값: ${curStyle.defaultGender}`, 'info');
     }
+    // TL (mature) mode: preserve explicit descriptions in plot beats and imagePrompts
+    let matureDirective = '';
+    if (artStyle === 'tlWebtoon') {
+      matureDirective = `\n\n--- MATURE CONTENT DIRECTIVE (TL MODE) ---\nThis is an ADULT webtoon production. You MUST:\n- Preserve ALL explicit/sexual descriptions from the source text EXACTLY as written in plotBeat summaries. Do NOT censor, euphemize, or omit any physical/sexual descriptions.\n- In character "appearance" fields, include detailed body descriptions (body proportions, physique details) that are relevant to the mature art style.\n- plotBeat summaries must faithfully capture intimate scenes with full physical detail — positions, actions, expressions, body contact — exactly as the source describes.\n--- END MATURE DIRECTIVE ---\n`;
+      log('TL (성인) 모드: 성인 콘텐츠 묘사 보존', 'info');
+    }
     // Retry up to 2 times on JSON parse failure
     let result, parsed;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        result = await callText(analyzePrompt, sourceText + existingAssetsContext + genderDirective, {maxTokens: inputMode === 'scene' ? 32768 : 16384});
+        result = await callText(analyzePrompt, sourceText + existingAssetsContext + genderDirective + matureDirective, {maxTokens: inputMode === 'scene' ? 32768 : 16384});
         parsed = parseJSON(result);
         break;
       } catch(parseErr) {
@@ -3783,7 +3799,11 @@ CRITICAL: Do NOT split scenes into multiple panels. Do NOT skip any scene. Retur
   : `Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details (not just IDs).
 CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is explicitly specified in the plot beat. Include prop descriptions when they appear in a scene.`);
 
-    const storyboardPrompt = inputMode === 'scene' ? PROMPTS.CREATE_SCENE_STORYBOARD : PROMPTS.CREATE_STORYBOARD;
+    let storyboardPrompt = inputMode === 'scene' ? PROMPTS.CREATE_SCENE_STORYBOARD : PROMPTS.CREATE_STORYBOARD;
+    // TL mode: add mature content directive to storyboard prompt
+    if (artStyle === 'tlWebtoon') {
+      storyboardPrompt += `\n\nMATURE CONTENT DIRECTIVE (TL MODE):\n- This is an ADULT webtoon. imagePrompt MUST include explicit, detailed descriptions of intimate/sexual scenes exactly as described in the plot beats.\n- Do NOT censor, euphemize, or omit physical descriptions. Include body positions, physical contact, expressions of pleasure/intensity, clothing state (partially undressed, nude, etc.), and anatomical details as needed.\n- Describe body language, skin contact areas, and physical interactions with anatomical precision in imagePrompt.\n- Use specific pose descriptions (e.g., "pinning against the wall", "straddling", "lying beneath") rather than vague terms.\n- Facial expressions during intimate scenes must be explicitly described (flushed cheeks, parted lips, half-closed eyes, etc.).`;
+    }
     log(`스토리보드 모드: ${inputMode === 'scene' ? '씬 설명 기반' : '웹소설 기반'}`, 'info');
 
     let parsed;
