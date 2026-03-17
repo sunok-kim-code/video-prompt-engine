@@ -4298,8 +4298,17 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           await runStep4(sbResult, refsResult);
           if (abortRef.current) break;
 
-          // Save completion
+          // Save panels & storyboard to Firebase
+          setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Firebase 저장 중...'});
+          log(`${epNum}화 패널 Firebase 저장 중...`, 'info');
+          const panelCount = panels.filter(Boolean).length;
+          await fbSavePhase(projectId, epNum, 'step4_panels', {panels, bubbleOverlays: []});
+          if (storyboard.length > 0) {
+            await fbSavePhase(projectId, epNum, 'step3_storyboard', {storyboard});
+          }
           await fbSaveEpisode(projectId, epNum, {step: 4, completedSteps: [0,1,2,3,4]});
+          log(`${epNum}화 패널 ${panelCount}개 Firebase 저장 완료`, 'success');
+
           completedCount++;
           log(`${epNum}화 완료! ✅`, 'success');
 
