@@ -3054,43 +3054,39 @@ Rules:
     // ========== Grok Image (xAI) ==========
     if (imageProvider === 'grokImage') {
       if (!hasXaiKey()) { log('xAI API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
-      // Build Visual ID Cards (same approach as Imagen 4 — text-only model)
+
+      const isMatureStyle = artStyle === 'tlWebtoon' || artStyle === 'blWebtoon';
+
+      // Build COMPACT Visual ID Cards for Grok (shorter than Imagen to avoid prompt bloat)
       let visualIdCards = '';
       if (opts.assetDescriptions?.length > 0) {
         const charDescs = opts.assetDescriptions.filter(d => d.startsWith('[Character'));
-        const propDescs = opts.assetDescriptions.filter(d => d.startsWith('[Prop'));
         const bgDescs = opts.assetDescriptions.filter(d => d.startsWith('[Background'));
-        if (charDescs.length + propDescs.length + bgDescs.length > 0) {
-          visualIdCards = '\n\n=== VISUAL ID CARDS ===\n' +
-            'CRITICAL: Render EVERY character, prop, and background EXACTLY as described:\n\n';
-          if (charDescs.length > 0) {
-            visualIdCards += charDescs.map(d => d + '\n→ Keep hair, outfit, face IDENTICAL across all panels.').join('\n\n') + '\n\n';
-          }
-          if (propDescs.length > 0) {
-            visualIdCards += propDescs.join('\n') + '\n\n';
-          }
-          if (bgDescs.length > 0) {
-            visualIdCards += bgDescs.join('\n') + '\n\n';
-          }
-          visualIdCards += '=== END VISUAL ID CARDS ===\n';
+        if (charDescs.length + bgDescs.length > 0) {
+          // For Grok: strip verbose pose transition text, keep core appearance only
+          const compactDescs = charDescs.map(d => {
+            // Remove "PREVIOUS POSE: ... → CURRENT POSE: ... (maintain...)" to keep it short
+            return d.replace(/,?\s*PREVIOUS POSE:.*?(?=,\s*\[|$)/gi, '')
+                    .replace(/,?\s*pose:.*?(?=,\s*\[|$)/gi, '');
+          });
+          visualIdCards = '\n\nCHARACTER REFS: ' + compactDescs.join(' | ');
+          if (bgDescs.length > 0) visualIdCards += '\nBACKGROUND: ' + bgDescs[0];
         }
       }
-      const noTextDirective = '\nIMPORTANT: Do NOT render any text, letters, words, sound effects, or typography in the image. Purely visual only.';
-      // Use original prompt (no Grok-specific sanitization — preserve original descriptions)
-      // Only strip Korean onomatopoeia/SFX which don't help image generation
-      const cleanedPrompt = sanitizeImagePrompt(prompt);
-      // Tone consistency directive — forces uniform rendering across all panels
-      const toneDirective = '\n\n=== RENDERING CONSISTENCY ===\n' +
-        'CRITICAL: Maintain IDENTICAL rendering style across all images in this series:\n' +
-        '- Color palette: Use the SAME color temperature and saturation level. Do NOT shift between warm/cool tones randomly.\n' +
-        '- Linework: Consistent line weight and thickness throughout.\n' +
-        '- Shading: Use the SAME shading technique (soft gradient OR cel-shading — one style only).\n' +
-        '- Skin rendering: Same smooth digital painting style for all characters, consistent highlight/shadow.\n' +
-        '- Background detail: Consistent level of detail and blur across panels.\n' +
-        '- Lighting: Same approach (direction, softness, contrast) unless scene mood explicitly changes.\n' +
-        '- This is ONE webtoon episode — every panel must look like the same artist drew it.\n' +
-        '=== END RENDERING CONSISTENCY ===\n';
-      const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective;
+      const noTextDirective = '\nNo text/letters/words in image.';
+
+      // Clean prompt: basic SFX removal + Grok sanitization for mature styles
+      let cleanedPrompt = sanitizeImagePrompt(prompt);
+      if (isMatureStyle) {
+        cleanedPrompt = sanitizeForGrok(cleanedPrompt);
+        log('Grok: TL/BL 모드 — 콘텐츠 필터 대응 프롬프트 적용', 'info');
+      }
+
+      // Compact tone directive (shorter for Grok to keep focus on style)
+      const toneDirective = '\nMaintain IDENTICAL art style, color palette, linework weight, shading technique, and skin rendering across all panels. Same artist, same episode.';
+
+      // Style reinforcement: place style prefix at start AND end to prevent drift
+      const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
 
       // Collect reference images for Grok Edit (character + background, max 3)
@@ -3117,9 +3113,9 @@ Rules:
           });
         }
         const refContext = refLabels.length > 0
-          ? `\n\nReference images provided: ${refLabels.join(', ')}. Maintain the EXACT same character appearances, art style, color palette, and rendering quality from these reference images. `
+          ? `\nRefs: ${refLabels.join(', ')}. Match character appearances, art style, colors from refs exactly.`
           : '';
-        const editPrompt = stylePrefix + cleanedPrompt + refContext + visualIdCards + toneDirective + noTextDirective;
+        const editPrompt = stylePrefix + cleanedPrompt + refContext + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
         log(`Grok Edit 사용 (레퍼런스 ${grokRefImages.length}개 + ${curStyleName}${charCount > 0 ? ' + 캐릭터 '+charCount+'명' : ''})`, 'info');
         try {
           return await callGrokEdit(editPrompt, grokRefImages, {aspectRatio: opts.aspectRatio || '3:4'});
@@ -3139,16 +3135,25 @@ Rules:
       } catch (grokErr) {
         const errMsg = grokErr.message || '';
         if (errMsg.includes('content moderation') || errMsg.includes('rejected')) {
-          log('⚠️ Grok 콘텐츠 필터 거부 — 대체 모델로 자동 전환 시도 중...', 'warn');
-          // Fallback: try Imagen 4 if available, then fal.ai
-          // Fallback with ORIGINAL prompt (no sanitization — preserve creative intent)
+          log('⚠️ Grok 콘텐츠 필터 거부 — 프롬프트 순화 후 Grok 재시도...', 'warn');
+          // Step 1: Retry Grok with sanitized prompt (strip mature keywords but keep artistic description)
+          try {
+            const sanitizedPrompt = sanitizeForGrok(cleanedPrompt);
+            const retryGrokPrompt = stylePrefix + sanitizedPrompt + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
+            log('Grok 순화 프롬프트로 재시도 중...', 'info');
+            return await callGrokImage(retryGrokPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+          } catch (retryErr) {
+            log('Grok 순화 재시도도 실패 — 대체 모델 전환', 'warn');
+          }
+          // Step 2: Fallback to other models with SAME style prefix for consistency
+          const fallbackStyleNote = '\nCRITICAL STYLE MATCH: This panel is part of a series previously rendered in this exact style. Match the rendering tone precisely: ' + stylePrefix.substring(0, 200);
           const hasVertex = !!(localStorage.getItem('VERTEX_PROJECT_ID'));
           if (hasFalKey()) {
-            log('fal.ai (Flux)로 대체 생성 중... (원본 프롬프트 유지)', 'info');
+            log('fal.ai (Flux)로 대체 생성 중... (스타일 일관성 유지)', 'info');
             try {
-              const falPrompt = stylePrefix + cleanedPrompt + (opts.assetDescriptions?.length > 0 ? '\n\nVISUAL CONSISTENCY:\n' + opts.assetDescriptions.join('\n') : '');
+              const falPrompt = stylePrefix + cleanedPrompt + fallbackStyleNote + (opts.assetDescriptions?.length > 0 ? '\n\nVISUAL CONSISTENCY:\n' + opts.assetDescriptions.slice(0, 3).join('\n') : '');
               const falResult = await callFalAI(falPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
-              log('✅ fal.ai 대체 생성 성공', 'success');
+              log('✅ fal.ai 대체 생성 성공 (스타일 매칭 적용)', 'success');
               return falResult;
             } catch (falErr) {
               log('fal.ai 대체도 실패: ' + (falErr.message||'').substring(0,100), 'warn');
@@ -3156,7 +3161,7 @@ Rules:
           }
           if (hasVertex) {
             log('Imagen 4로 대체 생성 중...', 'info');
-            const fallbackPrompt = stylePrefix + cleanedPrompt + visualIdCards + noTextDirective;
+            const fallbackPrompt = stylePrefix + cleanedPrompt + fallbackStyleNote + visualIdCards + noTextDirective;
             try {
               const fallbackResult = await callImagen(fallbackPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
               log('✅ Imagen 4 대체 생성 성공', 'success');
