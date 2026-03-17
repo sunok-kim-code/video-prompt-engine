@@ -221,6 +221,8 @@ div:hover > .panel-ctrl{opacity:1 !important;}
 .be-ctrl{display:flex;align-items:center;gap:6px;}
 .be-ctrl-label{font-size:10px;color:#888;}
 .be-ctrl-val{font-size:10px;color:#aaa;}
+.be-ctrl-reset{font-size:9px;padding:1px 6px;background:transparent;border:1px solid #555;border-radius:3px;color:#aaa;cursor:pointer;margin-left:4px;}
+.be-ctrl-reset:hover{border-color:var(--accent);color:var(--accent);}
 .be-body{display:flex;flex:1;overflow:hidden;}
 .be-canvas{flex:1;overflow:auto;background:#111;display:flex;flex-direction:column;align-items:center;padding-bottom:40px;}
 .be-page-canvas{position:relative;background:#fff;box-shadow:0 0 30px rgba(0,0,0,0.5);flex-shrink:0;}
@@ -1753,7 +1755,7 @@ Rules:
   }, [editorPanelScale]);
 
   const BUBBLE_TYPES = {
-    speech: {name:'말풍선', tail:true, bg:'#fff', border:'#222', borderWidth:3, ellipse:true, fontWeight:500, shadow:true},
+    speech: {name:'말풍선', tail:true, bg:'#fff', border:'#222', borderWidth:3, ellipse:true, fontWeight:500, shadow:true, defaultTailStyle:'straight'},
     thought: {name:'생각', tail:true, bg:'#fff', border:'#999', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, shadow:true},
     shout: {name:'외침', tail:true, bg:'#fff', border:'#d32f2f', borderWidth:3, spiky:true, spikeCount:16, fontWeight:700, shadow:true, color:'#d32f2f'},
     cloud: {name:'구름', tail:true, bg:'#fff', border:'#888', borderWidth:2, cloudShape:true, fontWeight:400, shadow:true},
@@ -1916,6 +1918,7 @@ Rules:
           w: bw, h: bh, fontSize: 13,
           fontFamily: "'Noto Sans KR',sans-serif",
           tailPos: di % 2 === 0 ? 0.3 : 0.7, tailSize: 1.0,
+          tailStyle: 'straight', textOffsetX: 0, textOffsetY: 0,
           zIndex: 10 + di
         });
         bubbleY += bubbleSpacing;
@@ -2025,6 +2028,7 @@ Rules:
 
   const addBubbleToPage = (bubbleStyle) => {
     if (editorPages.length === 0) return;
+    const bt = BUBBLE_TYPES[bubbleStyle] || BUBBLE_TYPES.speech;
     const page = editorPages[currentPageIdx];
     const pos = getInsertPosition();
     const newBubble = {
@@ -2036,6 +2040,8 @@ Rules:
       fontFamily: "'Noto Sans KR',sans-serif",
       tailPos: 0.3,
       tailSize: 1.0,
+      tailStyle: bt.defaultTailStyle || 'normal',
+      textOffsetX: 0, textOffsetY: 0,
       zIndex: Math.max(...page.objects.map(o => o.zIndex || 1), 10) + 1
     };
     setEditorPages(prev => {
@@ -2519,12 +2525,14 @@ Rules:
       const fs = Math.max(12, (b.fontSize || 14)) * scale;
       const ff = b.fontFamily || "'Noto Sans KR',sans-serif";
       ctx.font = `${bt.fontWeight} ${fs}px ${ff}`;
-      ctx.fillStyle = bt.color || '#111';
+      ctx.fillStyle = b.customColor || bt.color || '#111';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const lines = b.text.split('\n');
       const lh = fs * 1.3;
-      const sy = by + bh / 2 - (lines.length - 1) * lh / 2;
-      lines.forEach((l, li) => ctx.fillText(l, bx + bw / 2, sy + li * lh, bw - 16 * scale));
+      const txOff = (b.textOffsetX || 0) * scale;
+      const tyOff = (b.textOffsetY || 0) * scale;
+      const sy = by + bh / 2 - (lines.length - 1) * lh / 2 + tyOff;
+      lines.forEach((l, li) => ctx.fillText(l, bx + bw / 2 + txOff, sy + li * lh, bw - 16 * scale));
     }
     ctx.restore();
   };
@@ -4983,7 +4991,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                               </svg>
                               <textarea className="be-bubble-text" value={obj.text} onChange={(e) => updatePageObject(pageIdx, obj.id, {text: e.target.value})}
                                 placeholder={bt.name+'...'} onClick={() => { setCurrentPageIdx(pageIdx); setSelectedObjectId(obj.id); }}
-                                style={{width:obj.w*scale-12, height:obj.h*scale-8, fontWeight:bt.fontWeight, fontSize:(obj.fontSize||14)*scale, color:bt.color||'#111', fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif"}}/>
+                                style={{width:obj.w*scale-12, height:obj.h*scale-8, fontWeight:bt.fontWeight, fontSize:(obj.fontSize||14)*scale, color:obj.customColor||bt.color||'#111', fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
+                                  transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`}}/>
                               {isSelected && <>
                                 <div data-resize="true" className="be-resize"
                                   onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
@@ -5087,6 +5096,24 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                         <label className="be-ctrl-label">크기</label>
                         <input type="range" min="8" max="48" value={obj.fontSize||14} onChange={e => updatePageObject(currentPageIdx, obj.id, {fontSize: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
                         <span className="be-ctrl-val" style={{minWidth:20}}>{obj.fontSize||14}</span>
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>글자색</label>
+                        <input type="color" value={obj.customColor || bt.color || '#111111'} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {customColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                        {obj.customColor && <button className="be-ctrl-reset" onClick={e=>{e.stopPropagation(); updatePageObject(currentPageIdx, obj.id, {customColor: null});}}>초기화</button>}
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>텍스트X</label>
+                        <input type="range" min="-50" max="50" value={obj.textOffsetX||0} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {textOffsetX: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
+                        <span className="be-ctrl-val" style={{minWidth:24}}>{obj.textOffsetX||0}</span>
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>텍스트Y</label>
+                        <input type="range" min="-50" max="50" value={obj.textOffsetY||0} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {textOffsetY: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
+                        <span className="be-ctrl-val" style={{minWidth:24}}>{obj.textOffsetY||0}</span>
                       </div>
                       {bt.plainText && <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>배경색</label>
