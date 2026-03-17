@@ -3120,7 +3120,12 @@ Rules:
         try {
           return await callGrokEdit(editPrompt, grokRefImages, {aspectRatio: opts.aspectRatio || '3:4'});
         } catch (editErr) {
-          log(`Grok Edit 실패: ${(editErr.message||'').substring(0,100)} — 텍스트 전용으로 재시도...`, 'warn');
+          const editErrMsg = editErr.message || '';
+          if (editErrMsg.includes('content moderation') || editErrMsg.includes('rejected')) {
+            log('⚠️ Grok Edit 콘텐츠 필터 거부 — 이 패널을 건너뜁니다.', 'warn');
+            return null;
+          }
+          log(`Grok Edit 실패: ${editErrMsg.substring(0,100)} — 텍스트 전용으로 재시도...`, 'warn');
           // Fall through to text-only generation
         }
       }
@@ -3135,43 +3140,8 @@ Rules:
       } catch (grokErr) {
         const errMsg = grokErr.message || '';
         if (errMsg.includes('content moderation') || errMsg.includes('rejected')) {
-          log('⚠️ Grok 콘텐츠 필터 거부 — 프롬프트 순화 후 Grok 재시도...', 'warn');
-          // Step 1: Retry Grok with sanitized prompt (strip mature keywords but keep artistic description)
-          try {
-            const sanitizedPrompt = sanitizeForGrok(cleanedPrompt);
-            const retryGrokPrompt = stylePrefix + sanitizedPrompt + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
-            log('Grok 순화 프롬프트로 재시도 중...', 'info');
-            return await callGrokImage(retryGrokPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
-          } catch (retryErr) {
-            log('Grok 순화 재시도도 실패 — 대체 모델 전환', 'warn');
-          }
-          // Step 2: Fallback to other models with SAME style prefix for consistency
-          const fallbackStyleNote = '\nCRITICAL STYLE MATCH: This panel is part of a series previously rendered in this exact style. Match the rendering tone precisely: ' + stylePrefix.substring(0, 200);
-          const hasVertex = !!(localStorage.getItem('VERTEX_PROJECT_ID'));
-          if (hasFalKey()) {
-            log('fal.ai (Flux)로 대체 생성 중... (스타일 일관성 유지)', 'info');
-            try {
-              const falPrompt = stylePrefix + cleanedPrompt + fallbackStyleNote + (opts.assetDescriptions?.length > 0 ? '\n\nVISUAL CONSISTENCY:\n' + opts.assetDescriptions.slice(0, 3).join('\n') : '');
-              const falResult = await callFalAI(falPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
-              log('✅ fal.ai 대체 생성 성공 (스타일 매칭 적용)', 'success');
-              return falResult;
-            } catch (falErr) {
-              log('fal.ai 대체도 실패: ' + (falErr.message||'').substring(0,100), 'warn');
-            }
-          }
-          if (hasVertex) {
-            log('Imagen 4로 대체 생성 중...', 'info');
-            const fallbackPrompt = stylePrefix + cleanedPrompt + fallbackStyleNote + visualIdCards + noTextDirective;
-            try {
-              const fallbackResult = await callImagen(fallbackPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
-              log('✅ Imagen 4 대체 생성 성공', 'success');
-              return fallbackResult;
-            } catch (img4Err) {
-              log('Imagen 4 대체도 실패: ' + (img4Err.message||'').substring(0,100), 'warn');
-            }
-          }
-          // All fallbacks failed
-          throw new Error('Grok 콘텐츠 필터 거부. fal.ai 또는 다른 이미지 모델을 직접 선택해주세요.');
+          log('⚠️ Grok 콘텐츠 필터 거부 — 이 패널을 건너뜁니다.', 'warn');
+          return null; // Skip this panel, proceed to next
         }
         throw grokErr; // Re-throw non-moderation errors
       }
@@ -4123,25 +4093,34 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
 
       try {
         const images = await callImage(anchoredPrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
-        newPanels[i] = images[0];
-        // Capture style anchor from first successful panel
-        if (!styleAnchor && panel.imagePrompt) {
-          const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
-          if (sm) { styleAnchor = sm[0]; log(`스타일 앵커 설정: "${styleAnchor}"`, 'info'); }
+        // callImage returns null when content filter blocks — skip this panel
+        if (!images || !images[0]) {
+          log(`패널 ${i+1} 콘텐츠 필터 거부 — 건너뜀`, 'warn');
+        } else {
+          newPanels[i] = images[0];
+          // Capture style anchor from first successful panel
+          if (!styleAnchor && panel.imagePrompt) {
+            const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
+            if (sm) { styleAnchor = sm[0]; log(`스타일 앵커 설정: "${styleAnchor}"`, 'info'); }
+          }
+          log(`패널 ${i+1} 완료 (레퍼런스 ${refImages.length}개 사용)`, 'success');
         }
-        log(`패널 ${i+1} 완료 (레퍼런스 ${refImages.length}개 사용)`, 'success');
       } catch(e) {
         log(`패널 ${i+1} 실패: ${e.message}`, 'error');
         if (e.message.includes('429')) await new Promise(r => setTimeout(r, 10000));
         try {
           // Retry without reference images but keep asset descriptions + style anchor
           const images = await callImage(anchoredPrompt, {assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
-          newPanels[i] = images[0];
-          if (!styleAnchor && panel.imagePrompt) {
-            const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
-            if (sm) { styleAnchor = sm[0]; log(`스타일 앵커 설정: "${styleAnchor}"`, 'info'); }
+          if (!images || !images[0]) {
+            log(`패널 ${i+1} 콘텐츠 필터 거부 — 건너뜀`, 'warn');
+          } else {
+            newPanels[i] = images[0];
+            if (!styleAnchor && panel.imagePrompt) {
+              const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
+              if (sm) { styleAnchor = sm[0]; log(`스타일 앵커 설정: "${styleAnchor}"`, 'info'); }
+            }
+            log(`패널 ${i+1} 레퍼런스 없이 재생성 완료`, 'success');
           }
-          log(`패널 ${i+1} 레퍼런스 없이 재생성 완료`, 'success');
         } catch(e2) {
           log(`패널 ${i+1} 최종 실패: ${e2.message}`, 'error');
         }
