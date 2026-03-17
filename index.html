@@ -1108,9 +1108,10 @@ const ART_STYLES = {
   tlWebtoon: {
     name: 'TL 웹툰 (성인)',
     prefix: 'Korean adult webtoon (TL/mature) style, semi-realistic detailed art, anatomically accurate and expressive character rendering, sensual atmosphere, rich skin tones with detailed highlights and shadows on bare skin, intimate close-up compositions, soft warm cinematic lighting emphasizing body contours, smooth gradient shading, high detail on facial expressions and body language, mature romance illustration. ',
-    charSuffix: ', anatomically accurate semi-realistic proportions, detailed skin rendering with natural highlights and shadows, expressive eyes and lips, sensual body proportions, smooth skin texture, mature character design, high quality',
-    bgSuffix: ', intimate atmospheric lighting, warm soft tones, cinematic depth of field, mood-driven environment, private indoor settings with rich detail, high quality',
-    propSuffix: ', delicate detailed rendering, soft warm lighting, intimate object illustration',
+    // charSuffix is used for reference sheets (T-pose, clean bg) — keep it clean to avoid content filters
+    charSuffix: ', beautifully detailed eyes and hair, semi-realistic proportions, detailed skin rendering with natural highlights, expressive eyes and lips, smooth skin texture, elegant character design, high quality',
+    bgSuffix: ', atmospheric lighting, warm soft tones, cinematic depth of field, mood-driven environment, detailed interior settings, high quality',
+    propSuffix: ', delicate detailed rendering, soft warm lighting, elegant object illustration',
     loras: [
       {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.6},
     ],
@@ -2855,8 +2856,16 @@ Rules:
   };
 
   const callImage = useCallback(async (prompt, opts={}) => {
-    const stylePrefix = getStylePrefix();
+    let stylePrefix = getStylePrefix();
     const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.naverWebtoon).name;
+
+    // For reference sheet generation (character/bg/prop), use a clean prefix
+    // to avoid content filters rejecting T-pose reference images
+    const isRefSheet = /character reference sheet|full body.*front view|clean.*background.*T-pose|reference sheet/i.test(prompt);
+    if (isRefSheet && artStyle === 'tlWebtoon') {
+      // Use romance-style prefix for reference sheets — same art quality without mature keywords
+      stylePrefix = 'Korean romance webtoon style, semi-realistic detailed art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition. ';
+    }
 
     // Strip Korean onomatopoeia / sound effects + conflicting style keywords from prompt
     const cleanPrompt = stripStyleKeywords(sanitizeImagePrompt(prompt));
