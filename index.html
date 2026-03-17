@@ -1256,7 +1256,7 @@ Return ONLY a valid JSON array (no markdown):
     "type": "establishing|dialogue|action|emotion|transition|closeup",
     "shotSize": "extreme_wide|wide|medium_wide|medium|medium_close|close_up|extreme_close",
     "cameraAngle": "eye_level|low_angle|high_angle|birds_eye|dutch_angle|over_shoulder",
-    "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"center","outfitOverride":"only if changed from default"}],
+    "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"left","gazeDirection":"looking right toward char_2","outfitOverride":"only if changed from default"}],
     "background": "bg_1",
     "props": ["prop_1"],
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
@@ -1264,7 +1264,7 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens in this panel",
-    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER 1 NAME]: [COPY-PASTE exact hair description from appearance — color, length, style, parting, bangs], [COPY-PASTE exact outfit from outfit field — top garment+color+material, bottom+color, outer layer, footwear+color, accessories], [pose], [expression]. [REPEAT for each character]. Background: [environment]. Lighting: [mood-appropriate]. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER 1 NAME]: [COPY-PASTE exact hair from appearance], [COPY-PASTE exact outfit from outfit field], [pose], [expression], [GAZE DIRECTION — e.g. 'looking right toward CHARACTER 2' or 'looking down' or 'eyes facing the viewer']. [REPEAT for each character]. Background: [environment]. Lighting: [mood-appropriate]. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
   }
 ]
 
@@ -1279,8 +1279,18 @@ Rules:
 - CRITICAL STYLE RULE: Do NOT include any art style keywords in imagePrompt (no "manhwa style", "webtoon style", "anime", "illustration", "digital painting", "photorealistic", "cinematic", "cartoon", "cel-shaded", "vibrant colors", etc.). The art style is controlled separately and will be prepended automatically. imagePrompt should ONLY describe: shot size, camera angle, character appearances, poses, expressions, outfits, background environment, lighting, and mood. Nothing about rendering style.
 - Include prop descriptions in imagePrompt when props appear in scene
 - Dialogue should match the original story text
-- Extract ALL sound effects / onomatopoeia (끼익, 쾅, 부릉, 부르르릉, 철컥, 와장창, 펑, 빠직, 탁, 쿵, 두근두근, 콸콸, 찌직, 번쩍, etc.) from the scene into the "soundEffects" array field. Include Korean onomatopoeia exactly as written. Each sound effect should be a separate string in the array. If no sound effects, use an empty array [].
-- CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, 부르르릉, 철컥, etc.), or onomatopoeia — not in Korean, not translated to English. The generated image must be purely visual with NO text or typography of any kind. Do NOT describe sounds visually (e.g., "engine roaring", "tires screeching"). Text and sound effects will be added separately as overlays in the editor.`,
+- Extract ALL sound effects / onomatopoeia into the "soundEffects" array field. If no sound effects, use an empty array [].
+- CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects, or onomatopoeia.
+
+CRITICAL — GAZE DIRECTION & EYE LINE CONTINUITY (시선 처리):
+- Every character in every panel MUST have an explicit gazeDirection field AND the gaze must be described in imagePrompt.
+- DIALOGUE SCENES: When two characters are talking, they MUST look at each other. If char_A is on the left and char_B is on the right, char_A must gaze right and char_B must gaze left. The imagePrompt must say "looking right toward [name]" or "looking left toward [name]".
+- REACTION SHOTS: In close-up reaction panels, the character's gaze must match the direction of the person/object they're reacting to from the PREVIOUS panel. If the other character was on the right in the last panel, this character looks right.
+- OVER-SHOULDER SHOTS: The foreground character (seen from behind) faces AWAY from the viewer. The background character faces TOWARD the viewer and toward the foreground character.
+- CONSISTENT SCREEN DIRECTION: Within a continuous conversation, maintain the same left-right positioning of characters (180-degree rule). If char_A is on the left in panel 5, they should stay on the left in panels 6, 7, 8 of the same conversation. Do NOT flip their positions randomly.
+- SOLO PANELS: When only one character appears, their gaze should match the context — looking at the viewer for direct address, looking in the direction of the off-screen character they're thinking about/talking to, or looking down for introspection.
+- COMMON GAZE VALUES: "looking right toward [name]", "looking left toward [name]", "looking directly at viewer", "looking down", "looking up", "looking away to the right", "eyes closed", "looking over shoulder to the left".
+- The imagePrompt MUST include the gaze direction as part of each character's description (e.g., "CHAR_A: ..., looking right toward CHAR_B" or "eyes looking down, avoiding eye contact").`,
 
   ANALYZE_SCENES: `You are a webtoon scene analyst. The user provides NUMBERED scene descriptions (e.g. "1. ...", "2. ...", "3. ..."). Your job is to parse each scene into a plotBeat and extract characters, backgrounds, and props.
 
@@ -1403,7 +1413,7 @@ Return ONLY a valid JSON array (no markdown):
     "type": "establishing|dialogue|action|emotion|transition|closeup",
     "shotSize": "extreme_wide|wide|medium_wide|medium|medium_close|close_up|extreme_close",
     "cameraAngle": "eye_level|low_angle|high_angle|birds_eye|dutch_angle|over_shoulder",
-    "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"center","outfitOverride":"only if changed"}],
+    "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"left","gazeDirection":"looking right toward char_2","outfitOverride":"only if changed"}],
     "background": "bg_1",
     "props": ["prop_1"],
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
@@ -1411,7 +1421,7 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens",
-    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER NAME]: [COPY-PASTE exact hair from appearance — color, length, style, parting, bangs], [COPY-PASTE exact outfit — top+color+material, bottom+color, outer layer, footwear+color, accessories], [pose], [expression]. Background: [environment]. Lighting: [mood]. NEVER include any text, sound effects, or typography in the image."
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER NAME]: [COPY-PASTE exact hair from appearance], [COPY-PASTE exact outfit], [pose], [expression], [GAZE DIRECTION — e.g. 'looking right toward CHARACTER 2']. Background: [environment]. Lighting: [mood]. NEVER include any text, sound effects, or typography in the image."
   }
 ]
 
@@ -1425,8 +1435,17 @@ Rules:
 - CRITICAL STYLE RULE: Do NOT include any art style keywords in imagePrompt (no "manhwa style", "webtoon style", "anime", "illustration", "digital painting", "photorealistic", "cinematic", "cartoon", "cel-shaded", "vibrant colors", etc.). The art style is controlled separately and will be prepended automatically. imagePrompt should ONLY describe: shot size, camera angle, character appearances, poses, expressions, outfits, background environment, lighting, and mood. Nothing about rendering style.
 - Include prop descriptions when they appear
 - ALL dialogue from original scenes must be present in panels
-- Extract ALL sound effects / onomatopoeia (끼익, 쾅, 부릉, 부르르릉, 철컥, 와장창, 펑, 빠직, 탁, 쿵, 두근두근, 콸콸, 찌직, 번쩍, etc.) from the scene into the "soundEffects" array field. Include Korean onomatopoeia exactly as written. Each sound effect should be a separate string in the array. If no sound effects, use an empty array [].
-- CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects (끼익, 쾅, 부릉, 부르르릉, 철컥, etc.), or onomatopoeia — not in Korean, not translated to English. The generated image must be purely visual with NO text or typography of any kind. Do NOT describe sounds visually (e.g., "engine roaring", "tires screeching"). Text and sound effects will be added separately as overlays in the editor.`
+- Extract ALL sound effects / onomatopoeia into the "soundEffects" array field. If no sound effects, use an empty array [].
+- CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects, or onomatopoeia.
+
+CRITICAL — GAZE DIRECTION & EYE LINE CONTINUITY (시선 처리):
+- Every character MUST have a gazeDirection field AND the gaze must be described in imagePrompt.
+- DIALOGUE SCENES: Characters talking to each other MUST look at each other. If char_A is on the left, char_A gazes right toward char_B, and vice versa.
+- REACTION SHOTS: In close-ups, gaze must match the direction of the person/object from the PREVIOUS panel.
+- OVER-SHOULDER SHOTS: Foreground character faces away; background character faces toward viewer and toward the foreground character.
+- 180-DEGREE RULE: Within a continuous conversation, maintain the same left-right positioning. If char_A is left in panel 5, they stay left in panels 6-8 of the same scene. Do NOT flip positions randomly.
+- SOLO PANELS: Gaze should match context — at the viewer for direct address, toward off-screen character they're thinking about, down for introspection.
+- The imagePrompt MUST include gaze direction for EACH character (e.g., "looking right toward CHAR_B", "eyes looking down, avoiding eye contact").`
 };
 
 // ============================================================
