@@ -1340,6 +1340,15 @@ Rules:
 - Each imagePrompt must be self-contained (include full character appearance details, EXACT outfit, not just names)
 - CRITICAL STYLE RULE: Do NOT include any art style keywords in imagePrompt (no "manhwa style", "webtoon style", "anime", "illustration", "digital painting", "photorealistic", "cinematic", "cartoon", "cel-shaded", "vibrant colors", etc.). The art style is controlled separately and will be prepended automatically. imagePrompt should ONLY describe: shot size, camera angle, character appearances, poses, expressions, outfits, background environment, lighting, and mood. Nothing about rendering style.
 - Include prop descriptions in imagePrompt when props appear in scene
+
+CRITICAL — POSE & BODY STATE CONTINUITY (자세/포즈 연속성):
+- A character's BASE POSTURE (lying, sitting, standing, kneeling, crouching) MUST persist across consecutive panels unless the story EXPLICITLY describes them changing posture (e.g., "일어났다", "자리에서 벌떡 일어섰다", "침대에서 내려왔다").
+- If a character was LYING DOWN in the previous panel and the story does NOT mention them getting up, they MUST still be lying down in the next panel. Only arm positions, facial expressions, head turns, or small gestures should change.
+- If a character was SITTING, they remain sitting. New actions layer ON TOP of the base posture (e.g., sitting + leaning forward, sitting + turning head, sitting + picking up a cup).
+- STANDING characters remain standing unless described otherwise.
+- When generating imagePrompt, always specify the base posture explicitly (e.g., "lying on bed, turning head to the side" NOT just "looking sideways").
+- Include the TRANSITION if posture changes: "getting up from bed", "standing up from chair", "kneeling down from standing position". This makes the scene flow natural.
+- Each character entry MUST have a descriptive "pose" field that includes base posture + action (e.g., "lying on back, arm draped over eyes", "sitting cross-legged, leaning chin on hand", "standing with arms crossed").
 - Dialogue should match the original story text
 - Extract ALL sound effects / onomatopoeia into the "soundEffects" array field. If no sound effects, use an empty array [].
 - CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects, or onomatopoeia.
@@ -1499,6 +1508,15 @@ Rules:
 - ALL dialogue from original scenes must be present in panels
 - Extract ALL sound effects / onomatopoeia into the "soundEffects" array field. If no sound effects, use an empty array [].
 - CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects, or onomatopoeia.
+
+CRITICAL — POSE & BODY STATE CONTINUITY (자세/포즈 연속성):
+- A character's BASE POSTURE (lying, sitting, standing, kneeling, crouching) MUST persist across consecutive panels unless the story EXPLICITLY describes them changing posture.
+- LYING DOWN → stays lying. Only expressions, arm positions, head turns change. NOT suddenly sitting/standing.
+- SITTING → stays sitting. New actions layer on top (leaning forward, picking up cup, turning head).
+- STANDING → stays standing unless explicitly described otherwise.
+- In imagePrompt, always specify base posture + action (e.g., "lying on bed, turning head to the side" NOT just "looking sideways").
+- Include TRANSITION actions when posture changes: "getting up from bed", "standing up from chair", "kneeling down".
+- "pose" field MUST include base posture + specific action (e.g., "lying on back, arm draped over eyes", "sitting cross-legged, leaning chin on hand").
 
 CRITICAL — GAZE DIRECTION & EYE LINE CONTINUITY (시선 처리):
 - Every character MUST have a gazeDirection field AND the gaze must be described in imagePrompt.
@@ -2702,7 +2720,8 @@ Rules:
 
   // Helper: build reference images & descriptions from shared assets for a panel
   // outfitState: optional {charId: 'current outfit description'} — tracks cumulative outfit changes across panels
-  const buildPanelRefs = useCallback((panel, sa, analysisData, episodeRefs, outfitState) => {
+  // poseState: optional {charId: 'previous pose description'} — tracks pose continuity
+  const buildPanelRefs = useCallback((panel, sa, analysisData, episodeRefs, outfitState, poseState) => {
     const refImages = [];
     const assetDescriptions = [];
     if (!panel.characters || !analysisData) {
@@ -2740,6 +2759,14 @@ Rules:
       if (charInfo?.features) detailParts.push(`distinctive features: ${charInfo.features}`);
       if (outfitDesc) detailParts.push(`outfit: ${outfitDesc}`);
       if (saCharData?.description && saCharData.description !== appearanceDesc) detailParts.push(saCharData.description);
+      // Add previous pose context for continuity
+      const prevPose = poseState?.[charId];
+      const curPose = pc.pose || '';
+      if (prevPose && curPose) {
+        detailParts.push(`PREVIOUS POSE: ${prevPose} → CURRENT POSE: ${curPose} (maintain base posture unless transition is described)`);
+      } else if (curPose) {
+        detailParts.push(`pose: ${curPose}`);
+      }
       const fullDesc = detailParts.join(', ');
       assetDescriptions.push(`[Character ${charInfo?.name || charId}]: ${fullDesc}`);
       if (charImg) {
@@ -4048,17 +4075,22 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     // Track cumulative outfit state: {charId: 'current outfit description'}
     // Once an outfitOverride appears, that outfit persists for subsequent panels
     const outfitState = {};
+    // Track pose state: {charId: 'last known pose'} for continuity
+    const poseState = {};
 
     for (let i = 0; i < sb.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
 
-      // Always update outfit state even for already-generated panels
+      // Always update outfit + pose state even for already-generated panels
       const curPanel = sb[i];
       if (curPanel.characters) {
         for (const pc of curPanel.characters) {
           const cid = pc.id || pc;
           if (pc.outfitOverride) {
             outfitState[cid] = pc.outfitOverride;
+          }
+          if (pc.pose) {
+            poseState[cid] = pc.pose;
           }
         }
       }
@@ -4081,7 +4113,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         : panel.imagePrompt;
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
 
-      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, outfitState);
+      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, outfitState, poseState);
       log(`패널 ${i+1}: 레퍼런스 이미지 ${refImages.length}개, 에셋 설명 ${assetDescriptions.length}개, 캐릭터 ${panelCharIds.length}명`);
 
       try {
@@ -4456,17 +4488,20 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         setStoryboard(newSb);
       }
       // Build cumulative outfit state from all panels before this one
+      // Build cumulative outfit + pose state from all panels before this one
       const outfitState = {};
+      const poseState = {};
       for (let j = 0; j < idx; j++) {
         const prevPanel = storyboard[j];
         if (prevPanel?.characters) {
           for (const pc of prevPanel.characters) {
             const cid = pc.id || pc;
             if (pc.outfitOverride) outfitState[cid] = pc.outfitOverride;
+            if (pc.pose) poseState[cid] = pc.pose;
           }
         }
       }
-      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, references, outfitState);
+      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, references, outfitState, poseState);
       log(`패널 ${idx+1} 재생성 중... (asset ${assetDescriptions.length}개 참조)`);
       const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
       const newPanels = [...panels];
