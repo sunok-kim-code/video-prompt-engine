@@ -108,6 +108,33 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .project-title-bar{font-weight:700;font-size:14px;color:var(--text);margin-right:12px;display:flex;align-items:center;gap:8px;}
 .episode-delete{position:absolute;top:-4px;right:-4px;width:16px;height:16px;border-radius:50%;background:var(--err);color:#fff;border:none;font-size:10px;cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1;}
 .episode-pill:hover .episode-delete{display:flex;}
+/* Unified Storyboard + Panel */
+.sb-unified-list{display:flex;flex-direction:column;gap:0;}
+.sb-unified-card{display:flex;gap:12px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;transition:all .2s;position:relative;}
+.sb-unified-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(108,92,231,.08);}
+.sb-unified-card.dragging{opacity:.4;border-style:dashed;}
+.sb-card-handle{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:36px;cursor:grab;user-select:none;}
+.sb-card-handle:active{cursor:grabbing;}
+.sb-panel-num{width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;}
+.sb-drag-icon{font-size:12px;color:var(--text2);opacity:.4;letter-spacing:-2px;}
+.sb-card-info{flex:1;min-width:0;}
+.sb-card-image{width:160px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;}
+.sb-card-image img{width:100%;border-radius:8px;object-fit:cover;max-height:220px;cursor:pointer;}
+.sb-img-placeholder{width:100%;height:120px;background:var(--surface2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text2);border:1px dashed var(--border);}
+.sb-img-actions{display:flex;gap:4px;flex-wrap:wrap;}
+.sb-drop-zone{height:8px;display:flex;align-items:center;justify-content:center;transition:all .2s;position:relative;margin:2px 0;}
+.sb-drop-zone.active{height:40px;background:rgba(108,92,231,.08);border:2px dashed var(--accent);border-radius:8px;}
+.sb-insert-btn{position:absolute;opacity:0;width:24px;height:24px;border-radius:50%;border:1px dashed var(--border);background:var(--surface);color:var(--text2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;z-index:2;}
+.sb-drop-zone:hover .sb-insert-btn,.sb-drop-zone.active .sb-insert-btn{opacity:1;}
+.sb-insert-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.sb-insert-end{position:relative;opacity:1;width:auto;padding:6px 16px;border-radius:20px;font-size:12px;font-weight:600;}
+.sb-edit-form{display:flex;flex-direction:column;gap:6px;}
+.sb-edit-row{display:flex;gap:8px;align-items:flex-start;font-size:12px;}
+.sb-edit-row label{min-width:80px;font-weight:600;color:var(--text2);padding-top:4px;flex-shrink:0;}
+.sb-edit-row input,.sb-edit-row textarea,.sb-edit-row select{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;color:var(--text);font-family:inherit;}
+.sb-edit-row textarea{resize:vertical;min-height:48px;}
+.sb-edit-row select{max-width:180px;}
+@media(max-width:700px){.sb-card-image{width:100px;}.sb-unified-card{flex-wrap:wrap;}}
 /* Batch Run */
 .batch-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:300;display:flex;align-items:center;justify-content:center;}
 .batch-modal{background:var(--surface);border-radius:16px;width:min(500px,90vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4);}
@@ -3427,7 +3454,9 @@ Rules:
 
       const s3 = await fbLoadPhase(pid, episodeNum, 'step3_storyboard');
       if (s3 && s3.storyboard?.length > 0) {
-        setStoryboard(s3.storyboard);
+        const sbLoaded = s3.storyboard;
+        sbLoaded.forEach((p, i) => { if (!p._uid) p._uid = 'sb_' + Date.now() + '_' + i; });
+        setStoryboard(sbLoaded);
         detected.add(2);
         lastStep = 3;
         log(`  Step 3 (스토리보드) 로드됨: ${s3.storyboard.length}개 패널`, 'info');
@@ -3949,6 +3978,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     } else {
       log(`스토리보드 완료: ${parsed.length}개 패널`, 'success');
     }
+    parsed.forEach((p, i) => { if (!p._uid) p._uid = 'sb_' + Date.now() + '_' + i; });
     setStoryboard(parsed);
     setPanels(new Array(parsed.length).fill(null));
     setCompletedSteps(prev => new Set([...prev, 2]));
@@ -4065,6 +4095,83 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     } finally { setRunning(false); }
   };
 
+  // ======== Storyboard Editing Helpers ========
+  const startSbEdit = (idx) => {
+    setEditingSbPanel(idx);
+    setEditingSbData({...storyboard[idx], dialogue: [...(storyboard[idx].dialogue || [])]});
+  };
+  const cancelSbEdit = () => { setEditingSbPanel(null); setEditingSbData({}); };
+  const saveSbEdit = (idx) => {
+    const newSb = [...storyboard];
+    newSb[idx] = {...newSb[idx], ...editingSbData};
+    setStoryboard(newSb);
+    setEditingSbPanel(null);
+    setEditingSbData({});
+    log(`패널 ${idx+1} 수정됨`, 'success');
+    // Auto-save to Firebase
+    if (projectId && currentEpisode) {
+      fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+    }
+  };
+  const deleteSbPanel = (idx) => {
+    if (!confirm(`패널 ${idx+1}을 삭제하시겠습니까?`)) return;
+    const newSb = storyboard.filter((_, i) => i !== idx);
+    const newPanels = panels.filter((_, i) => i !== idx);
+    setStoryboard(newSb);
+    setPanels(newPanels);
+    setEditingSbPanel(null);
+    log(`패널 ${idx+1} 삭제됨`, 'info');
+    if (projectId && currentEpisode) {
+      fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+    }
+  };
+  const insertSbPanel = (atIdx) => {
+    const newPanel = {
+      _uid: 'sb_' + Date.now(),
+      panelNumber: atIdx + 1,
+      type: 'action',
+      shotSize: 'medium',
+      cameraAngle: 'eye level',
+      mood: 'neutral',
+      description: '(새 패널 - 클릭하여 수정)',
+      dialogue: [],
+      narration: '',
+      imagePrompt: '',
+      characters: [],
+      background: '',
+    };
+    const newSb = [...storyboard];
+    newSb.splice(atIdx, 0, newPanel);
+    // Renumber
+    newSb.forEach((p, i) => { p.panelNumber = i + 1; });
+    const newPanels = [...panels];
+    newPanels.splice(atIdx, 0, null);
+    setStoryboard(newSb);
+    setPanels(newPanels);
+    // Auto-open editor for new panel
+    setEditingSbPanel(atIdx);
+    setEditingSbData({...newPanel, dialogue: []});
+    log(`패널 ${atIdx+1} 위치에 새 패널 추가됨`, 'info');
+  };
+  const handleSbDrop = (targetIdx) => {
+    if (draggingSbIdx === null || draggingSbIdx === targetIdx) return;
+    const newSb = [...storyboard];
+    const newPanels = [...panels];
+    const [movedSb] = newSb.splice(draggingSbIdx, 1);
+    const [movedPanel] = newPanels.splice(draggingSbIdx, 1);
+    const insertAt = targetIdx > draggingSbIdx ? targetIdx - 1 : targetIdx;
+    newSb.splice(insertAt, 0, movedSb);
+    newPanels.splice(insertAt, 0, movedPanel);
+    newSb.forEach((p, i) => { p.panelNumber = i + 1; });
+    setStoryboard(newSb);
+    setPanels(newPanels);
+    setDraggingSbIdx(null);
+    log(`패널 순서 변경됨`, 'info');
+    if (projectId && currentEpisode) {
+      fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+    }
+  };
+
   // ======== Batch Sequential Run (연속 실행 모드) ========
   // Runs full pipeline across multiple episodes with per-step provider overrides
   const [batchRunning, setBatchRunning] = useState(false);
@@ -4072,6 +4179,11 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchConfig, setBatchConfig] = useState({step12Provider:'imagen4', step34Provider:'grokImage', artStyleOverride:''});
   const [batchEpisodeList, setBatchEpisodeList] = useState([]);
+  // Storyboard editing state
+  const [editingSbPanel, setEditingSbPanel] = useState(null); // index of panel being edited
+  const [editingSbData, setEditingSbData] = useState({});
+  const [draggingSbIdx, setDraggingSbIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
 
   const runBatchPipeline = async (config) => {
     // config: { episodes: [episodeNum, ...], step1Provider, step2Provider, step3Provider, step4Provider, artStyle }
@@ -5444,112 +5556,184 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
               )}
 
               {/* ===== STEP 2: Storyboard ===== */}
-              {step === 2 && (
+              {/* ===== STEP 2+3: Storyboard & Panel Generation (Unified) ===== */}
+              {(step === 2 || step === 3) && (
                 <div className="flex-col">
-                  <div className="flex-row gap-8">
+                  {/* Action bar */}
+                  <div className="flex-row gap-8 flex-wrap" style={{alignItems:'center'}}>
                     <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(2)} disabled={!analysis || running}>스토리보드 생성</button>
+                    <button className="btn btn-sm" style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none'}} onClick={()=>runSingleStep(3)} disabled={storyboard.length===0 || running}>패널 이미지 생성</button>
                     {storyboard.length > 0 && <span className="text-muted">{storyboard.length}개 패널</span>}
+                    {panels.filter(Boolean).length > 0 && <span className="text-muted" style={{color:'var(--success)'}}>이미지 {panels.filter(Boolean).length}/{storyboard.length}</span>}
+                    {panels.filter(Boolean).length > 0 && <>
+                      <button className="btn btn-success btn-xs" onClick={savePanelsToFirebase} disabled={running}>💾 저장</button>
+                      <button className="btn btn-primary btn-xs" onClick={openBubbleEditor}>💬 에디터</button>
+                      <button className="btn btn-outline btn-xs" onClick={() => openViewerLocal()}>🔗 보기</button>
+                      <button className="btn btn-outline btn-xs" onClick={exportWebtoonPDF} disabled={running}>📄 PDF</button>
+                    </>}
                     {running && <span className="status-badge running">생성 중...</span>}
                   </div>
 
                   {storyboard.length === 0 && <div className="placeholder">스토리보드를 생성하면 패널별 구성이 표시됩니다</div>}
 
+                  {/* Unified storyboard + panel list */}
                   {storyboard.length > 0 && (
-                    <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                      {storyboard.map((panel, i) => (
-                        <div key={i} className="card" style={{padding:12,display:'flex',gap:12,alignItems:'flex-start'}}>
-                          <div style={{minWidth:36,height:36,borderRadius:'50%',background:'var(--accent)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:14}}>
-                            {panel.panelNumber || i+1}
-                          </div>
-                          <div style={{flex:1}}>
-                            <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:4}}>
-                              <span className="tag tag-mood">{panel.type}</span>
-                              <span className="tag" style={{background:'#ffeaa7',color:'#636e72'}}>{panel.shotSize}</span>
-                              <span className="tag" style={{background:'#dfe6e9',color:'#636e72'}}>{panel.cameraAngle}</span>
-                              <span className="tag tag-mood">{panel.mood}</span>
+                    <div className="sb-unified-list">
+                      {storyboard.map((panel, i) => {
+                        const isEditing = editingSbPanel === i;
+                        return (
+                          <React.Fragment key={panel._uid || i}>
+                            {/* Drop zone before panel */}
+                            <div className={`sb-drop-zone ${dragOverIdx === i ? 'active' : ''}`}
+                              onDragOver={e => { e.preventDefault(); setDragOverIdx(i); }}
+                              onDragLeave={() => setDragOverIdx(null)}
+                              onDrop={e => { e.preventDefault(); handleSbDrop(i); setDragOverIdx(null); }}>
+                              <button className="sb-insert-btn" onClick={() => insertSbPanel(i)} title="여기에 패널 추가">+</button>
                             </div>
-                            <div style={{fontSize:13,marginBottom:4}}>{panel.description}</div>
-                            {panel.dialogue?.map((d, di) => (
-                              <div key={di} style={{fontSize:12,color:'var(--accent)',marginLeft:8}}>💬 {d.speaker}: "{d.text}"</div>
-                            ))}
-                            {panel.narration && <div style={{fontSize:12,color:'var(--text2)',fontStyle:'italic',marginLeft:8}}>📝 {panel.narration}</div>}
-                            <details style={{marginTop:6}}>
-                              <summary style={{fontSize:11,color:'var(--text2)',cursor:'pointer'}}>이미지 프롬프트</summary>
-                              <div style={{fontSize:11,color:'var(--text2)',padding:'4px 0',lineHeight:1.5,fontFamily:'monospace'}}>{panel.imagePrompt}</div>
-                              <button className="btn btn-outline btn-sm" style={{fontSize:10,marginTop:4}} onClick={() => openPromptEditor('storyboard', i, panel.imagePrompt, `패널 ${i+1} 프롬프트`,
-                                (p) => {
-                                  const newSb = [...storyboard];
-                                  newSb[i] = {...newSb[i], imagePrompt: p};
-                                  setStoryboard(newSb);
-                                  log(`패널 ${i+1} 프롬프트 수정 → 이미지 생성 시작`, 'info');
-                                  regeneratePanel(i, p);
-                                },
-                                (p) => {
-                                  const newSb = [...storyboard];
-                                  newSb[i] = {...newSb[i], imagePrompt: p};
-                                  setStoryboard(newSb);
-                                  log(`패널 ${i+1} 프롬프트 저장됨`, 'success');
-                                }
-                              )}>프롬프트 수정</button>
-                            </details>
-                          </div>
-                        </div>
-                      ))}
+
+                            <div className={`sb-unified-card ${draggingSbIdx === i ? 'dragging' : ''}`}
+                              draggable={!isEditing}
+                              onDragStart={e => { setDraggingSbIdx(i); e.dataTransfer.effectAllowed = 'move'; }}
+                              onDragEnd={() => { setDraggingSbIdx(null); setDragOverIdx(null); }}>
+
+                              {/* Panel number + drag handle */}
+                              <div className="sb-card-handle" title="드래그하여 순서 변경">
+                                <div className="sb-panel-num">{i+1}</div>
+                                <div className="sb-drag-icon">⋮⋮</div>
+                              </div>
+
+                              {/* Storyboard info (left) */}
+                              <div className="sb-card-info">
+                                {isEditing ? (
+                                  /* Editing mode */
+                                  <div className="sb-edit-form">
+                                    <div className="sb-edit-row">
+                                      <label>유형</label>
+                                      <select value={editingSbData.type || ''} onChange={e => setEditingSbData(prev => ({...prev, type: e.target.value}))}>
+                                        <option value="action">action</option><option value="dialogue">dialogue</option><option value="reaction">reaction</option>
+                                        <option value="establishing">establishing</option><option value="transition">transition</option><option value="montage">montage</option>
+                                        <option value="emotional">emotional</option><option value="dramatic">dramatic</option><option value="closeup">closeup</option>
+                                      </select>
+                                    </div>
+                                    <div className="sb-edit-row">
+                                      <label>샷 사이즈</label>
+                                      <select value={editingSbData.shotSize || ''} onChange={e => setEditingSbData(prev => ({...prev, shotSize: e.target.value}))}>
+                                        <option value="extreme wide">extreme wide</option><option value="wide">wide</option><option value="full">full</option>
+                                        <option value="medium">medium</option><option value="medium close-up">medium close-up</option>
+                                        <option value="close-up">close-up</option><option value="extreme close-up">extreme close-up</option>
+                                      </select>
+                                    </div>
+                                    <div className="sb-edit-row">
+                                      <label>카메라 앵글</label>
+                                      <select value={editingSbData.cameraAngle || ''} onChange={e => setEditingSbData(prev => ({...prev, cameraAngle: e.target.value}))}>
+                                        <option value="eye level">eye level</option><option value="low angle">low angle</option><option value="high angle">high angle</option>
+                                        <option value="bird's eye">bird's eye</option><option value="dutch angle">dutch angle</option><option value="over shoulder">over shoulder</option>
+                                        <option value="POV">POV</option><option value="worm's eye">worm's eye</option>
+                                      </select>
+                                    </div>
+                                    <div className="sb-edit-row">
+                                      <label>분위기</label>
+                                      <input value={editingSbData.mood || ''} onChange={e => setEditingSbData(prev => ({...prev, mood: e.target.value}))} placeholder="분위기" />
+                                    </div>
+                                    <div className="sb-edit-row">
+                                      <label>설명</label>
+                                      <textarea value={editingSbData.description || ''} onChange={e => setEditingSbData(prev => ({...prev, description: e.target.value}))} rows={3} />
+                                    </div>
+                                    <div className="sb-edit-row">
+                                      <label>내레이션</label>
+                                      <input value={editingSbData.narration || ''} onChange={e => setEditingSbData(prev => ({...prev, narration: e.target.value}))} placeholder="내레이션 (선택)" />
+                                    </div>
+                                    {/* Dialogue editing */}
+                                    <div className="sb-edit-row">
+                                      <label>대사</label>
+                                      <div style={{display:'flex',flexDirection:'column',gap:4,flex:1}}>
+                                        {(editingSbData.dialogue || []).map((d, di) => (
+                                          <div key={di} style={{display:'flex',gap:4,alignItems:'center'}}>
+                                            <input style={{width:70}} value={d.speaker} placeholder="화자" onChange={e => {
+                                              const nd = [...(editingSbData.dialogue||[])]; nd[di] = {...nd[di], speaker: e.target.value};
+                                              setEditingSbData(prev => ({...prev, dialogue: nd}));
+                                            }} />
+                                            <input style={{flex:1}} value={d.text} placeholder="대사" onChange={e => {
+                                              const nd = [...(editingSbData.dialogue||[])]; nd[di] = {...nd[di], text: e.target.value};
+                                              setEditingSbData(prev => ({...prev, dialogue: nd}));
+                                            }} />
+                                            <button className="btn btn-xs" style={{color:'var(--err)',padding:'2px 6px'}} onClick={() => {
+                                              const nd = (editingSbData.dialogue||[]).filter((_,j) => j !== di);
+                                              setEditingSbData(prev => ({...prev, dialogue: nd}));
+                                            }}>×</button>
+                                          </div>
+                                        ))}
+                                        <button className="btn btn-outline btn-xs" onClick={() => {
+                                          setEditingSbData(prev => ({...prev, dialogue: [...(prev.dialogue||[]), {speaker:'', text:''}]}));
+                                        }}>+ 대사 추가</button>
+                                      </div>
+                                    </div>
+                                    {/* Image prompt */}
+                                    <div className="sb-edit-row">
+                                      <label>이미지 프롬프트</label>
+                                      <textarea value={editingSbData.imagePrompt || ''} onChange={e => setEditingSbData(prev => ({...prev, imagePrompt: e.target.value}))} rows={4} style={{fontFamily:'monospace',fontSize:11}} />
+                                    </div>
+                                    <div style={{display:'flex',gap:6,marginTop:6}}>
+                                      <button className="btn btn-primary btn-xs" onClick={() => saveSbEdit(i)}>저장</button>
+                                      <button className="btn btn-outline btn-xs" onClick={() => { saveSbEdit(i); regeneratePanel(i, editingSbData.imagePrompt); }}>저장 + 이미지 재생성</button>
+                                      <button className="btn btn-outline btn-xs" onClick={cancelSbEdit}>취소</button>
+                                      <button className="btn btn-xs" style={{color:'var(--err)',marginLeft:'auto'}} onClick={() => deleteSbPanel(i)}>삭제</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  /* View mode */
+                                  <div onClick={() => startSbEdit(i)} style={{cursor:'pointer'}} title="클릭하여 수정">
+                                    <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:4}}>
+                                      <span className="tag tag-mood">{panel.type}</span>
+                                      <span className="tag" style={{background:'#ffeaa7',color:'#636e72'}}>{panel.shotSize}</span>
+                                      <span className="tag" style={{background:'#dfe6e9',color:'#636e72'}}>{panel.cameraAngle}</span>
+                                      <span className="tag tag-mood">{panel.mood}</span>
+                                    </div>
+                                    <div style={{fontSize:13,marginBottom:4}}>{panel.description}</div>
+                                    {panel.dialogue?.map((d, di) => (
+                                      <div key={di} style={{fontSize:12,color:'var(--accent)',marginLeft:8}}>💬 {d.speaker}: "{d.text}"</div>
+                                    ))}
+                                    {panel.narration && <div style={{fontSize:12,color:'var(--text2)',fontStyle:'italic',marginLeft:8}}>📝 {panel.narration}</div>}
+                                    <details style={{marginTop:6}} onClick={e => e.stopPropagation()}>
+                                      <summary style={{fontSize:11,color:'var(--text2)',cursor:'pointer'}}>이미지 프롬프트</summary>
+                                      <div style={{fontSize:11,color:'var(--text2)',padding:'4px 0',lineHeight:1.5,fontFamily:'monospace'}}>{panel.imagePrompt?.substring(0,300)}</div>
+                                    </details>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Panel image (right) */}
+                              <div className="sb-card-image">
+                                {panels[i] ? (
+                                  <img className="clickable-img" src={panels[i]} alt={`Panel ${i+1}`}
+                                    onClick={() => showPreview(panels[i], `패널 ${i+1}: ${panel.description?.substring(0,60) || ""}`)} />
+                                ) : (
+                                  <div className="sb-img-placeholder">{running ? '대기...' : '미생성'}</div>
+                                )}
+                                <div className="sb-img-actions">
+                                  {panels[i] ? (<>
+                                    <button className="btn btn-outline btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
+                                    <button className="btn btn-success btn-xs" onClick={()=>saveSinglePanelToFirebase(i)} disabled={running}>💾</button>
+                                    <button className="btn btn-outline btn-xs" onClick={()=>savePanelImage(panels[i], `panel_${i+1}.png`)}>⬇</button>
+                                  </>) : (
+                                    <button className="btn btn-primary btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>생성</button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </React.Fragment>
+                        );
+                      })}
+
+                      {/* Final drop zone + add button */}
+                      <div className={`sb-drop-zone ${dragOverIdx === storyboard.length ? 'active' : ''}`}
+                        onDragOver={e => { e.preventDefault(); setDragOverIdx(storyboard.length); }}
+                        onDragLeave={() => setDragOverIdx(null)}
+                        onDrop={e => { e.preventDefault(); handleSbDrop(storyboard.length); setDragOverIdx(null); }}>
+                        <button className="sb-insert-btn sb-insert-end" onClick={() => insertSbPanel(storyboard.length)} title="마지막에 패널 추가">+ 패널 추가</button>
+                      </div>
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* ===== STEP 3: Panel Generation ===== */}
-              {step === 3 && (
-                <div className="flex-col">
-                  <div className="flex-row gap-8">
-                    <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(3)} disabled={storyboard.length===0 || running}>패널 이미지 생성</button>
-                    {panels.filter(Boolean).length > 0 && <>
-                      <span className="text-muted">{panels.filter(Boolean).length}/{storyboard.length} 완료</span>
-                      <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
-                      <button className="btn btn-primary btn-sm" onClick={openBubbleEditor} style={{display:'flex',alignItems:'center',gap:4}}>💬 웹툰 에디터</button>
-                      <button className="btn btn-outline btn-sm" onClick={() => openViewerLocal()} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>
-                      <button className="btn btn-outline btn-sm" onClick={exportWebtoonPDF} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>📄 PDF 내보내기</button>
-                    </>}
-                    {running && <span className="status-badge running">생성 중...</span>}
-                  </div>
-
-                  {storyboard.length === 0 && <div className="placeholder">먼저 스토리보드를 생성하세요</div>}
-
-                  <div className="panel-grid">
-                    {storyboard.map((panel, i) => (
-                      <div key={i} className="panel-card">
-                        <div className="panel-num">{i+1}</div>
-                        {panels[i] ? (
-                          <img className="clickable-img" src={panels[i]} alt={`Panel ${i+1}`} onClick={() => showPreview(panels[i], `패널 ${i+1}: ${panel.description?.substring(0,60) || ""}`)} />
-                        ) : (
-                          <div className="panel-placeholder">{running ? '생성 대기...' : '미생성'}</div>
-                        )}
-                        <div className="panel-info">
-                          <span className="tag tag-mood" style={{fontSize:10}}>{panel.type}</span> <span className="text-xs">{panel.description?.substring(0, 40)}</span>
-                          <details style={{marginTop:2}}>
-                            <summary className="prompt-badge">프롬프트</summary>
-                            <div className="text-xs" style={{padding:'4px 0',lineHeight:1.4,fontFamily:'monospace',maxHeight:80,overflow:'auto'}}>{panel.imagePrompt?.substring(0,300)}</div>
-                          </details>
-                          <div className="action-bar">
-                            <button className="btn btn-outline btn-xs"
-                              onClick={() => openPromptEditor('panel', i, panel.imagePrompt, `패널 ${i+1}`,
-                                (p) => regeneratePanel(i, p),
-                                (p) => { const newSb=[...storyboard]; newSb[i]={...newSb[i],imagePrompt:p}; setStoryboard(newSb); log(`패널 ${i+1} 프롬프트 저장됨`,'success'); }
-                              )} disabled={running}>수정</button>
-                            {panels[i] ? (<>
-                              <button className="btn btn-outline btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
-                              <button className="btn btn-success btn-xs" onClick={()=>saveSinglePanelToFirebase(i)} disabled={running}>💾 Firebase 저장</button>
-                              <button className="btn btn-outline btn-xs" onClick={()=>savePanelImage(panels[i], `panel_${i+1}.png`)}>다운로드</button>
-                            </>) : (
-                              <button className="btn btn-primary btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>생성</button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
 
