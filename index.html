@@ -1215,7 +1215,7 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens in this panel",
-    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER 1 NAME]: [COPY-PASTE exact hair description from appearance — color, length, style, parting, bangs], [COPY-PASTE exact outfit from outfit field — top garment+color+material, bottom+color, outer layer, footwear+color, accessories], [pose], [expression]. [REPEAT for each character]. Background: [environment]. Lighting: [mood-appropriate]. manhwa/webtoon style, detailed illustration, vibrant colors. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography."
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER 1 NAME]: [COPY-PASTE exact hair description from appearance — color, length, style, parting, bangs], [COPY-PASTE exact outfit from outfit field — top garment+color+material, bottom+color, outer layer, footwear+color, accessories], [pose], [expression]. [REPEAT for each character]. Background: [environment]. Lighting: [mood-appropriate]. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
   }
 ]
 
@@ -1227,6 +1227,7 @@ Rules:
 - Include at least one panel per plot beat
 - Add transition panels between major scene changes
 - Each imagePrompt must be self-contained (include full character appearance details, EXACT outfit, not just names)
+- CRITICAL STYLE RULE: Do NOT include any art style keywords in imagePrompt (no "manhwa style", "webtoon style", "anime", "illustration", "digital painting", "photorealistic", "cinematic", "cartoon", "cel-shaded", "vibrant colors", etc.). The art style is controlled separately and will be prepended automatically. imagePrompt should ONLY describe: shot size, camera angle, character appearances, poses, expressions, outfits, background environment, lighting, and mood. Nothing about rendering style.
 - Include prop descriptions in imagePrompt when props appear in scene
 - Dialogue should match the original story text
 - Extract ALL sound effects / onomatopoeia (끼익, 쾅, 부릉, 부르르릉, 철컥, 와장창, 펑, 빠직, 탁, 쿵, 두근두근, 콸콸, 찌직, 번쩍, etc.) from the scene into the "soundEffects" array field. Include Korean onomatopoeia exactly as written. Each sound effect should be a separate string in the array. If no sound effects, use an empty array [].
@@ -1361,7 +1362,7 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action",
     "description": "Brief Korean description of what happens",
-    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER NAME]: [COPY-PASTE exact hair from appearance — color, length, style, parting, bangs], [COPY-PASTE exact outfit — top+color+material, bottom+color, outer layer, footwear+color, accessories], [pose], [expression]. Background: [environment]. Lighting: [mood]. manhwa/webtoon style, detailed illustration, vibrant colors. NEVER include any text, sound effects, or typography."
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER NAME]: [COPY-PASTE exact hair from appearance — color, length, style, parting, bangs], [COPY-PASTE exact outfit — top+color+material, bottom+color, outer layer, footwear+color, accessories], [pose], [expression]. Background: [environment]. Lighting: [mood]. NEVER include any text, sound effects, or typography in the image."
   }
 ]
 
@@ -1372,6 +1373,7 @@ Rules:
 - Use wide shots for action and establishing scenes
 - EVERY plotBeat must have at least 1 panel — verify this before returning
 - Each imagePrompt must be self-contained — COPY character hair+outfit descriptions verbatim from character data
+- CRITICAL STYLE RULE: Do NOT include any art style keywords in imagePrompt (no "manhwa style", "webtoon style", "anime", "illustration", "digital painting", "photorealistic", "cinematic", "cartoon", "cel-shaded", "vibrant colors", etc.). The art style is controlled separately and will be prepended automatically. imagePrompt should ONLY describe: shot size, camera angle, character appearances, poses, expressions, outfits, background environment, lighting, and mood. Nothing about rendering style.
 - Include prop descriptions when they appear
 - ALL dialogue from original scenes must be present in panels
 - Extract ALL sound effects / onomatopoeia (끼익, 쾅, 부릉, 부르르릉, 철컥, 와장창, 펑, 빠직, 탁, 쿵, 두근두근, 콸콸, 찌직, 번쩍, etc.) from the scene into the "soundEffects" array field. Include Korean onomatopoeia exactly as written. Each sound effect should be a separate string in the array. If no sound effects, use an empty array [].
@@ -2756,12 +2758,30 @@ Rules:
     return p;
   };
 
+  // Strip conflicting style keywords from imagePrompt so only stylePrefix controls the look
+  const stripStyleKeywords = (prompt) => {
+    if (!prompt) return prompt;
+    return prompt
+      .replace(/\b(manhwa|webtoon|anime|manga|cartoon|comic)\s*(style|art)?\b[,.]?\s*/gi, '')
+      .replace(/\b(detailed|professional|beautiful)\s+illustration[,.]?\s*/gi, '')
+      .replace(/\b(digital painting|digital art|cel[- ]shad(?:ed|ing)|flat coloring)[,.]?\s*/gi, '')
+      .replace(/\b(photorealistic|photo[- ]realistic|hyperrealistic|ultra[- ]realistic)[,.]?\s*/gi, '')
+      .replace(/\bcinematic(?:\s+quality)?[,.]?\s*/gi, '')
+      .replace(/\b(vibrant|vivid|saturated|muted)\s+colors?[,.]?\s*/gi, '')
+      .replace(/\b(oil painting|watercolor|gouache|painterly)\s*(style)?[,.]?\s*/gi, '')
+      .replace(/\b(semi[- ]realistic|stylized|rendered)\b[,.]?\s*/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .replace(/,\s*,/g, ',')
+      .replace(/,\s*\./g, '.')
+      .trim();
+  };
+
   const callImage = useCallback(async (prompt, opts={}) => {
     const stylePrefix = getStylePrefix();
     const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.naverWebtoon).name;
 
-    // Strip Korean onomatopoeia / sound effects from prompt before sending to image model
-    const cleanPrompt = sanitizeImagePrompt(prompt);
+    // Strip Korean onomatopoeia / sound effects + conflicting style keywords from prompt
+    const cleanPrompt = stripStyleKeywords(sanitizeImagePrompt(prompt));
 
     // Build asset-enriched prompt: always append asset descriptions to ensure consistency
     const assetSuffix = opts.assetDescriptions?.length > 0
