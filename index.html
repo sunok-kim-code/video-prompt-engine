@@ -5591,13 +5591,14 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                               <button className="sb-insert-btn" onClick={() => insertSbPanel(i)} title="여기에 패널 추가">+</button>
                             </div>
 
-                            <div className={`sb-unified-card ${draggingSbIdx === i ? 'dragging' : ''}`}
-                              draggable={!isEditing}
-                              onDragStart={e => { setDraggingSbIdx(i); e.dataTransfer.effectAllowed = 'move'; }}
-                              onDragEnd={() => { setDraggingSbIdx(null); setDragOverIdx(null); }}>
+                            <div className={`sb-unified-card ${draggingSbIdx === i ? 'dragging' : ''}`}>
 
                               {/* Panel number + drag handle */}
-                              <div className="sb-card-handle" title="드래그하여 순서 변경">
+                              <div className="sb-card-handle"
+                                draggable={!isEditing}
+                                onDragStart={e => { setDraggingSbIdx(i); e.dataTransfer.effectAllowed = 'move'; }}
+                                onDragEnd={() => { setDraggingSbIdx(null); setDragOverIdx(null); }}
+                                title="드래그하여 순서 변경">
                                 <div className="sb-panel-num">{i+1}</div>
                                 <div className="sb-drag-icon">⋮⋮</div>
                               </div>
@@ -5606,7 +5607,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                               <div className="sb-card-info">
                                 {isEditing ? (
                                   /* Editing mode */
-                                  <div className="sb-edit-form">
+                                  <div className="sb-edit-form" onMouseDown={e => e.stopPropagation()} onDragStart={e => e.preventDefault()}>
                                     <div className="sb-edit-row">
                                       <label>유형</label>
                                       <select value={editingSbData.type || ''} onChange={e => setEditingSbData(prev => ({...prev, type: e.target.value}))}>
@@ -5682,21 +5683,23 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                   </div>
                                 ) : (
                                   /* View mode */
-                                  <div onClick={() => startSbEdit(i)} style={{cursor:'pointer'}} title="클릭하여 수정">
-                                    <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:4}}>
+                                  <div>
+                                    <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:4,alignItems:'center'}}>
                                       <span className="tag tag-mood">{panel.type}</span>
                                       <span className="tag" style={{background:'#ffeaa7',color:'#636e72'}}>{panel.shotSize}</span>
                                       <span className="tag" style={{background:'#dfe6e9',color:'#636e72'}}>{panel.cameraAngle}</span>
                                       <span className="tag tag-mood">{panel.mood}</span>
+                                      <button className="btn btn-outline btn-xs" style={{marginLeft:'auto',fontSize:10}} onClick={() => startSbEdit(i)}>수정</button>
                                     </div>
-                                    <div style={{fontSize:13,marginBottom:4}}>{panel.description}</div>
+                                    <div style={{fontSize:13,marginBottom:4,cursor:'pointer'}} onClick={() => startSbEdit(i)} title="클릭하여 수정">{panel.description}</div>
                                     {panel.dialogue?.map((d, di) => (
                                       <div key={di} style={{fontSize:12,color:'var(--accent)',marginLeft:8}}>💬 {d.speaker}: "{d.text}"</div>
                                     ))}
                                     {panel.narration && <div style={{fontSize:12,color:'var(--text2)',fontStyle:'italic',marginLeft:8}}>📝 {panel.narration}</div>}
-                                    <details style={{marginTop:6}} onClick={e => e.stopPropagation()}>
+                                    <details style={{marginTop:6}}>
                                       <summary style={{fontSize:11,color:'var(--text2)',cursor:'pointer'}}>이미지 프롬프트</summary>
                                       <div style={{fontSize:11,color:'var(--text2)',padding:'4px 0',lineHeight:1.5,fontFamily:'monospace'}}>{panel.imagePrompt?.substring(0,300)}</div>
+                                      <button className="btn btn-outline btn-xs" style={{fontSize:10,marginTop:4}} onClick={() => startSbEdit(i)}>프롬프트 수정</button>
                                     </details>
                                   </div>
                                 )}
