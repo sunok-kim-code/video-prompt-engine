@@ -1584,8 +1584,12 @@ function App() {
   const [currentEpisode, setCurrentEpisode] = useState(null);
 
   // Data state (per episode)
-  const [sourceText, setSourceText] = useState('');
-  const [inputMode, setInputMode] = useState('novel'); // 'novel' | 'scene'
+  const [sourceText, _setSourceText] = useState('');
+  const sourceTextRef = React.useRef('');
+  const setSourceText = (val) => { sourceTextRef.current = val; _setSourceText(val); };
+  const [inputMode, _setInputMode] = useState('novel'); // 'novel' | 'scene'
+  const inputModeRef = React.useRef('novel');
+  const setInputMode = (val) => { inputModeRef.current = val; _setInputMode(val); };
   const [analysis, setAnalysis] = useState(null);
   const [references, setReferences] = useState({characters:{}, backgrounds:{}});
   const [storyboard, setStoryboard] = useState([]);
@@ -3595,8 +3599,11 @@ Rules:
       existingAssetsContext += '--- END EXISTING ASSETS ---\n';
     }
 
-    const analyzePrompt = inputMode === 'scene' ? PROMPTS.ANALYZE_SCENES : PROMPTS.ANALYZE_STORY;
-    log(`분석 모드: ${inputMode === 'scene' ? '씬 설명 기반' : '웹소설 기반'}`, 'info');
+    // Use ref for latest sourceText/inputMode (critical for batch mode where closures go stale)
+    const curSourceText = sourceTextRef.current;
+    const curInputMode = inputModeRef.current;
+    const analyzePrompt = curInputMode === 'scene' ? PROMPTS.ANALYZE_SCENES : PROMPTS.ANALYZE_STORY;
+    log(`분석 모드: ${curInputMode === 'scene' ? '씬 설명 기반' : '웹소설 기반'}`, 'info');
     // Apply default gender directive from art style (e.g., BL webtoon → all male)
     const curStyle = ART_STYLES[artStyle] || {};
     let genderDirective = '';
@@ -3621,7 +3628,7 @@ This is an ADULT webtoon production for mature audiences. You MUST:
     let result, parsed;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        result = await callText(analyzePrompt, sourceText + existingAssetsContext + genderDirective + matureDirective, {maxTokens: inputMode === 'scene' ? 32768 : 16384});
+        result = await callText(analyzePrompt, curSourceText + existingAssetsContext + genderDirective + matureDirective, {maxTokens: curInputMode === 'scene' ? 32768 : 16384});
         parsed = parseJSON(result);
         break;
       } catch(parseErr) {
@@ -3725,7 +3732,7 @@ This is an ADULT webtoon production for mature audiences. You MUST:
     if (projectId && currentEpisode) {
       try {
         const cs = [...new Set([...completedSteps, 0])];
-        await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis: parsed, sourceText, inputMode});
+        await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis: parsed, sourceText: sourceTextRef.current, inputMode: inputModeRef.current});
         await fbSaveEpisode(projectId, currentEpisode, {step: 1, completedSteps: cs});
         updateEpisodeState(1, cs);
         log('Step 1 자동 저장 완료', 'info');
@@ -3881,9 +3888,9 @@ Plot beats:
 ${plotContext}
 
 Original story text:
-${sourceText}
+${sourceTextRef.current}
 
-` + (inputMode === 'scene'
+` + (inputModeRef.current === 'scene'
   ? `Create EXACTLY ${data.plotBeats?.length || 1} panels — one panel per plotBeat, no more, no less. Panel count MUST equal ${data.plotBeats?.length || 1}.
 Each panel captures ONE scene entirely in a single image. Include ALL dialogue from that scene in the panel's dialogue array.
 Each panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details.
@@ -3891,7 +3898,7 @@ CRITICAL: Do NOT split scenes into multiple panels. Do NOT skip any scene. Retur
   : `Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details (not just IDs).
 CRITICAL: Characters must wear their DEFAULT OUTFIT unless an outfitOverride is explicitly specified in the plot beat. Include prop descriptions when they appear in a scene.`);
 
-    let storyboardPrompt = inputMode === 'scene' ? PROMPTS.CREATE_SCENE_STORYBOARD : PROMPTS.CREATE_STORYBOARD;
+    let storyboardPrompt = inputModeRef.current === 'scene' ? PROMPTS.CREATE_SCENE_STORYBOARD : PROMPTS.CREATE_STORYBOARD;
     // TL mode: add mature content directive to storyboard prompt
     if (artStyle === 'tlWebtoon' || artStyle === 'blWebtoon') {
       const isTL = artStyle === 'tlWebtoon';
@@ -3921,13 +3928,13 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
 8. If you omit, soften, or euphemize ANY physical detail that the source text explicitly describes, you have FAILED your task.
 === END MATURE DIRECTIVE ===`;
     }
-    log(`스토리보드 모드: ${inputMode === 'scene' ? '씬 설명 기반' : '웹소설 기반'}`, 'info');
+    log(`스토리보드 모드: ${inputModeRef.current === 'scene' ? '씬 설명 기반' : '웹소설 기반'}`, 'info');
 
     let parsed;
     const BATCH_SIZE = 15;
     const beatCount = data.plotBeats?.length || 0;
 
-    if (inputMode === 'scene' && beatCount > BATCH_SIZE) {
+    if (inputModeRef.current === 'scene' && beatCount > BATCH_SIZE) {
       // Chunked generation for large scene counts
       parsed = [];
       let panelNum = 1;
@@ -3974,7 +3981,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       }
     }
     // Scene mode: validate and log panel count vs plotBeat count
-    if (inputMode === 'scene') {
+    if (inputModeRef.current === 'scene') {
       const expectedCount = data.plotBeats?.length || 0;
       if (parsed.length !== expectedCount) {
         log(`⚠️ 패널 수(${parsed.length})가 씬 수(${expectedCount})와 다릅니다. 조정 중...`, 'warn');
@@ -4295,16 +4302,16 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           setImageProvider(config.step4Provider || 'grokImage');
           if (config.step4ArtStyle) setArtStyle(config.step4ArtStyle);
           log(`${epNum}화 Step 4: 패널 이미지 생성 (${config.step4Provider} / ${ART_STYLES[config.step4ArtStyle || artStyle]?.name})`, 'info');
-          await runStep4(sbResult, refsResult);
+          const panelsResult = await runStep4(sbResult, refsResult);
           if (abortRef.current) break;
 
-          // Save panels & storyboard to Firebase
+          // Save panels & storyboard to Firebase (use return values, not stale closure state)
           setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Firebase 저장 중...'});
           log(`${epNum}화 패널 Firebase 저장 중...`, 'info');
-          const panelCount = panels.filter(Boolean).length;
-          await fbSavePhase(projectId, epNum, 'step4_panels', {panels, bubbleOverlays: []});
-          if (storyboard.length > 0) {
-            await fbSavePhase(projectId, epNum, 'step3_storyboard', {storyboard});
+          const panelCount = (panelsResult || []).filter(Boolean).length;
+          await fbSavePhase(projectId, epNum, 'step4_panels', {panels: panelsResult || [], bubbleOverlays: []});
+          if (sbResult && sbResult.length > 0) {
+            await fbSavePhase(projectId, epNum, 'step3_storyboard', {storyboard: sbResult});
           }
           await fbSaveEpisode(projectId, epNum, {step: 4, completedSteps: [0,1,2,3,4]});
           log(`${epNum}화 패널 ${panelCount}개 Firebase 저장 완료`, 'success');
