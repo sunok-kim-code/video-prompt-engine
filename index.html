@@ -3408,6 +3408,19 @@ Rules:
     try {
       const pid = overridePid || projectId;
       if (!pid) { console.warn('[loadEpisode] no projectId'); return; }
+
+      // Auto-save current episode's sourceText before switching
+      if (currentEpisode && currentEpisode !== episodeNum && sourceText.trim()) {
+        try {
+          const existing = await fbLoadPhase(pid, currentEpisode, 'step1_analysis');
+          await fbSavePhase(pid, currentEpisode, 'step1_analysis', {
+            analysis: existing?.analysis || analysis,
+            sourceText,
+            inputMode,
+          });
+        } catch(e) { /* silent */ }
+      }
+
       log(`${episodeNum}화 로드 중...`);
 
       // Clear current state before loading
@@ -3425,13 +3438,17 @@ Rules:
       let lastStep = 0;
 
       const s1 = await fbLoadPhase(pid, episodeNum, 'step1_analysis');
-      if (s1 && s1.analysis) {
-        setAnalysis(s1.analysis);
-        setSourceText(s1.sourceText || '');
+      if (s1) {
+        if (s1.sourceText) setSourceText(s1.sourceText);
         if (s1.inputMode) setInputMode(s1.inputMode);
-        detected.add(0);
-        lastStep = 1;
-        log(`  Step 1 (분석) 로드됨`, 'info');
+        if (s1.analysis) {
+          setAnalysis(s1.analysis);
+          detected.add(0);
+          lastStep = 1;
+          log(`  Step 1 (분석) 로드됨`, 'info');
+        } else if (s1.sourceText) {
+          log(`  소스 텍스트 로드됨 (분석 미완료)`, 'info');
+        }
       }
 
       const s2 = await fbLoadPhase(pid, episodeNum, 'step2_references');
@@ -4468,7 +4485,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       await fbSaveEpisode(projectId, currentEpisode, episodeData);
 
       // Save phases
-      if (analysis) await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis, sourceText, inputMode});
+      if (sourceText.trim() || analysis) await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis, sourceText, inputMode});
       if (Object.keys(references.characters).length > 0) await fbSavePhase(projectId, currentEpisode, 'step2_references', {characterIds: Object.keys(references.characters), backgroundIds: Object.keys(references.backgrounds), hasImages: true}, true);
       if (storyboard.length > 0) await fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard});
       if (panels.some(p => p)) await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels});
@@ -5410,6 +5427,13 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                     </div>
 
                     <textarea className="form-textarea" value={sourceText} onChange={e=>setSourceText(e.target.value)}
+                      onBlur={() => {
+                        if (projectId && currentEpisode && sourceText.trim()) {
+                          fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis, sourceText, inputMode})
+                            .then(() => log('소스 텍스트 자동 저장됨', 'info'))
+                            .catch(() => {});
+                        }
+                      }}
                       placeholder={inputMode==='novel'
                         ? `웹툰으로 만들 소설/스토리 텍스트를 입력하세요. 이 텍스트가 웹툰 ${currentEpisode || 1}화로 변환됩니다.`
                         : `씬 설명을 번호와 함께 입력하세요. 예:\n1. (카페 내부) 이한이 창가에 앉아 커피를 마시고 있다. 이한: "오늘도 평범한 하루군."\n2. (카페 문 앞) 수아가 문을 열고 들어온다. 수아: "오빠! 여기 있었구나!"\n3. ...`}
