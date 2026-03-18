@@ -911,8 +911,11 @@ async function uploadImageToA2eR2(base64Data) {
   });
   if (!presignRes.ok) throw new Error('A2E R2 presigned URL 실패: ' + presignRes.status);
   const presignData = await presignRes.json();
+  console.log('[A2E R2] presign response:', JSON.stringify(presignData).substring(0, 500));
   if (presignData.code != 0) throw new Error('A2E R2 에러: ' + (presignData.msg || JSON.stringify(presignData).substring(0, 200)));
-  const { uploadUrl } = presignData.data;
+  const data = presignData.data;
+  const uploadUrl = data.uploadUrl || data.upload_url || data.presigned_url || data.url;
+  if (!uploadUrl) throw new Error('A2E R2: uploadUrl 필드 없음: ' + JSON.stringify(data).substring(0, 300));
   // 2) Convert base64 to blob and upload via PUT
   const b64 = base64Data.replace(/^data:[^;]+;base64,/, '');
   const binary = atob(b64);
@@ -920,9 +923,23 @@ async function uploadImageToA2eR2(base64Data) {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   const blob = new Blob([bytes], { type: 'image/png' });
   const putRes = await fetch(uploadUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': 'image/png' } });
-  if (!putRes.ok) throw new Error('A2E R2 업로드 실패: ' + putRes.status);
-  // 3) Return public URL (strip query params from presigned URL)
-  return uploadUrl.split('?')[0];
+  if (!putRes.ok) throw new Error('A2E R2 업로드 실패: ' + putRes.status + ' ' + (await putRes.text()).substring(0, 200));
+  // 3) Return public URL — prefer explicit public/download URL from response, fallback to key-based
+  const publicUrl = data.publicUrl || data.public_url || data.downloadUrl || data.download_url || data.fileUrl || data.file_url;
+  if (publicUrl) {
+    console.log('[A2E R2] using publicUrl from response:', publicUrl);
+    return publicUrl;
+  }
+  // Fallback: construct URL using key field if available
+  if (data.key || data.file_key) {
+    const key = data.key || data.file_key;
+    console.log('[A2E R2] using key-based URL:', key);
+    return key; // API may accept just the key/path
+  }
+  // Last resort: strip query params from presigned URL
+  const stripped = uploadUrl.split('?')[0];
+  console.log('[A2E R2] using stripped presigned URL:', stripped);
+  return stripped;
 }
 
 async function callA2eNanoBanana(prompt, opts={}) {
@@ -940,19 +957,20 @@ async function callA2eNanoBanana(prompt, opts={}) {
           inputImages.push(imgData); // Already a URL
         } else if (imgData.startsWith('data:')) {
           const url = await uploadImageToA2eR2(imgData);
-          inputImages.push(url);
+          if (url) inputImages.push(url);
         }
       } catch (e) { console.warn('[A2E NanoBanana] ref upload failed:', e.message); }
     }
-    console.log('[A2E NanoBanana] Uploaded', inputImages.length, 'reference images');
+    console.log('[A2E NanoBanana] Uploaded', inputImages.length, 'reference images:', inputImages);
   }
 
-  // 1) Start task
+  // 1) Start task — try with input_images first, fallback without if it fails
   const startBody = {
     name: 'webtoon_ref_' + Date.now(),
     prompt: prompt.substring(0, 4000)
   };
   if (inputImages.length > 0) startBody.input_images = inputImages;
+  console.log('[A2E NanoBanana] start body:', JSON.stringify({...startBody, prompt: startBody.prompt.substring(0, 100) + '...'}));
 
   const startRes = await fetch(baseUrl + '/start', {
     method: 'POST',
@@ -999,7 +1017,13 @@ async function callA2eNanoBanana(prompt, opts={}) {
       if (urls.length === 0) throw new Error('A2E NanoBanana: 이미지가 생성되지 않았습니다.');
       return urls;
     } else if (pollObj.current_status === 'failed') {
-      throw new Error('A2E NanoBanana 실패: ' + (pollObj.failed_message || 'unknown'));
+      const failMsg = pollObj.failed_message || 'unknown';
+      // If failed due to reference image issue, retry without references
+      if (inputImages.length > 0 && (failMsg.includes('400') || failMsg.includes('Bad Request') || failMsg.includes('r2') || failMsg.includes('image'))) {
+        console.warn('[A2E NanoBanana] Failed with references, retrying without:', failMsg);
+        return await callA2eNanoBanana(prompt, {...opts, referenceImages: undefined, _retryNoRef: true});
+      }
+      throw new Error('A2E NanoBanana 실패: ' + failMsg);
     }
   }
   throw new Error('A2E NanoBanana: 시간 초과 (5분 이내 완료되지 않음)');
