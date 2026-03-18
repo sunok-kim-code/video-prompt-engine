@@ -1048,6 +1048,108 @@ async function callA2eNanoBanana(prompt, opts={}) {
   throw new Error(`A2E NanoBanana: 시간 초과 (5분 이내 완료되지 않음)`);
 }
 
+// ============================================================
+// FLUX 2 PRO — fal.ai (reference images via /edit endpoint)
+// ============================================================
+async function callFlux2Pro(prompt, opts={}) {
+  const apiKey = getFalKey();
+  if (!apiKey) throw new Error('fal.ai API 키가 필요합니다. 설정에서 입력해주세요.');
+
+  const refs = opts.referenceImages || [];
+  const hasRefs = refs.length > 0;
+
+  // Upload reference images: convert data URIs to fal.ai CDN URLs if needed
+  const imageUrls = [];
+  if (hasRefs) {
+    for (const ref of refs.slice(0, 8)) { // Flux 2 Pro supports up to 9 refs
+      const imgData = ref.image || ref;
+      if (typeof imgData === 'string' && imgData.startsWith('http')) {
+        imageUrls.push(imgData);
+      } else if (typeof imgData === 'string' && imgData.startsWith('data:')) {
+        imageUrls.push(imgData); // fal.ai accepts data URIs directly
+      }
+    }
+    console.log('[Flux2Pro] Reference images:', imageUrls.length);
+  }
+
+  // Choose endpoint: edit (with refs) or generate (text-only)
+  const endpoint = hasRefs && imageUrls.length > 0
+    ? 'https://fal.run/fal-ai/flux-2-pro/edit'
+    : 'https://fal.run/fal-ai/flux-2-pro';
+
+  // Build request body
+  const body = { prompt: prompt.substring(0, 4000) };
+
+  if (hasRefs && imageUrls.length > 0) {
+    // Edit endpoint uses image_urls array
+    body.image_urls = imageUrls;
+  }
+
+  // Image size
+  const ar = opts.aspectRatio || '3:4';
+  if (ar === '1:1') body.image_size = { width: 1024, height: 1024 };
+  else if (ar === '16:9') body.image_size = { width: 1024, height: 576 };
+  else if (ar === '9:16') body.image_size = { width: 576, height: 1024 };
+  else if (ar === '4:3') body.image_size = { width: 1024, height: 768 };
+  else if (ar === '3:2') body.image_size = { width: 1024, height: 683 };
+  else body.image_size = { width: 768, height: 1024 }; // 3:4 default
+
+  body.num_images = 1;
+  body.output_format = 'png';
+  body.safety_tolerance = 6; // relaxed for creative content
+
+  console.log(`[Flux2Pro] Endpoint: ${endpoint.split('/').slice(-2).join('/')}, refs: ${imageUrls.length}, size: ${body.image_size.width}x${body.image_size.height}`);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Key ' + apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (res.status === 429 || res.status === 503) {
+      const wait = Math.min(15000 * Math.pow(2, attempt), 60000);
+      console.warn('[Flux2Pro] ' + res.status + ', waiting ' + wait/1000 + 's (attempt ' + (attempt+1) + '/3)...');
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('[Flux2Pro] Error:', errText.substring(0, 500));
+      // If edit endpoint fails, retry without references as text-to-image
+      if (hasRefs && imageUrls.length > 0 && (res.status === 422 || res.status === 400)) {
+        console.warn('[Flux2Pro] Edit failed, retrying as text-to-image...');
+        return await callFlux2Pro(prompt, {...opts, referenceImages: undefined});
+      }
+      throw new Error('Flux 2 Pro ' + res.status + ': ' + errText.substring(0, 300));
+    }
+
+    const data = await res.json();
+    if (data.images?.length > 0) {
+      const imgUrl = data.images[0].url;
+      try {
+        const imgRes = await fetch(imgUrl);
+        const blob = await imgRes.blob();
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        return [dataUrl];
+      } catch (fetchErr) {
+        console.warn('[Flux2Pro] Image fetch failed, returning URL:', fetchErr.message);
+        return [imgUrl];
+      }
+    }
+    throw new Error('Flux 2 Pro: 이미지가 생성되지 않았습니다.');
+  }
+  throw new Error('Flux 2 Pro: 재시도 초과');
+}
+
 async function callFalAI(prompt, opts={}) {
   const apiKey = getFalKey();
 
@@ -3676,24 +3778,25 @@ Rules:
       }
     }
 
-    // ========== A2E Nano Banana (Gemini Flash + Reference Images via A2E) ==========
-    if (imageProvider === 'a2eNanoBanana') {
-      if (!hasA2eKey()) { log('A2E API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
+    // ========== Flux 2 Pro (fal.ai — reference images via /edit endpoint) ==========
+    if (imageProvider === 'flux2Pro') {
+      if (!hasFalKey()) { log('fal.ai API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
       const refCount = refs.length;
       if (refCount > 0) {
-        log(`A2E NanoBanana 사용 (레퍼런스 ${refCount}개, 최대 4개)`, 'info');
+        log(`Flux 2 Pro 사용 (레퍼런스 ${refCount}개, 최대 8개)`, 'info');
       } else {
-        log('A2E NanoBanana 사용 (이미지 생성)', 'info');
+        log('Flux 2 Pro 사용 (텍스트→이미지)', 'info');
       }
       try {
-        const urls = await callA2eNanoBanana(basePrompt, {
-          referenceImages: refs.length > 0 ? refs : undefined
+        const urls = await callFlux2Pro(basePrompt, {
+          referenceImages: refs.length > 0 ? refs : undefined,
+          aspectRatio: opts.aspectRatio || '3:4'
         });
         return urls;
-      } catch (nbErr) {
-        const errMsg = nbErr.message || '';
-        log(`A2E NanoBanana 오류: ${errMsg.substring(0, 200)}`, 'error');
-        throw nbErr;
+      } catch (fluxErr) {
+        const errMsg = fluxErr.message || '';
+        log(`Flux 2 Pro 오류: ${errMsg.substring(0, 200)}`, 'error');
+        throw fluxErr;
       }
     }
 
@@ -5438,7 +5541,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           <option value="imagen4">Imagen 4 (고품질)</option>
           <option value="nanoBanana">Gemini (레퍼런스 반영)</option>
           <option value="a2eImage">A2E (Manga/General)</option>
-          <option value="a2eNanoBanana">A2E Gemini (레퍼런스 반영)</option>
+          <option value="flux2Pro">Flux 2 Pro (레퍼런스 반영)</option>
         </select>
         {imageProvider === 'nanoBanana' && (
           <select className="form-select" style={{width:170,marginLeft:4,background:'linear-gradient(135deg,#e8f5e9,#c8e6c9)',borderColor:'#66bb6a'}} value={nbVertexModel} onChange={e=>setNbVertexModel(e.target.value)}>
@@ -6784,7 +6887,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                         <option value="stableDiffusion">Stable Diffusion 3.5</option>
                         <option value="nanoBanana">Gemini (레퍼런스)</option>
                         <option value="a2eImage">A2E (Manga/General)</option>
-          <option value="a2eNanoBanana">A2E Gemini (레퍼런스 반영)</option>
+          <option value="flux2Pro">Flux 2 Pro (레퍼런스 반영)</option>
                       </select>
                     </div>
                     <div style={{flex:1}}>
