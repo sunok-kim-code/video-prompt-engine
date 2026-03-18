@@ -1559,7 +1559,7 @@ Return ONLY a valid JSON array (no markdown):
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
     "soundEffects": ["쾅!", "끼익"],
     "narration": "나레이션이 있으면 여기에",
-    "mood": "calm|tense|dramatic|warm|sad|comedic|action",
+    "mood": "calm|tense|dramatic|warm|sad|comedic|action|anxious|romantic|determined|melancholic|excited|playful|desperate|fearful|embarrassed",
     "description": "Brief Korean description of what happens in this panel",
     "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER 1 NAME]: [COPY-PASTE exact hair from appearance], [COPY-PASTE exact outfit from outfit field], [pose], [expression], [GAZE DIRECTION — e.g. 'looking right toward CHARACTER 2' or 'looking down' or 'eyes facing the viewer']. [REPEAT for each character]. Background: [environment]. Lighting: [mood-appropriate]. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
   }
@@ -1567,7 +1567,9 @@ Return ONLY a valid JSON array (no markdown):
 
 Rules:
 - Start with an establishing wide shot
-- Vary shot sizes and angles for visual interest
+- MANDATORY CAMERA VARIETY: You MUST use at least 4 different camera angles across the panels. NEVER use more than 2 consecutive panels with the same angle. Rotate between: eye_level, low_angle, high_angle, dutch_angle, over_shoulder, birds_eye. Use low_angle for power/determination, high_angle for vulnerability, dutch_angle for tension/unease, over_shoulder for dialogue intimacy.
+- MANDATORY EXPRESSION VARIETY: Characters must show VIVID, SPECIFIC facial expressions that match the scene emotion. NEVER use generic "smiling" or "neutral" — instead use: "smiling warmly with eyes crinkling", "biting lower lip nervously", "eyes wide with shock, mouth slightly open", "tears streaming, brows furrowed in anguish", "smirking confidently with one raised eyebrow", "blushing deep red, averting gaze shyly". Each panel's expression MUST differ from the previous panel.
+- MANDATORY SHOT SIZE VARIETY: Alternate between wide/medium/close-up. Use extreme_close on eyes or hands for peak emotional moments. Use medium_wide for scene transitions. Never repeat the same shot size more than 2 times in a row.
 - Use close-ups for emotional moments
 - Use wide shots for action and establishing scenes
 - Include at least one panel per plot beat
@@ -1725,7 +1727,7 @@ Return ONLY a valid JSON array (no markdown):
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
     "soundEffects": ["쾅!", "끼익"],
     "narration": "나레이션이 있으면 여기에",
-    "mood": "calm|tense|dramatic|warm|sad|comedic|action",
+    "mood": "calm|tense|dramatic|warm|sad|comedic|action|anxious|romantic|determined|melancholic|excited|playful|desperate|fearful|embarrassed",
     "description": "Brief Korean description of what happens",
     "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER NAME]: [COPY-PASTE exact hair from appearance], [COPY-PASTE exact outfit], [pose], [expression], [GAZE DIRECTION — e.g. 'looking right toward CHARACTER 2']. Background: [environment]. Lighting: [mood]. NEVER include any text, sound effects, or typography in the image."
   }
@@ -1733,7 +1735,9 @@ Return ONLY a valid JSON array (no markdown):
 
 Rules:
 - Start with an establishing wide shot
-- Vary shot sizes and angles for visual interest
+- MANDATORY CAMERA VARIETY: Use at least 4 different camera angles across panels. NEVER use the same angle more than 2 times consecutively. Rotate between: eye_level, low_angle, high_angle, dutch_angle, over_shoulder, birds_eye. Match angle to emotion: low_angle=power/determination, high_angle=vulnerability/loneliness, dutch_angle=tension/disorientation, over_shoulder=intimate dialogue.
+- MANDATORY EXPRESSION VARIETY: Characters must show VIVID, SPECIFIC expressions matching scene emotion. NEVER use generic "smiling" or "neutral" — instead: "smiling warmly with eyes crinkling", "biting lower lip nervously", "eyes wide with shock, mouth open", "tears streaming down face", "smirking with one raised eyebrow", "deep blush, averting gaze". Each panel's expression MUST differ from the previous.
+- MANDATORY SHOT SIZE VARIETY: Alternate between wide/medium/close-up. Use extreme_close on eyes or hands for peak emotional moments. Never repeat the same shot size more than 2 times in a row.
 - Use close-ups for emotional moments and dialogue
 - Use wide shots for action and establishing scenes
 - EVERY plotBeat must have at least 1 panel — verify this before returning
@@ -3349,6 +3353,66 @@ Rules:
     return p;
   };
 
+  // Enhance panel prompt with expression/mood/camera keywords for more dynamic, expressive panels
+  const MOOD_EXPRESSIONS = {
+    tense: 'clenched jaw, furrowed brows, intense stare, rigid posture',
+    anxious: 'wide worried eyes, biting lip, fidgeting hands, uneasy posture',
+    sad: 'downcast eyes, tears welling up, slumped shoulders, trembling lips',
+    happy: 'bright genuine smile, sparkling eyes, relaxed open posture, warm glow',
+    angry: 'gritted teeth, flared nostrils, clenched fists, aggressive forward lean',
+    surprised: 'wide open eyes, raised eyebrows, open mouth, body jolting back',
+    fearful: 'pale face, trembling body, wide terrified eyes, shrinking away',
+    romantic: 'soft blushing cheeks, gentle gaze, slightly parted lips, tender expression',
+    determined: 'steely focused eyes, firm set jaw, confident stance, unwavering gaze',
+    confused: 'tilted head, one raised eyebrow, puzzled frown, uncertain posture',
+    embarrassed: 'deep blush, averting gaze, hand touching face, shy smile',
+    neutral: '',
+    melancholic: 'distant gaze, slight frown, hunched shoulders, hollow expression',
+    excited: 'beaming wide smile, bright shining eyes, leaning forward eagerly, animated gesture',
+    serious: 'stern focused expression, narrowed eyes, straight posture, tight-lipped',
+    playful: 'mischievous grin, winking eye, relaxed tilted head, teasing gesture',
+    nostalgic: 'wistful distant gaze, gentle sad smile, soft unfocused eyes',
+    desperate: 'pleading eyes, reaching out hands, strained expression, trembling voice',
+    // Legacy mood values from existing storyboards
+    calm: 'serene relaxed expression, soft gentle eyes, peaceful slight smile',
+    dramatic: 'intense piercing eyes, dramatic sharp shadows, heightened vivid expression',
+    warm: 'gentle warm smile, soft kind eyes, welcoming relaxed posture',
+    comedic: 'exaggerated comical expression, wide goofy grin, animated lively body language',
+    action: 'fierce determined expression, dynamic motion pose, adrenaline-charged intensity',
+  };
+  const CAMERA_VARIETY = {
+    'eye level': ['slight low angle for drama', 'eye level with shallow depth of field', 'straight-on intimate framing'],
+    'low angle': ['dramatic low angle looking up, emphasizing power', 'worm\'s eye view', 'heroic upshot angle'],
+    'high angle': ['bird\'s eye view looking down', 'overhead angle showing vulnerability', 'tilted high angle'],
+    'dutch angle': ['dramatic tilted dutch angle for tension', 'canted frame for unease'],
+    'close-up': ['extreme close-up on eyes and expression', 'tight face close-up', 'close-up with blurred background'],
+    'over the shoulder': ['over-the-shoulder shot showing both characters', 'POV over shoulder'],
+  };
+  const enhancePanelExpression = (prompt, panel) => {
+    if (!prompt) return prompt;
+    let enhanced = prompt;
+    // Add mood-specific expression keywords if not already present
+    const mood = (panel.mood || '').toLowerCase().trim();
+    const moodKeywords = MOOD_EXPRESSIONS[mood];
+    if (moodKeywords && !prompt.toLowerCase().includes(moodKeywords.split(',')[0].trim().toLowerCase())) {
+      enhanced += `. Character expression: ${moodKeywords}`;
+    }
+    // Add camera angle variety hint
+    const angle = (panel.cameraAngle || '').toLowerCase().trim();
+    const angleOptions = CAMERA_VARIETY[angle];
+    if (angleOptions) {
+      const pick = angleOptions[Math.floor(Math.random() * angleOptions.length)];
+      if (!prompt.toLowerCase().includes(pick.split(',')[0].trim().toLowerCase())) {
+        enhanced += `. Camera: ${pick}`;
+      }
+    }
+    // Ensure no "flat front-facing neutral expression" default
+    if (!/expression|emotion|look|gaze|smile|frown|tears|blush/i.test(prompt)) {
+      enhanced += '. Expressive dynamic facial emotion, NOT blank neutral stare.';
+    }
+    return enhanced;
+  };
+
   // Strip conflicting style keywords from imagePrompt so only stylePrefix controls the look
   const stripStyleKeywords = (prompt) => {
     if (!prompt) return prompt;
@@ -4593,8 +4657,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         }
       }
 
-      // Append style anchor + state directive for consistent rendering
-      let anchoredPrompt = panel.imagePrompt;
+      // Enrich prompt with expression/mood/camera keywords for more dynamic panels
+      let anchoredPrompt = enhancePanelExpression(panel.imagePrompt, panel);
       if (stateDirective) anchoredPrompt += stateDirective;
       if (styleAnchor) anchoredPrompt += ' Maintain consistent style: ' + styleAnchor;
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
