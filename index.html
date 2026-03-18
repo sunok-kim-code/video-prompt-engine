@@ -3828,14 +3828,13 @@ Rules:
       if (s4 && s4.panels?.some(p => p)) {
         // Align panels array to storyboard length (fix index mismatch from insert/delete without save)
         let loadedPanels = s4.panels;
-        if (sbLoaded && sbLoaded.length !== loadedPanels.length) {
-          console.warn('[loadEpisode] storyboard/panels length mismatch:', sbLoaded.length, 'vs', loadedPanels.length, '— aligning');
-          if (loadedPanels.length < sbLoaded.length) {
-            // Panels shorter: pad with nulls
-            loadedPanels = [...loadedPanels, ...new Array(sbLoaded.length - loadedPanels.length).fill(null)];
+        const sbLen = s3?.storyboard?.length || 0;
+        if (sbLen > 0 && sbLen !== loadedPanels.length) {
+          console.warn('[loadEpisode] storyboard/panels length mismatch:', sbLen, 'vs', loadedPanels.length, '— aligning');
+          if (loadedPanels.length < sbLen) {
+            loadedPanels = [...loadedPanels, ...new Array(sbLen - loadedPanels.length).fill(null)];
           } else {
-            // Panels longer: trim to storyboard length
-            loadedPanels = loadedPanels.slice(0, sbLoaded.length);
+            loadedPanels = loadedPanels.slice(0, sbLen);
           }
         }
         setPanels(loadedPanels);
