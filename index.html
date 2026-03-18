@@ -2058,8 +2058,10 @@ Rules:
   // [WebtoonSFX 추가] SFX 오브젝트를 현재 페이지에 추가
   const addSfxToPage = (overrideText) => {
     if (editorPages.length === 0) return;
+    const pageIdx = Math.min(currentPageIdx, editorPages.length - 1);
     const preset = SFX_PRESETS[sfxPreset] || SFX_PRESETS.impact;
-    const page = editorPages[currentPageIdx];
+    const page = editorPages[pageIdx];
+    if (!page || !page.objects) return;
     const pos = getInsertPosition();
     const text = overrideText || sfxText || preset.examples[0];
     const newSfx = {
@@ -2081,7 +2083,9 @@ Rules:
     };
     setEditorPages(prev => {
       const next = [...prev];
-      next[currentPageIdx] = {...next[currentPageIdx], objects: [...next[currentPageIdx].objects, newSfx]};
+      const pi = Math.min(currentPageIdx, next.length - 1);
+      if (!next[pi]) return prev;
+      next[pi] = {...next[pi], objects: [...(next[pi].objects || []), newSfx]};
       return next;
     });
     setSfxPanelOpen(false);
