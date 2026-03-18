@@ -3826,7 +3826,19 @@ Rules:
 
       const s4 = await fbLoadPhase(pid, episodeNum, 'step4_panels');
       if (s4 && s4.panels?.some(p => p)) {
-        setPanels(s4.panels);
+        // Align panels array to storyboard length (fix index mismatch from insert/delete without save)
+        let loadedPanels = s4.panels;
+        if (sbLoaded && sbLoaded.length !== loadedPanels.length) {
+          console.warn('[loadEpisode] storyboard/panels length mismatch:', sbLoaded.length, 'vs', loadedPanels.length, '— aligning');
+          if (loadedPanels.length < sbLoaded.length) {
+            // Panels shorter: pad with nulls
+            loadedPanels = [...loadedPanels, ...new Array(sbLoaded.length - loadedPanels.length).fill(null)];
+          } else {
+            // Panels longer: trim to storyboard length
+            loadedPanels = loadedPanels.slice(0, sbLoaded.length);
+          }
+        }
+        setPanels(loadedPanels);
         if (s4.bubbleOverlays && Array.isArray(s4.bubbleOverlays)) {
           setBubbleOverlays(s4.bubbleOverlays);
           console.log('[loadEpisode] bubbleOverlays loaded:', s4.bubbleOverlays.length, '개');
@@ -4532,6 +4544,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     log(`패널 ${idx+1} 삭제됨`, 'info');
     if (projectId && currentEpisode) {
       fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+      fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
     }
   };
   const insertSbPanel = (atIdx) => {
@@ -4557,6 +4570,11 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     newPanels.splice(atIdx, 0, null);
     setStoryboard(newSb);
     setPanels(newPanels);
+    // Auto-save both storyboard AND panels to Firebase to keep indices in sync
+    if (projectId && currentEpisode) {
+      fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+      fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
+    }
     // Auto-open editor for new panel
     setEditingSbPanel(atIdx);
     setEditingSbData({...newPanel, dialogue: []});
@@ -4578,6 +4596,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     log(`패널 순서 변경됨`, 'info');
     if (projectId && currentEpisode) {
       fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+      fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
     }
   };
 
