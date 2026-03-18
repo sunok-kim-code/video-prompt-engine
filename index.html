@@ -896,6 +896,114 @@ async function callA2eImage(prompt, opts={}) {
   throw new Error('A2E: 시간 초과 (5분 이내 완료되지 않음)');
 }
 
+// ============================================================
+// A2E NANO BANANA (Gemini-2.5-Flash via A2E — supports reference images)
+// ============================================================
+async function uploadImageToA2eR2(base64Data) {
+  const apiKey = getA2eKey();
+  const filename = 'ref_' + Date.now() + '_' + Math.random().toString(36).slice(2,8) + '.png';
+  // 1) Get presigned URL
+  const presignRes = await fetch('https://video.a2e.ai/api/v1/r2/get_upload_presigned_url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+    body: JSON.stringify({ key: filename })
+  });
+  if (!presignRes.ok) throw new Error('A2E R2 presigned URL 실패: ' + presignRes.status);
+  const presignData = await presignRes.json();
+  if (presignData.code != 0) throw new Error('A2E R2 에러: ' + (presignData.msg || JSON.stringify(presignData).substring(0, 200)));
+  const { uploadUrl } = presignData.data;
+  // 2) Convert base64 to blob and upload via PUT
+  const b64 = base64Data.replace(/^data:[^;]+;base64,/, '');
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: 'image/png' });
+  const putRes = await fetch(uploadUrl, { method: 'PUT', body: blob, headers: { 'Content-Type': 'image/png' } });
+  if (!putRes.ok) throw new Error('A2E R2 업로드 실패: ' + putRes.status);
+  // 3) Return public URL (strip query params from presigned URL)
+  return uploadUrl.split('?')[0];
+}
+
+async function callA2eNanoBanana(prompt, opts={}) {
+  const apiKey = getA2eKey();
+  const baseUrl = 'https://video.a2e.ai/api/v1/userNanoBanana';
+
+  // Upload reference images to A2E R2 if provided
+  const inputImages = [];
+  if (opts.referenceImages?.length > 0) {
+    console.log('[A2E NanoBanana] Uploading', opts.referenceImages.length, 'reference images to R2...');
+    for (const ref of opts.referenceImages.slice(0, 4)) {
+      try {
+        const imgData = ref.image || ref;
+        if (imgData.startsWith('http')) {
+          inputImages.push(imgData); // Already a URL
+        } else if (imgData.startsWith('data:')) {
+          const url = await uploadImageToA2eR2(imgData);
+          inputImages.push(url);
+        }
+      } catch (e) { console.warn('[A2E NanoBanana] ref upload failed:', e.message); }
+    }
+    console.log('[A2E NanoBanana] Uploaded', inputImages.length, 'reference images');
+  }
+
+  // 1) Start task
+  const startBody = {
+    name: 'webtoon_ref_' + Date.now(),
+    prompt: prompt.substring(0, 4000)
+  };
+  if (inputImages.length > 0) startBody.input_images = inputImages;
+
+  const startRes = await fetch(baseUrl + '/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+    body: JSON.stringify(startBody)
+  });
+  if (!startRes.ok) {
+    const errText = await startRes.text();
+    throw new Error('A2E NanoBanana Start ' + startRes.status + ': ' + errText.substring(0, 300));
+  }
+  const startData = await startRes.json();
+  console.log('[A2E NanoBanana] start response:', JSON.stringify(startData).substring(0, 500));
+  if (startData.code != 0) {
+    throw new Error('A2E NanoBanana 에러 (code=' + startData.code + '): ' + (startData.msg || JSON.stringify(startData).substring(0, 300)));
+  }
+  let taskObj = startData.data;
+  if (Array.isArray(taskObj)) taskObj = taskObj[0];
+  if (!taskObj || !taskObj._id) {
+    throw new Error('A2E NanoBanana: task ID 없음 — ' + JSON.stringify(startData).substring(0, 300));
+  }
+  const taskId = taskObj._id;
+  console.log('[A2E NanoBanana] task started:', taskId);
+
+  // If already completed
+  if (taskObj.current_status === 'completed' && taskObj.image_urls?.length > 0) {
+    return taskObj.image_urls;
+  }
+
+  // 2) Poll for completion (5s intervals, max 5min)
+  const maxPolls = 60;
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+    const pollRes = await fetch(baseUrl + '/detail/' + taskId, {
+      method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + apiKey }
+    });
+    if (!pollRes.ok) { console.warn('A2E NanoBanana poll error:', pollRes.status); continue; }
+    const pollData = await pollRes.json();
+    if (pollData.code != 0 || !pollData.data) continue;
+    const pollObj = Array.isArray(pollData.data) ? pollData.data[0] : pollData.data;
+    if (!pollObj) continue;
+    if (pollObj.current_status === 'completed') {
+      const urls = pollObj.image_urls || [];
+      if (urls.length === 0) throw new Error('A2E NanoBanana: 이미지가 생성되지 않았습니다.');
+      return urls;
+    } else if (pollObj.current_status === 'failed') {
+      throw new Error('A2E NanoBanana 실패: ' + (pollObj.failed_message || 'unknown'));
+    }
+  }
+  throw new Error('A2E NanoBanana: 시간 초과 (5분 이내 완료되지 않음)');
+}
+
 async function callFalAI(prompt, opts={}) {
   const apiKey = getFalKey();
 
@@ -3347,6 +3455,27 @@ Rules:
       }
     }
 
+    // ========== A2E Nano Banana (Gemini + Reference Images) ==========
+    if (imageProvider === 'a2eNanoBanana') {
+      if (!hasA2eKey()) { log('A2E API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
+      const refCount = refs.length;
+      if (refCount > 0) {
+        log(`A2E NanoBanana 사용 (Gemini + 레퍼런스 ${refCount}개)`, 'info');
+      } else {
+        log('A2E NanoBanana 사용 (Gemini 이미지 생성)', 'info');
+      }
+      try {
+        const urls = await callA2eNanoBanana(basePrompt, {
+          referenceImages: refs.length > 0 ? refs : undefined
+        });
+        return urls;
+      } catch (nbErr) {
+        const errMsg = nbErr.message || '';
+        log(`A2E NanoBanana 오류: ${errMsg.substring(0, 200)}`, 'error');
+        throw nbErr;
+      }
+    }
+
     // ========== Stable Diffusion ==========
     if (imageProvider === 'stableDiffusion') {
       const sdOpts = {aspectRatio: opts.aspectRatio || '3:4'};
@@ -5050,6 +5179,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           <option value="imagen4">Imagen 4 (고품질)</option>
           <option value="nanoBanana">Gemini (레퍼런스 반영)</option>
           <option value="a2eImage">A2E (Manga/General)</option>
+          <option value="a2eNanoBanana">A2E Gemini (레퍼런스 반영)</option>
         </select>
         <label style={{marginLeft:16}}>아트 스타일</label>
         <select className="form-select" style={{width:150,background:'linear-gradient(135deg,#ffecd2,#fcb69f)',borderColor:'#f8a879'}} value={artStyle} onChange={e=>setArtStyle(e.target.value)}>
@@ -6299,6 +6429,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                         <option value="stableDiffusion">Stable Diffusion 3.5</option>
                         <option value="nanoBanana">Gemini (레퍼런스)</option>
                         <option value="a2eImage">A2E (Manga/General)</option>
+          <option value="a2eNanoBanana">A2E Gemini (레퍼런스 반영)</option>
                       </select>
                     </div>
                     <div style={{flex:1}}>
