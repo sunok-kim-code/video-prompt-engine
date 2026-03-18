@@ -840,15 +840,21 @@ async function callA2eImage(prompt, opts={}) {
   }
 
   const startData = await startRes.json();
-  if (startData.code !== 0 || !startData.data?._id) {
+  if (startData.code !== 0) {
     throw new Error('A2E Start 실패: ' + JSON.stringify(startData).substring(0, 300));
   }
 
-  const taskId = startData.data._id;
+  // data can be an object or an array — normalize to single task object
+  const taskObj = Array.isArray(startData.data) ? startData.data[0] : startData.data;
+  if (!taskObj?._id) {
+    throw new Error('A2E Start: task ID를 받지 못했습니다. ' + JSON.stringify(startData).substring(0, 300));
+  }
+
+  const taskId = taskObj._id;
 
   // If start response already has completed images, return immediately
-  if (startData.data.current_status === 'completed' && startData.data.image_urls?.length > 0) {
-    return startData.data.image_urls;
+  if (taskObj.current_status === 'completed' && taskObj.image_urls?.length > 0) {
+    return taskObj.image_urls;
   }
 
   // 2) Poll for completion
@@ -869,13 +875,16 @@ async function callA2eImage(prompt, opts={}) {
     const pollData = await pollRes.json();
     if (pollData.code !== 0 || !pollData.data) continue;
 
-    const status = pollData.data.current_status;
+    const pollObj = Array.isArray(pollData.data) ? pollData.data[0] : pollData.data;
+    if (!pollObj) continue;
+
+    const status = pollObj.current_status;
     if (status === 'completed') {
-      const urls = pollData.data.image_urls || [];
+      const urls = pollObj.image_urls || [];
       if (urls.length === 0) throw new Error('A2E: 이미지가 생성되지 않았습니다.');
       return urls; // Return array of image URLs
     } else if (status === 'failed') {
-      throw new Error('A2E 생성 실패: ' + (pollData.data.failed_message || 'unknown'));
+      throw new Error('A2E 생성 실패: ' + (pollObj.failed_message || 'unknown'));
     }
     // else: still processing, continue polling
   }
