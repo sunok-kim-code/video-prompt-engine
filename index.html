@@ -2279,11 +2279,45 @@ Rules:
     return newPages.length > 0 ? newPages : [{id:'p_'+Date.now(), width:PAGE_W, height:PAGE_H, objects:[]}];
   };
 
+  // Save editor layout to Firebase
+  const saveEditorLayout = async () => {
+    if (!projectId || !currentEpisode) { log('프로젝트/에피소드를 먼저 선택하세요.', 'error'); return; }
+    try {
+      log('에디터 배치 저장 중...', 'info');
+      await fbSavePhase(projectId, currentEpisode, 'step5_editor', { editorPages, currentPageIdx });
+      log('에디터 배치 저장 완료!', 'success');
+    } catch(e) {
+      console.error('[saveEditorLayout]', e);
+      log('에디터 배치 저장 실패: ' + e.message, 'error');
+    }
+  };
+
+  // Load saved editor layout from Firebase
+  const loadEditorLayout = async () => {
+    if (!projectId || !currentEpisode) return null;
+    try {
+      const data = await fbLoadPhase(projectId, currentEpisode, 'step5_editor');
+      if (data && data.editorPages && data.editorPages.length > 0) {
+        return data;
+      }
+    } catch(e) {
+      console.warn('[loadEditorLayout] failed:', e.message);
+    }
+    return null;
+  };
+
   const openBubbleEditor = async () => {
     const validCount = panels.filter(Boolean).length;
     console.log('[BubbleEditor] openBubbleEditor called, validPanels:', validCount);
     setBubbleEditorOpen(true);
-    if (validCount > 0) {
+
+    // Try loading saved layout first
+    const saved = await loadEditorLayout();
+    if (saved) {
+      setEditorPages(saved.editorPages);
+      setCurrentPageIdx(saved.currentPageIdx || 0);
+      log(`저장된 배치 불러옴: ${saved.editorPages.length}페이지`, 'success');
+    } else if (validCount > 0) {
       log('에디터 초기화 중... 패널 크기 측정', 'info');
       const newPages = await initEditorPages();
       setEditorPages(newPages);
@@ -2291,7 +2325,7 @@ Rules:
     } else {
       setEditorPages([{id:'p_'+Date.now(), width:PAGE_W, height:PAGE_H, objects:[]}]);
     }
-    setCurrentPageIdx(0);
+    if (!saved) setCurrentPageIdx(0);
     setSelectedObjectId(null);
     if (!Array.isArray(bubbleOverlays)) setBubbleOverlays([]);
   };
@@ -5364,6 +5398,16 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
               <span className="be-ctrl-val" style={{minWidth:24}}>{editorPanelScale}%</span>
             </div>
             <div className="be-divider" />
+            <button className="btn btn-outline btn-sm" onClick={saveEditorLayout} style={{fontSize:12}}>배치 저장</button>
+            <button className="btn btn-outline btn-sm" onClick={async () => {
+              if (!confirm('현재 배치를 초기화하고 패널에서 다시 생성하시겠습니까?')) return;
+              log('에디터 초기화 중...', 'info');
+              const newPages = await initEditorPages();
+              setEditorPages(newPages);
+              setCurrentPageIdx(0);
+              log(`에디터 재초기화 완료: ${newPages.length}페이지`, 'success');
+            }} style={{fontSize:12}}>배치 초기화</button>
+            <div className="be-divider" />
             <button className="btn btn-outline btn-sm be-btn-export" onClick={async () => {
               for (let i = 0; i < editorPages.length; i++) {
                 const jpegUrl = await exportPageAsJpeg(i);
@@ -5371,7 +5415,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
               }
               log(`전체 ${editorPages.length}페이지 JPG 내보내기 완료`, 'success');
             }}>전체 페이지 JPG 내보내기</button>
-            <button className="btn btn-success btn-sm" onClick={closeBubbleEditor} style={{fontSize:12}}>완료</button>
+            <button className="btn btn-success btn-sm" onClick={() => { saveEditorLayout(); closeBubbleEditor(); }} style={{fontSize:12}}>저장 후 완료</button>
           </div>
 
           <div className="be-body">
