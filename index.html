@@ -816,23 +816,48 @@ async function callA2eImage(prompt, opts={}) {
   else if (ar === '3:2') { width = 1024; height = 683; }
   else if (ar === '2:3') { width = 683; height = 1024; }
 
+  // model_type: 'a2e' (default) or 'seedream'
+  const modelType = opts.modelType || 'a2e';
+
   // req_key: 'high_aes_general_v21_L' (General/Realistic) or 'high_aes' (Manga)
   const reqKey = opts.reqKey || 'high_aes'; // default to Manga style for webtoon
 
+  // Upload reference images to A2E R2 (max 2 for Text to Image)
+  const inputImages = [];
+  if (opts.referenceImages?.length > 0) {
+    console.log('[A2E T2I] Uploading', opts.referenceImages.length, 'reference images to R2 (max 2)...');
+    for (const ref of opts.referenceImages.slice(0, 2)) {
+      try {
+        const imgData = ref.image || ref;
+        if (typeof imgData === 'string' && imgData.startsWith('http')) {
+          inputImages.push(imgData);
+        } else if (typeof imgData === 'string' && imgData.startsWith('data:')) {
+          const url = await uploadImageToA2eR2(imgData);
+          if (url) inputImages.push(url);
+        }
+      } catch (e) { console.warn('[A2E T2I] ref upload failed:', e.message); }
+    }
+    console.log('[A2E T2I] Uploaded', inputImages.length, 'reference images');
+  }
+
   // 1) Start task
+  const startBody = {
+    name: 'webtoon_panel_' + Date.now(),
+    prompt: prompt.substring(0, 4000),
+    req_key: reqKey,
+    model_type: modelType,
+    width: width,
+    height: height
+  };
+  if (inputImages.length > 0) startBody.input_images = inputImages;
+
   const startRes = await fetch(baseUrl + '/start', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + apiKey
     },
-    body: JSON.stringify({
-      name: 'webtoon_panel_' + Date.now(),
-      prompt: prompt.substring(0, 4000),
-      req_key: reqKey,
-      width: width,
-      height: height
-    })
+    body: JSON.stringify(startBody)
   });
 
   if (!startRes.ok) {
@@ -3774,18 +3799,22 @@ Rules:
     if (imageProvider === 'a2eImage') {
       if (!hasA2eKey()) { log('A2E API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
       // A2E supports 'high_aes' (Manga) and 'high_aes_general_v21_L' (General/Realistic)
-      // Use Manga style for webtoon art styles, General for realistic styles
       const isRealistic = artStyle === 'realistic' || artStyle === 'cinematic' || artStyle === 'portrait';
       const reqKey = isRealistic ? 'high_aes_general_v21_L' : 'high_aes';
       const styleName = reqKey === 'high_aes' ? 'Manga' : 'General';
-      log(`A2E 사용 (${styleName} 스타일, ${curStyleName} 프롬프트)`, 'info');
+      const refCount = refs.length;
+      if (refCount > 0) {
+        log(`A2E 사용 (${styleName} 스타일 + 레퍼런스 ${refCount}개, 최대 2개)`, 'info');
+      } else {
+        log(`A2E 사용 (${styleName} 스타일, ${curStyleName} 프롬프트)`, 'info');
+      }
 
       try {
         const urls = await callA2eImage(basePrompt, {
           aspectRatio: opts.aspectRatio || '3:4',
-          reqKey: reqKey
+          reqKey: reqKey,
+          referenceImages: refs.length > 0 ? refs : undefined
         });
-        // A2E returns URLs, not data URIs — return as-is (the pipeline handles both)
         return urls;
       } catch (a2eErr) {
         const errMsg = a2eErr.message || '';
@@ -5581,7 +5610,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           <option value="stableDiffusion">Stable Diffusion 3.5</option>
           <option value="imagen4">Imagen 4 (고품질)</option>
           <option value="nanoBanana">Gemini (레퍼런스 반영)</option>
-          <option value="a2eImage">A2E (Manga/General)</option>
+          <option value="a2eImage">A2E (Manga/General + 레퍼런스)</option>
           <option value="a2eNanoBanana">A2E Gemini (레퍼런스 반영)</option>
           <option value="flux2Pro">Flux 2 Pro (fal.ai 레퍼런스)</option>
         </select>
@@ -6928,7 +6957,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                         <option value="falAI">FLUX (fal.ai)</option>
                         <option value="stableDiffusion">Stable Diffusion 3.5</option>
                         <option value="nanoBanana">Gemini (레퍼런스)</option>
-                        <option value="a2eImage">A2E (Manga/General)</option>
+                        <option value="a2eImage">A2E (Manga/General + 레퍼런스)</option>
                         <option value="a2eNanoBanana">A2E Gemini (레퍼런스)</option>
                         <option value="flux2Pro">Flux 2 Pro (fal.ai)</option>
                       </select>
