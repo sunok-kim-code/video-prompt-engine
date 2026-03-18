@@ -3940,15 +3940,35 @@ Rules:
 
       const s4 = await fbLoadPhase(pid, episodeNum, 'step4_panels');
       if (s4 && s4.panels?.some(p => p)) {
-        // Align panels array to storyboard length (fix index mismatch from insert/delete without save)
+        // Bidirectional alignment: keep ALL images, pad storyboard if needed
         let loadedPanels = s4.panels;
-        const sbLen = s3?.storyboard?.length || 0;
-        if (sbLen > 0 && sbLen !== loadedPanels.length) {
-          console.warn('[loadEpisode] storyboard/panels length mismatch:', sbLen, 'vs', loadedPanels.length, '— aligning');
-          if (loadedPanels.length < sbLen) {
-            loadedPanels = [...loadedPanels, ...new Array(sbLen - loadedPanels.length).fill(null)];
+        const sbData = s3?.storyboard || [];
+        const sbLen = sbData.length;
+        const panelLen = loadedPanels.length;
+        if (sbLen > 0 && sbLen !== panelLen) {
+          console.warn('[loadEpisode] storyboard/panels length mismatch:', sbLen, 'vs', panelLen, '— aligning');
+          if (panelLen < sbLen) {
+            // Panels shorter than storyboard: pad panels with null
+            loadedPanels = [...loadedPanels, ...new Array(sbLen - panelLen).fill(null)];
           } else {
-            loadedPanels = loadedPanels.slice(0, sbLen);
+            // Images > storyboard: pad storyboard with placeholder entries (NEVER truncate images)
+            const padded = [...sbData];
+            for (let pi = sbLen; pi < panelLen; pi++) {
+              padded.push({
+                _uid: 'sb_auto_' + Date.now() + '_' + pi,
+                panelNumber: pi + 1,
+                type: 'action', shotSize: 'medium', cameraAngle: 'eye level', mood: 'neutral',
+                description: `(패널 ${pi + 1} - 자동 생성됨)`,
+                dialogue: [], narration: '', imagePrompt: '', characters: [], background: '',
+              });
+            }
+            padded.forEach((p, i) => { p.panelNumber = i + 1; });
+            setStoryboard(padded);
+            log(`  스토리보드 ${sbLen}개 → ${panelLen}개로 확장 (이미지 수에 맞춤)`, 'info');
+            // Save expanded storyboard to Firebase
+            if (pid && episodeNum) {
+              fbSavePhase(pid, episodeNum, 'step3_storyboard', {storyboard: padded}).catch(() => {});
+            }
           }
         }
         setPanels(loadedPanels);
@@ -6237,6 +6257,34 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                       <button className="btn btn-primary btn-xs" onClick={openBubbleEditor}>💬 에디터</button>
                       <button className="btn btn-outline btn-xs" onClick={() => openViewerLocal()}>🔗 보기</button>
                       <button className="btn btn-outline btn-xs" onClick={exportWebtoonPDF} disabled={running}>📄 PDF</button>
+                      {panels.filter(Boolean).length !== storyboard.length && (
+                        <button className="btn btn-outline btn-xs" style={{color:'#ffaa00',borderColor:'#ffaa00'}} onClick={() => {
+                          const imgCount = panels.filter(Boolean).length;
+                          const totalPanels = panels.length;
+                          const sbCount = storyboard.length;
+                          if (totalPanels > sbCount) {
+                            // Pad storyboard to match panels array length
+                            const newSb = [...storyboard];
+                            for (let si = sbCount; si < totalPanels; si++) {
+                              newSb.push({
+                                _uid: 'sb_sync_' + Date.now() + '_' + si,
+                                panelNumber: si + 1, type: 'action', shotSize: 'medium', cameraAngle: 'eye level', mood: 'neutral',
+                                description: `(패널 ${si + 1} - 동기화 추가)`, dialogue: [], narration: '', imagePrompt: '', characters: [], background: '',
+                              });
+                            }
+                            newSb.forEach((p, i) => { p.panelNumber = i + 1; });
+                            setStoryboard(newSb);
+                            if (projectId && currentEpisode) fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+                            log(`스토리보드 ${sbCount} → ${totalPanels}개로 동기화 (이미지 기준)`, 'success');
+                          } else if (sbCount > totalPanels) {
+                            // Pad panels array to match storyboard
+                            const newPanels = [...panels, ...new Array(sbCount - totalPanels).fill(null)];
+                            setPanels(newPanels);
+                            if (projectId && currentEpisode) fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
+                            log(`패널 배열 ${totalPanels} → ${sbCount}개로 동기화 (스토리보드 기준)`, 'success');
+                          }
+                        }}>⚠ 동기화 ({panels.length}↔{storyboard.length})</button>
+                      )}
                     </>}
                     {running && <span className="status-badge running">생성 중...</span>}
                   </div>
