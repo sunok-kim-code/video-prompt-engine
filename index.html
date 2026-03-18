@@ -2270,8 +2270,10 @@ Rules:
 
   const addBubbleToPage = (bubbleStyle) => {
     if (editorPages.length === 0) return;
+    const pageIdx = Math.min(currentPageIdx, editorPages.length - 1);
     const bt = BUBBLE_TYPES[bubbleStyle] || BUBBLE_TYPES.speech;
-    const page = editorPages[currentPageIdx];
+    const page = editorPages[pageIdx];
+    if (!page || !page.objects) return;
     const pos = getInsertPosition();
     const newBubble = {
       id: 'b_' + Date.now(), type: 'bubble', bubbleStyle, text: '',
@@ -2288,7 +2290,9 @@ Rules:
     };
     setEditorPages(prev => {
       const next = [...prev];
-      next[currentPageIdx] = {...next[currentPageIdx], objects: [...next[currentPageIdx].objects, newBubble]};
+      const pi = Math.min(currentPageIdx, next.length - 1);
+      if (!next[pi]) return prev;
+      next[pi] = {...next[pi], objects: [...(next[pi].objects || []), newBubble]};
       return next;
     });
   };
@@ -2304,14 +2308,16 @@ Rules:
       imgH = Math.round(imgW * ratio);
     } catch(e) {}
     setEditorPages(prev => {
-      const page = prev[currentPageIdx];
+      const pi = Math.min(currentPageIdx, prev.length - 1);
+      const page = prev[pi];
+      if (!page || !page.objects) return prev;
       const pos = getInsertPosition();
       const newImage = {
         id: 'img_' + Date.now(), type: 'image', src: dataUrl, x: pos.x, y: pos.y, w: imgW, h: imgH,
         zIndex: Math.max(...page.objects.map(o => o.zIndex || 1), 5) + 1
       };
       const next = [...prev];
-      next[currentPageIdx] = {...next[currentPageIdx], objects: [...next[currentPageIdx].objects, newImage]};
+      next[pi] = {...next[pi], objects: [...(next[pi].objects || []), newImage]};
       return next;
     });
     log('이미지가 현재 페이지에 추가되었습니다.', 'success');
@@ -5312,7 +5318,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                     <div className={`be-page-bar${isFocused ? ' focused' : ''}`}
                       onClick={() => setCurrentPageIdx(pageIdx)}>
                       <span style={{fontWeight:700}}>페이지 {pageIdx + 1}</span>
-                      <span style={{fontSize:10,color:'#888'}}>({page.objects.length}개 객체)</span>
+                      <span style={{fontSize:10,color:'#888'}}>({(page.objects||[]).length}개 객체)</span>
                       <div style={{flex:1}} />
                       <button className="be-page-bar-btn" onClick={async (e) => {
                         e.stopPropagation();
@@ -5328,7 +5334,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                       style={{width: displayW, height: displayH, position:'relative'}}
                       onClick={() => setCurrentPageIdx(pageIdx)}>
                       {/* Render all objects in z-order */}
-                      {[...page.objects].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1)).map(obj => {
+                      {[...(page.objects||[])].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1)).map(obj => {
                         const isSelected = selectedObjectId === obj.id;
                         if (obj.type === 'panel' || obj.type === 'image') {
                           return (
@@ -5513,8 +5519,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
             {/* Right sidebar — shows focused page objects */}
             <div className="be-sidebar">
               <div className="be-sidebar-title">페이지 {currentPageIdx + 1} 객체</div>
-              {editorPages[currentPageIdx]?.objects.length === 0 && <div className="be-sidebar-empty">상단 버튼으로 말풍선이나 이미지를 추가하세요.</div>}
-              {editorPages[currentPageIdx]?.objects.map((obj, oi) => {
+              {(editorPages[currentPageIdx]?.objects?.length || 0) === 0 && <div className="be-sidebar-empty">상단 버튼으로 말풍선이나 이미지를 추가하세요.</div>}
+              {(editorPages[currentPageIdx]?.objects || []).map((obj, oi) => {
                 const isSelected = selectedObjectId === obj.id;
                 if (obj.type === 'bubble') {
                   const bt = BUBBLE_TYPES[obj.bubbleStyle] || BUBBLE_TYPES.speech;
