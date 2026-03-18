@@ -915,7 +915,14 @@ async function callA2eImage(prompt, opts={}) {
       if (urls.length === 0) throw new Error('A2E: 이미지가 생성되지 않았습니다.');
       return urls; // Return array of image URLs
     } else if (status === 'failed') {
-      throw new Error('A2E 생성 실패: ' + (pollObj.failed_message || 'unknown'));
+      const failMsg = pollObj.failed_message || 'unknown';
+      console.error('[A2E T2I] Task failed:', JSON.stringify(pollObj).substring(0, 500));
+      // If failed with reference images, retry without them
+      if (inputImages.length > 0 && !opts._retryNoRef) {
+        console.warn('[A2E T2I] Failed with references, retrying without:', failMsg);
+        return await callA2eImage(prompt, {...opts, referenceImages: undefined, _retryNoRef: true});
+      }
+      throw new Error('A2E 생성 실패: ' + failMsg);
     }
     // else: still processing, continue polling
   }
