@@ -227,6 +227,7 @@ div:hover > .panel-ctrl{opacity:1 !important;}
 .be-canvas{flex:1;overflow:auto;background:#111;display:flex;flex-direction:column;align-items:center;padding-bottom:40px;}
 .be-page-canvas{position:relative;background:#fff;box-shadow:0 0 30px rgba(0,0,0,0.5);flex-shrink:0;}
 .be-page-canvas.focused{outline:2px solid #4fc3f7;outline-offset:0;}
+.be-page-canvas.drop-target{outline:3px dashed #4fc3f7;outline-offset:2px;background:#e3f2fd !important;}
 .be-page-bar{display:flex;align-items:center;gap:8px;padding:6px 16px;background:#1a1a2e;border:1px solid #333;border-radius:6px 6px 0 0;margin-top:20px;color:#ccc;font-size:12px;cursor:pointer;transition:all .15s;}
 .be-page-bar.focused{background:#2a2a50;border-color:#4fc3f7;color:#fff;}
 .be-page-bar-btn{border:none;background:rgba(79,195,247,0.15);color:#4fc3f7;font-size:10px;padding:3px 10px;border-radius:4px;cursor:pointer;font-weight:600;}
@@ -1943,9 +1944,36 @@ Rules:
   const editorCanvasRef = React.useRef(null);
   const imageInputRef = React.useRef(null);
   const dragRef = React.useRef(null); // {type:'move'|'resize', pageIdx, objId, startX, startY, origX, origY, origW, origH}
+  const [dropTargetPageIdx, setDropTargetPageIdx] = useState(null); // highlight page during cross-page drag
 
   // Unified drag handler using ref to avoid stale closures
+  const autoScrollTimerRef = React.useRef(null);
   useEffect(() => {
+    const SCROLL_EDGE = 60; // px from edge to trigger auto-scroll
+    const SCROLL_SPEED = 12; // px per frame
+
+    const doAutoScroll = () => {
+      const d = dragRef.current;
+      if (!d || d.type !== 'move' || !d.crossPage) { autoScrollTimerRef.current = null; return; }
+      const canvas = editorCanvasRef.current;
+      if (!canvas) { autoScrollTimerRef.current = null; return; }
+      const rect = canvas.getBoundingClientRect();
+      const mouseY = d.lastClientY || d.startY;
+      let scrolled = false;
+      if (mouseY > rect.bottom - SCROLL_EDGE && canvas.scrollTop < canvas.scrollHeight - canvas.clientHeight) {
+        canvas.scrollTop += SCROLL_SPEED;
+        scrolled = true;
+      } else if (mouseY < rect.top + SCROLL_EDGE && canvas.scrollTop > 0) {
+        canvas.scrollTop -= SCROLL_SPEED;
+        scrolled = true;
+      }
+      if (scrolled) {
+        autoScrollTimerRef.current = requestAnimationFrame(doAutoScroll);
+      } else {
+        autoScrollTimerRef.current = null;
+      }
+    };
+
     const onMouseMove = (e) => {
       const d = dragRef.current;
       if (!d) return;
@@ -1956,6 +1984,26 @@ Rules:
       d.lastClientY = e.clientY;
       if (d.type === 'move') {
         updatePageObject(d.pageIdx, d.objId, {x: Math.max(0, d.origX + dx), y: Math.max(0, d.origY + dy)});
+        // Cross-page drag: auto-scroll + highlight drop target
+        if (d.crossPage) {
+          // Auto-scroll near edges
+          if (!autoScrollTimerRef.current) {
+            const canvas = editorCanvasRef.current;
+            if (canvas) {
+              const rect = canvas.getBoundingClientRect();
+              if (e.clientY > rect.bottom - SCROLL_EDGE || e.clientY < rect.top + SCROLL_EDGE) {
+                autoScrollTimerRef.current = requestAnimationFrame(doAutoScroll);
+              }
+            }
+          }
+          // Highlight drop target page
+          const hoverPage = detectDropPage(d);
+          if (hoverPage !== null && hoverPage !== d.pageIdx) {
+            setDropTargetPageIdx(hoverPage);
+          } else {
+            setDropTargetPageIdx(null);
+          }
+        }
       } else if (d.type === 'resize') {
         if (d.aspectRatio) {
           const newW = Math.max(30, d.origW + dx);
@@ -1976,6 +2024,12 @@ Rules:
       }
     };
     const onMouseUp = () => {
+      // Stop auto-scroll
+      if (autoScrollTimerRef.current) {
+        cancelAnimationFrame(autoScrollTimerRef.current);
+        autoScrollTimerRef.current = null;
+      }
+      setDropTargetPageIdx(null);
       const d = dragRef.current;
       // Cross-page drop detection
       if (d && d.type === 'move' && d.crossPage) {
@@ -1988,7 +2042,11 @@ Rules:
     };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
-    return () => { window.removeEventListener('mousemove', onMouseMove); window.removeEventListener('mouseup', onMouseUp); };
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      if (autoScrollTimerRef.current) cancelAnimationFrame(autoScrollTimerRef.current);
+    };
   }, [editorPanelScale]);
 
   const BUBBLE_TYPES = {
@@ -2363,18 +2421,30 @@ Rules:
   };
 
   // Detect which page the mouse is over for cross-page drop
+  // Also handles gaps between pages by finding the nearest page vertically
   const detectDropPage = (d) => {
     if (!editorCanvasRef.current) return null;
     const pageDivs = editorCanvasRef.current.querySelectorAll('.be-page-canvas');
     const mouseY = d.lastClientY || d.startY;
     const mouseX = d.lastClientX || d.startX;
+    let closestPage = null;
+    let closestDist = Infinity;
     for (let i = 0; i < pageDivs.length; i++) {
       const rect = pageDivs[i].getBoundingClientRect();
+      // Exact hit — mouse is inside this page canvas
       if (mouseY >= rect.top && mouseY <= rect.bottom && mouseX >= rect.left && mouseX <= rect.right) {
         return i;
       }
+      // Track closest page by vertical distance (for gap handling)
+      const distY = mouseY < rect.top ? rect.top - mouseY : mouseY > rect.bottom ? mouseY - rect.bottom : 0;
+      const distX = mouseX < rect.left ? rect.left - mouseX : mouseX > rect.right ? mouseX - rect.right : 0;
+      const dist = Math.sqrt(distX * distX + distY * distY);
+      if (dist < closestDist && dist < 80) { // within 80px tolerance
+        closestDist = dist;
+        closestPage = i;
+      }
     }
-    return null;
+    return closestPage;
   };
 
   // Get position near currently selected object (for adding new items nearby)
@@ -5330,7 +5400,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                       )}
                     </div>
                     {/* Page canvas */}
-                    <div className={`be-page-canvas${isFocused ? ' focused' : ''}`}
+                    <div className={`be-page-canvas${isFocused ? ' focused' : ''}${dropTargetPageIdx === pageIdx ? ' drop-target' : ''}`}
                       style={{width: displayW, height: displayH, position:'relative'}}
                       onClick={() => setCurrentPageIdx(pageIdx)}>
                       {/* Render all objects in z-order */}
@@ -5530,6 +5600,23 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                         <span className={`be-item-label${isSelected?' selected':''}`}>{oi+1}. 말풍선 ({bt.name})</span>
                         <button className="be-item-del" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>삭제</button>
                       </div>
+                      {editorPages.length > 1 && (
+                        <div className="be-ctrl-row" style={{padding:'4px 6px'}}>
+                          <label className="be-ctrl-label" style={{flexShrink:0}}>페이지 이동</label>
+                          <select className="be-select" value="" onClick={e=>e.stopPropagation()}
+                            onChange={e => {
+                              const toPage = parseInt(e.target.value);
+                              if (!isNaN(toPage) && toPage !== currentPageIdx) {
+                                moveObjectToPage(currentPageIdx, obj.id, toPage);
+                              }
+                            }}>
+                            <option value="">선택...</option>
+                            {editorPages.map((_, pi) => pi !== currentPageIdx && (
+                              <option key={pi} value={pi}>페이지 {pi + 1}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <textarea className="be-textarea" value={obj.text} onChange={(e) => updatePageObject(currentPageIdx, obj.id, {text: e.target.value})}
                         placeholder="텍스트 입력..." onClick={(e) => e.stopPropagation()} />
                       <div className="be-ctrl-row">
@@ -5617,6 +5704,23 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                         <span className={`be-item-label${isSelected?' selected':''}`} style={{color: isSelected?'#ff6b6b':'#ccc'}}>{oi+1}. 효과음 ({obj.text})</span>
                         <button className="be-item-del" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>삭제</button>
                       </div>
+                      {editorPages.length > 1 && (
+                        <div className="be-ctrl-row" style={{padding:'4px 6px'}}>
+                          <label className="be-ctrl-label" style={{flexShrink:0}}>페이지 이동</label>
+                          <select className="be-select" value="" onClick={e=>e.stopPropagation()}
+                            onChange={e => {
+                              const toPage = parseInt(e.target.value);
+                              if (!isNaN(toPage) && toPage !== currentPageIdx) {
+                                moveObjectToPage(currentPageIdx, obj.id, toPage);
+                              }
+                            }}>
+                            <option value="">선택...</option>
+                            {editorPages.map((_, pi) => pi !== currentPageIdx && (
+                              <option key={pi} value={pi}>페이지 {pi + 1}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>텍스트</label>
                         <input className="be-sfx-input" value={obj.text} onClick={e=>e.stopPropagation()}
@@ -5682,6 +5786,23 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                         <button className="be-item-del" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>삭제</button>
                       </div>
                       <div style={{fontSize:11,color:'#aaa',padding:6}}>크기: {Math.round(obj.w)}×{Math.round(obj.h)} | 위치: ({Math.round(obj.x)}, {Math.round(obj.y)})</div>
+                      {editorPages.length > 1 && (
+                        <div className="be-ctrl-row" style={{padding:'4px 6px'}}>
+                          <label className="be-ctrl-label" style={{flexShrink:0}}>페이지 이동</label>
+                          <select className="be-select" value="" onClick={e=>e.stopPropagation()}
+                            onChange={e => {
+                              const toPage = parseInt(e.target.value);
+                              if (!isNaN(toPage) && toPage !== currentPageIdx) {
+                                moveObjectToPage(currentPageIdx, obj.id, toPage);
+                              }
+                            }}>
+                            <option value="">선택...</option>
+                            {editorPages.map((_, pi) => pi !== currentPageIdx && (
+                              <option key={pi} value={pi}>페이지 {pi + 1}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
                   );
                 }
