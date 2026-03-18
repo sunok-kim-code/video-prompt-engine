@@ -471,7 +471,7 @@ let _apiKeySyncResolve;
 const _apiKeySyncPromise = new Promise(r => { _apiKeySyncResolve = r; });
 function waitForApiKeySync() { return _apiKeySyncPromise; }
 
-const API_KEY_NAMES = ['VERTEX_PROJECT_ID','VERTEX_LOCATION','VERTEX_ACCESS_TOKEN','XAI_API_KEY','STABILITY_API_KEY','FAL_API_KEY'];
+const API_KEY_NAMES = ['VERTEX_PROJECT_ID','VERTEX_LOCATION','VERTEX_ACCESS_TOKEN','XAI_API_KEY','STABILITY_API_KEY','FAL_API_KEY','A2E_API_KEY'];
 
 async function syncApiKeysFromFirestore() {
   const db = getDb();
@@ -793,6 +793,94 @@ async function callStableDiffusion(prompt, opts={}) {
 // ============================================================
 function getFalKey() { const k=localStorage.getItem('FAL_API_KEY'); if(!k)throw new Error('fal.ai API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
 function hasFalKey() { return !!localStorage.getItem('FAL_API_KEY'); }
+
+// ============================================================
+// A2E IMAGE API (video.a2e.ai)
+// ============================================================
+function getA2eKey() { const k=localStorage.getItem('A2E_API_KEY'); if(!k)throw new Error('A2E API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
+function hasA2eKey() { return !!localStorage.getItem('A2E_API_KEY'); }
+
+async function callA2eImage(prompt, opts={}) {
+  const apiKey = getA2eKey();
+  const baseUrl = 'https://video.a2e.ai/api/v1/userText2image';
+
+  // Determine dimensions from aspect ratio
+  let width = 768, height = 1024; // default 3:4
+  const ar = opts.aspectRatio || '3:4';
+  if (ar === '1:1') { width = 1024; height = 1024; }
+  else if (ar === '16:9') { width = 1024; height = 576; }
+  else if (ar === '9:16') { width = 576; height = 1024; }
+  else if (ar === '4:3') { width = 1024; height = 768; }
+  else if (ar === '3:4') { width = 768; height = 1024; }
+  else if (ar === '3:2') { width = 1024; height = 683; }
+  else if (ar === '2:3') { width = 683; height = 1024; }
+
+  // req_key: 'high_aes_general_v21_L' (General/Realistic) or 'high_aes' (Manga)
+  const reqKey = opts.reqKey || 'high_aes'; // default to Manga style for webtoon
+
+  // 1) Start task
+  const startRes = await fetch(baseUrl + '/start', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey
+    },
+    body: JSON.stringify({
+      name: 'webtoon_panel_' + Date.now(),
+      prompt: prompt.substring(0, 4000),
+      req_key: reqKey,
+      width: width,
+      height: height
+    })
+  });
+
+  if (!startRes.ok) {
+    const errText = await startRes.text();
+    throw new Error('A2E Start ' + startRes.status + ': ' + errText.substring(0, 300));
+  }
+
+  const startData = await startRes.json();
+  if (startData.code !== 0 || !startData.data?._id) {
+    throw new Error('A2E Start 실패: ' + JSON.stringify(startData).substring(0, 300));
+  }
+
+  const taskId = startData.data._id;
+
+  // If start response already has completed images, return immediately
+  if (startData.data.current_status === 'completed' && startData.data.image_urls?.length > 0) {
+    return startData.data.image_urls;
+  }
+
+  // 2) Poll for completion
+  const maxPolls = 60; // up to 5 minutes (5s intervals)
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+
+    const pollRes = await fetch(baseUrl + '/' + taskId, {
+      method: 'GET',
+      headers: { 'Authorization': 'Bearer ' + apiKey }
+    });
+
+    if (!pollRes.ok) {
+      console.warn('A2E poll error:', pollRes.status);
+      continue;
+    }
+
+    const pollData = await pollRes.json();
+    if (pollData.code !== 0 || !pollData.data) continue;
+
+    const status = pollData.data.current_status;
+    if (status === 'completed') {
+      const urls = pollData.data.image_urls || [];
+      if (urls.length === 0) throw new Error('A2E: 이미지가 생성되지 않았습니다.');
+      return urls; // Return array of image URLs
+    } else if (status === 'failed') {
+      throw new Error('A2E 생성 실패: ' + (pollData.data.failed_message || 'unknown'));
+    }
+    // else: still processing, continue polling
+  }
+  throw new Error('A2E: 시간 초과 (5분 이내 완료되지 않음)');
+}
 
 async function callFalAI(prompt, opts={}) {
   const apiKey = getFalKey();
@@ -1544,6 +1632,7 @@ function ApiKeyModal({onClose}) {
   const [xk,setXk]=useState(localStorage.getItem('XAI_API_KEY')||'');
   const [sk,setSk]=useState(localStorage.getItem('STABILITY_API_KEY')||'');
   const [fk,setFk]=useState(localStorage.getItem('FAL_API_KEY')||'');
+  const [ak,setAk]=useState(localStorage.getItem('A2E_API_KEY')||'');
   const save=()=>{
     if(vp)localStorage.setItem('VERTEX_PROJECT_ID',vp);
     if(vl)localStorage.setItem('VERTEX_LOCATION',vl);
@@ -1551,6 +1640,7 @@ function ApiKeyModal({onClose}) {
     if(xk)localStorage.setItem('XAI_API_KEY',xk);
     if(sk)localStorage.setItem('STABILITY_API_KEY',sk);
     if(fk)localStorage.setItem('FAL_API_KEY',fk);
+    if(ak)localStorage.setItem('A2E_API_KEY',ak);
     // Sync to Firestore for cross-browser access
     const keysToSave = {};
     if(vp) keysToSave.VERTEX_PROJECT_ID = vp;
@@ -1559,6 +1649,7 @@ function ApiKeyModal({onClose}) {
     if(xk) keysToSave.XAI_API_KEY = xk;
     if(sk) keysToSave.STABILITY_API_KEY = sk;
     if(fk) keysToSave.FAL_API_KEY = fk;
+    if(ak) keysToSave.A2E_API_KEY = ak;
     fbSaveApiKeys(keysToSave).then(() => {
       console.log('[KeySync] Keys saved to Firestore:', Object.keys(keysToSave).join(', '));
     }).catch(e => {
@@ -1580,6 +1671,8 @@ function ApiKeyModal({onClose}) {
       <div className="key-status"><div className={`dot ${hasStabilityKey()?'on':''}`}/><span>Stability AI {hasStabilityKey()?'설정됨':'미설정'}</span></div>
       <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">fal.ai API Key (FLUX + ControlNet)</label><input className="modal-input" type="password" value={fk} onChange={e=>setFk(e.target.value)} placeholder="xxxxxxxx-xxxx-xxxx-xxxx:xxxxxxxx"/></div>
       <div className="key-status"><div className={`dot ${hasFalKey()?'on':''}`}/><span>fal.ai {hasFalKey()?'설정됨':'미설정'}</span></div>
+      <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">A2E API Key (Text-to-Image)</label><input className="modal-input" type="password" value={ak} onChange={e=>setAk(e.target.value)} placeholder="Bearer token"/></div>
+      <div className="key-status"><div className={`dot ${hasA2eKey()?'on':''}`}/><span>A2E {hasA2eKey()?'설정됨':'미설정'}</span></div>
       <div className="modal-actions"><button className="btn-cancel" onClick={onClose}>취소</button><button className="btn-save" onClick={save}>저장</button></div>
     </div></div>
   );
@@ -3213,6 +3306,30 @@ Rules:
           return null; // Skip this panel, proceed to next
         }
         throw grokErr; // Re-throw non-moderation errors
+      }
+    }
+
+    // ========== A2E Image ==========
+    if (imageProvider === 'a2eImage') {
+      if (!hasA2eKey()) { log('A2E API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
+      // A2E supports 'high_aes' (Manga) and 'high_aes_general_v21_L' (General/Realistic)
+      // Use Manga style for webtoon art styles, General for realistic styles
+      const isRealistic = artStyle === 'realistic' || artStyle === 'cinematic' || artStyle === 'portrait';
+      const reqKey = isRealistic ? 'high_aes_general_v21_L' : 'high_aes';
+      const styleName = reqKey === 'high_aes' ? 'Manga' : 'General';
+      log(`A2E 사용 (${styleName} 스타일, ${curStyleName} 프롬프트)`, 'info');
+
+      try {
+        const urls = await callA2eImage(basePrompt, {
+          aspectRatio: opts.aspectRatio || '3:4',
+          reqKey: reqKey
+        });
+        // A2E returns URLs, not data URIs — return as-is (the pipeline handles both)
+        return urls;
+      } catch (a2eErr) {
+        const errMsg = a2eErr.message || '';
+        log(`A2E 오류: ${errMsg.substring(0, 200)}`, 'error');
+        throw a2eErr;
       }
     }
 
@@ -4918,6 +5035,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           <option value="stableDiffusion">Stable Diffusion 3.5</option>
           <option value="imagen4">Imagen 4 (고품질)</option>
           <option value="nanoBanana">Gemini (레퍼런스 반영)</option>
+          <option value="a2eImage">A2E (Manga/General)</option>
         </select>
         <label style={{marginLeft:16}}>아트 스타일</label>
         <select className="form-select" style={{width:150,background:'linear-gradient(135deg,#ffecd2,#fcb69f)',borderColor:'#f8a879'}} value={artStyle} onChange={e=>setArtStyle(e.target.value)}>
@@ -6166,6 +6284,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                         <option value="falAI">FLUX (fal.ai)</option>
                         <option value="stableDiffusion">Stable Diffusion 3.5</option>
                         <option value="nanoBanana">Gemini (레퍼런스)</option>
+                        <option value="a2eImage">A2E (Manga/General)</option>
                       </select>
                     </div>
                     <div style={{flex:1}}>
