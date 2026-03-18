@@ -840,16 +840,23 @@ async function callA2eImage(prompt, opts={}) {
     console.log('[A2E T2I] Uploaded', inputImages.length, 'reference images');
   }
 
-  // 1) Start task
+  // 1) Start task — use model_type for new API, req_key as fallback for legacy
   const startBody = {
     name: 'webtoon_panel_' + Date.now(),
     prompt: prompt.substring(0, 4000),
-    req_key: reqKey,
     model_type: modelType,
     width: width,
     height: height
   };
-  if (inputImages.length > 0) startBody.input_images = inputImages;
+  // Only add req_key if no reference images (legacy mode)
+  if (inputImages.length === 0) {
+    startBody.req_key = reqKey;
+  }
+  if (inputImages.length > 0) {
+    startBody.input_images = inputImages;
+  }
+
+  console.log('[A2E T2I] Request:', JSON.stringify({...startBody, prompt: startBody.prompt.substring(0, 80) + '...', input_images: startBody.input_images?.map(u => u.substring(0, 80) + '...')}));
 
   const startRes = await fetch(baseUrl + '/start', {
     method: 'POST',
@@ -862,11 +869,12 @@ async function callA2eImage(prompt, opts={}) {
 
   if (!startRes.ok) {
     const errText = await startRes.text();
+    console.error('[A2E T2I] Start failed:', startRes.status, errText.substring(0, 500));
     throw new Error('A2E Start ' + startRes.status + ': ' + errText.substring(0, 300));
   }
 
   const startData = await startRes.json();
-  console.log('[A2E] start response:', JSON.stringify(startData).substring(0, 500));
+  console.log('[A2E T2I] start response:', JSON.stringify(startData).substring(0, 500));
 
   // code can be number 0 or string "0" — treat both as success
   if (startData.code != 0) {
