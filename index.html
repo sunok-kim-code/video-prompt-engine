@@ -2718,10 +2718,85 @@ Rules:
     return await callGemini(system, user, {maxTokens: extraOpts.maxTokens || 16384, thinkBudget: extraOpts.thinkBudget ?? 1024});
   }, []);
 
+  // ======== Character State System ========
+  // Unified state tracker: accumulates outfit, pose, location, expression, props per character across panels
+  // Each character has a "current state" that persists and only changes when explicitly overridden
+  const buildCharacterStates = useCallback((storyboardData, analysisData, upToIndex) => {
+    // Initialize with default state from analysis
+    const states = {}; // {charId: {outfit, pose, expression, location, props, lastChangedAt, changeLog}}
+    if (analysisData?.characters) {
+      for (const c of analysisData.characters) {
+        states[c.id] = {
+          outfit: c.outfit || '',
+          pose: 'standing',
+          expression: 'neutral',
+          location: '',
+          props: [],
+          lastChangedAt: 0,
+          changeLog: [{panel: 0, field: 'init', from: '', to: c.outfit || '', desc: '기본 상태'}],
+        };
+      }
+    }
+    // Walk through panels up to (but not including) the target index to accumulate state
+    const limit = upToIndex !== undefined ? upToIndex : storyboardData.length;
+    for (let i = 0; i < limit; i++) {
+      const panel = storyboardData[i];
+      if (!panel?.characters) continue;
+      for (const pc of panel.characters) {
+        const cid = pc.id || pc;
+        if (!states[cid]) {
+          states[cid] = {outfit:'', pose:'standing', expression:'neutral', location:'', props:[], lastChangedAt: i, changeLog:[]};
+        }
+        const s = states[cid];
+        // Outfit: only changes on explicit outfitOverride
+        if (pc.outfitOverride) {
+          s.changeLog.push({panel: i+1, field: 'outfit', from: s.outfit, to: pc.outfitOverride, desc: `패널${i+1}에서 의상 변경`});
+          s.outfit = pc.outfitOverride;
+          s.lastChangedAt = i;
+        }
+        // Pose: always updates (tracks latest base posture)
+        if (pc.pose && pc.pose !== s.pose) {
+          s.changeLog.push({panel: i+1, field: 'pose', from: s.pose, to: pc.pose, desc: `패널${i+1}에서 포즈 변경`});
+          s.pose = pc.pose;
+          s.lastChangedAt = i;
+        }
+        // Expression
+        if (pc.expression && pc.expression !== s.expression) {
+          s.expression = pc.expression;
+        }
+      }
+      // Track location from background
+      if (panel.background) {
+        for (const pc of panel.characters) {
+          const cid = pc.id || pc;
+          if (states[cid]) states[cid].location = panel.background;
+        }
+      }
+    }
+    return states;
+  }, []);
+
+  // Generate a compact state summary string for a character (used in image prompts)
+  const formatCharacterState = (charId, charState, panelCharData) => {
+    const parts = [];
+    // Current outfit (accumulated)
+    if (charState.outfit) parts.push(`CURRENT OUTFIT: ${charState.outfit}`);
+    // Pose continuity: show previous → current if different
+    const curPose = panelCharData?.pose || charState.pose;
+    if (charState.pose && curPose && charState.pose !== curPose) {
+      parts.push(`POSE TRANSITION: ${charState.pose} → ${curPose}`);
+    } else if (curPose) {
+      parts.push(`POSE: ${curPose} (maintain this posture)`);
+    }
+    // Expression
+    const curExpr = panelCharData?.expression || charState.expression;
+    if (curExpr) parts.push(`expression: ${curExpr}`);
+    return parts.join(', ');
+  };
+
   // Helper: build reference images & descriptions from shared assets for a panel
-  // outfitState: optional {charId: 'current outfit description'} — tracks cumulative outfit changes across panels
-  // poseState: optional {charId: 'previous pose description'} — tracks pose continuity
-  const buildPanelRefs = useCallback((panel, sa, analysisData, episodeRefs, outfitState, poseState) => {
+  // charStates: optional character state map from buildCharacterStates()
+  const buildPanelRefs = useCallback((panel, sa, analysisData, episodeRefs, charStates) => {
     const refImages = [];
     const assetDescriptions = [];
     if (!panel.characters || !analysisData) {
@@ -2746,8 +2821,9 @@ Rules:
       const charImg = saCharImg || epCharImg;
       const charInfo = analysisData.characters?.find(c => c.id === charId);
       const saCharData = sa?.characters?.[charId];
-      // Outfit priority: panel-level override > cumulative state from previous panels > default outfit
-      const outfitDesc = pc.outfitOverride || outfitState?.[charId] || charInfo?.outfit || '';
+      const charState = charStates?.[charId];
+      // Outfit priority: panel-level override > accumulated state > default outfit
+      const outfitDesc = pc.outfitOverride || charState?.outfit || charInfo?.outfit || '';
       const appearanceDesc = charInfo?.appearance || charId;
       // Build detailed Visual ID Card: combine all available description fields
       const detailParts = [appearanceDesc];
@@ -2759,13 +2835,13 @@ Rules:
       if (charInfo?.features) detailParts.push(`distinctive features: ${charInfo.features}`);
       if (outfitDesc) detailParts.push(`outfit: ${outfitDesc}`);
       if (saCharData?.description && saCharData.description !== appearanceDesc) detailParts.push(saCharData.description);
-      // Add previous pose context for continuity
-      const prevPose = poseState?.[charId];
-      const curPose = pc.pose || '';
-      if (prevPose && curPose) {
-        detailParts.push(`PREVIOUS POSE: ${prevPose} → CURRENT POSE: ${curPose} (maintain base posture unless transition is described)`);
-      } else if (curPose) {
-        detailParts.push(`pose: ${curPose}`);
+      // Add state-based context (pose continuity, expression, transitions)
+      if (charState) {
+        const stateContext = formatCharacterState(charId, charState, pc);
+        if (stateContext) detailParts.push(stateContext);
+      } else {
+        // Fallback: no state system, just use panel's pose
+        if (pc.pose) detailParts.push(`pose: ${pc.pose}`);
       }
       const fullDesc = detailParts.join(', ');
       assetDescriptions.push(`[Character ${charInfo?.name || charId}]: ${fullDesc}`);
@@ -4047,28 +4123,11 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     // and prepend it to subsequent panels for tone consistency
     let styleAnchor = '';
 
-    // Track cumulative outfit state: {charId: 'current outfit description'}
-    // Once an outfitOverride appears, that outfit persists for subsequent panels
-    const outfitState = {};
-    // Track pose state: {charId: 'last known pose'} for continuity
-    const poseState = {};
-
     for (let i = 0; i < sb.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
 
-      // Always update outfit + pose state even for already-generated panels
-      const curPanel = sb[i];
-      if (curPanel.characters) {
-        for (const pc of curPanel.characters) {
-          const cid = pc.id || pc;
-          if (pc.outfitOverride) {
-            outfitState[cid] = pc.outfitOverride;
-          }
-          if (pc.pose) {
-            poseState[cid] = pc.pose;
-          }
-        }
-      }
+      // Build character states UP TO this panel (accumulated from all previous panels)
+      const charStates = buildCharacterStates(sb, analysis, i);
 
       if (newPanels[i]) {
         // If first panel already exists, extract its style as anchor
@@ -4082,13 +4141,43 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       }
 
       const panel = sb[i];
-      // Append style anchor from first panel to maintain tone consistency
-      const anchoredPrompt = styleAnchor
-        ? panel.imagePrompt + ' Maintain consistent style: ' + styleAnchor
-        : panel.imagePrompt;
+
+      // Build state change directive: tells the image model what changed vs what's maintained
+      let stateDirective = '';
+      if (panel.characters && i > 0) {
+        const changes = [];
+        const maintained = [];
+        for (const pc of panel.characters) {
+          const cid = pc.id || pc;
+          const cs = charStates[cid];
+          const charName = analysis?.characters?.find(c => c.id === cid)?.name || cid;
+          if (!cs) continue;
+          // Detect what changed in THIS panel vs accumulated state
+          if (pc.outfitOverride && pc.outfitOverride !== cs.outfit) {
+            changes.push(`${charName}: outfit changes to "${pc.outfitOverride}"`);
+          } else if (cs.outfit) {
+            maintained.push(`${charName}: still wearing "${cs.outfit}"`);
+          }
+          if (pc.pose && pc.pose !== cs.pose) {
+            changes.push(`${charName}: pose changes from "${cs.pose}" to "${pc.pose}"`);
+          } else if (cs.pose) {
+            maintained.push(`${charName}: maintains ${cs.pose} posture`);
+          }
+        }
+        if (changes.length > 0 || maintained.length > 0) {
+          stateDirective = '\n[STATE] ';
+          if (maintained.length > 0) stateDirective += 'KEEP: ' + maintained.join('; ') + '. ';
+          if (changes.length > 0) stateDirective += 'CHANGED: ' + changes.join('; ') + '.';
+        }
+      }
+
+      // Append style anchor + state directive for consistent rendering
+      let anchoredPrompt = panel.imagePrompt;
+      if (stateDirective) anchoredPrompt += stateDirective;
+      if (styleAnchor) anchoredPrompt += ' Maintain consistent style: ' + styleAnchor;
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
 
-      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, outfitState, poseState);
+      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, charStates);
       log(`패널 ${i+1}: 레퍼런스 이미지 ${refImages.length}개, 에셋 설명 ${assetDescriptions.length}개, 캐릭터 ${panelCharIds.length}명`);
 
       try {
@@ -4471,21 +4560,9 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         newSb[idx] = {...newSb[idx], imagePrompt: customPrompt};
         setStoryboard(newSb);
       }
-      // Build cumulative outfit state from all panels before this one
-      // Build cumulative outfit + pose state from all panels before this one
-      const outfitState = {};
-      const poseState = {};
-      for (let j = 0; j < idx; j++) {
-        const prevPanel = storyboard[j];
-        if (prevPanel?.characters) {
-          for (const pc of prevPanel.characters) {
-            const cid = pc.id || pc;
-            if (pc.outfitOverride) outfitState[cid] = pc.outfitOverride;
-            if (pc.pose) poseState[cid] = pc.pose;
-          }
-        }
-      }
-      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, references, outfitState, poseState);
+      // Build character states accumulated up to this panel
+      const charStates = buildCharacterStates(storyboard, analysis, idx);
+      const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, references, charStates);
       log(`패널 ${idx+1} 재생성 중... (asset ${assetDescriptions.length}개 참조)`);
       const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
       const newPanels = [...panels];
@@ -5834,8 +5911,34 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                       <span className="tag" style={{background:'#ffeaa7',color:'#636e72'}}>{panel.shotSize}</span>
                                       <span className="tag" style={{background:'#dfe6e9',color:'#636e72'}}>{panel.cameraAngle}</span>
                                       <span className="tag tag-mood">{panel.mood}</span>
+                                      {/* State change badges */}
+                                      {panel.characters?.some(pc => pc.outfitOverride) && <span className="outfit-tag">의상변경</span>}
+                                      {i > 0 && panel.characters?.some(pc => {
+                                        if (!pc.pose) return false;
+                                        const prev = storyboard[i-1]?.characters?.find(c => (c.id||c) === (pc.id||pc));
+                                        return prev?.pose && prev.pose !== pc.pose;
+                                      }) && <span className="outfit-tag" style={{background:'#e8daef',color:'#6c3483'}}>포즈변경</span>}
                                       <button className="btn btn-outline btn-xs" style={{marginLeft:'auto',fontSize:10}} onClick={() => startSbEdit(i)}>수정</button>
                                     </div>
+                                    {/* Character state summary */}
+                                    {i > 0 && panel.characters?.length > 0 && (() => {
+                                      const cs = buildCharacterStates(storyboard, analysis, i);
+                                      const stateItems = panel.characters.map(pc => {
+                                        const cid = pc.id || pc;
+                                        const s = cs[cid];
+                                        if (!s) return null;
+                                        const name = analysis?.characters?.find(c => c.id === cid)?.name || cid;
+                                        const parts = [];
+                                        if (s.outfit) parts.push(s.outfit.length > 30 ? s.outfit.substring(0,30)+'…' : s.outfit);
+                                        if (s.pose) parts.push(s.pose);
+                                        return parts.length > 0 ? `${name}: ${parts.join(' / ')}` : null;
+                                      }).filter(Boolean);
+                                      return stateItems.length > 0 ? (
+                                        <div style={{fontSize:10,color:'var(--text2)',marginBottom:4,padding:'2px 6px',background:'var(--surface2)',borderRadius:4,lineHeight:1.6}}>
+                                          {stateItems.map((s,si) => <div key={si}>📌 {s}</div>)}
+                                        </div>
+                                      ) : null;
+                                    })()}
                                     <div style={{fontSize:13,marginBottom:4,cursor:'pointer'}} onClick={() => startSbEdit(i)} title="클릭하여 수정">{panel.description}</div>
                                     {panel.dialogue?.map((d, di) => (
                                       <div key={di} style={{fontSize:12,color:'var(--accent)',marginLeft:8}}>💬 {d.speaker}: "{d.text}"</div>
