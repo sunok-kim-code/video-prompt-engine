@@ -2338,7 +2338,7 @@ Rules:
       x: pos.x, y: pos.y,
       w: bubbleStyle === 'narration' ? 300 : bubbleStyle === 'boxRound' ? 130 : 180,
       h: bubbleStyle === 'narration' ? 44 : bubbleStyle === 'boxRound' ? 110 : 80,
-      fontSize: 14,
+      fontSize: 25,
       fontFamily: "'Noto Sans KR',sans-serif",
       tailPos: 0.3,
       tailSize: 1.0,
@@ -2832,7 +2832,7 @@ Rules:
     // Draw text
     ctx.shadowColor = 'transparent';
     if (b.text) {
-      const fs = Math.max(12, (b.fontSize || 14)) * scale;
+      const fs = Math.max(12, (b.fontSize || 25)) * scale;
       const ff = b.fontFamily || "'Noto Sans KR',sans-serif";
       ctx.font = `${bt.fontWeight} ${fs}px ${ff}`;
       ctx.fillStyle = b.customColor || bt.color || '#111';
@@ -5508,7 +5508,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                               </svg>
                               <textarea className="be-bubble-text" value={obj.text} onChange={(e) => updatePageObject(pageIdx, obj.id, {text: e.target.value})}
                                 placeholder={bt.name+'...'} onClick={() => { setCurrentPageIdx(pageIdx); setSelectedObjectId(obj.id); }}
-                                style={{width:obj.w*scale-12, height:obj.h*scale-8, fontWeight:bt.fontWeight, fontSize:(obj.fontSize||14)*scale, color:obj.customColor||bt.color||'#111', fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
+                                style={{width:obj.w*scale-12, height:obj.h*scale-8, fontWeight:bt.fontWeight, fontSize:(obj.fontSize||25)*scale, color:obj.customColor||bt.color||'#111', fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
                                   transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`}}/>
                               {isSelected && <>
                                 <div data-resize="true" className="be-resize"
@@ -5628,8 +5628,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                       </div>
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label">크기</label>
-                        <input type="range" min="8" max="48" value={obj.fontSize||14} onChange={e => updatePageObject(currentPageIdx, obj.id, {fontSize: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
-                        <span className="be-ctrl-val" style={{minWidth:20}}>{obj.fontSize||14}</span>
+                        <input type="range" min="8" max="48" value={obj.fontSize||25} onChange={e => updatePageObject(currentPageIdx, obj.id, {fontSize: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
+                        <span className="be-ctrl-val" style={{minWidth:20}}>{obj.fontSize||25}</span>
                       </div>
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>글자색</label>
