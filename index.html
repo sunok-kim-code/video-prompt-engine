@@ -3778,6 +3778,27 @@ Rules:
       }
     }
 
+    // ========== A2E NanoBanana (Gemini Flash + Reference Images via A2E) ==========
+    if (imageProvider === 'a2eNanoBanana') {
+      if (!hasA2eKey()) { log('A2E API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
+      const refCount = refs.length;
+      if (refCount > 0) {
+        log(`A2E NanoBanana 사용 (레퍼런스 ${refCount}개, 최대 4개)`, 'info');
+      } else {
+        log('A2E NanoBanana 사용 (이미지 생성)', 'info');
+      }
+      try {
+        const urls = await callA2eNanoBanana(basePrompt, {
+          referenceImages: refs.length > 0 ? refs : undefined
+        });
+        return urls;
+      } catch (nbErr) {
+        const errMsg = nbErr.message || '';
+        log(`A2E NanoBanana 오류: ${errMsg.substring(0, 200)}`, 'error');
+        throw nbErr;
+      }
+    }
+
     // ========== Flux 2 Pro (fal.ai — reference images via /edit endpoint) ==========
     if (imageProvider === 'flux2Pro') {
       if (!hasFalKey()) { log('fal.ai API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
@@ -5541,7 +5562,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           <option value="imagen4">Imagen 4 (고품질)</option>
           <option value="nanoBanana">Gemini (레퍼런스 반영)</option>
           <option value="a2eImage">A2E (Manga/General)</option>
-          <option value="flux2Pro">Flux 2 Pro (레퍼런스 반영)</option>
+          <option value="a2eNanoBanana">A2E Gemini (레퍼런스 반영)</option>
+          <option value="flux2Pro">Flux 2 Pro (fal.ai 레퍼런스)</option>
         </select>
         {imageProvider === 'nanoBanana' && (
           <select className="form-select" style={{width:170,marginLeft:4,background:'linear-gradient(135deg,#e8f5e9,#c8e6c9)',borderColor:'#66bb6a'}} value={nbVertexModel} onChange={e=>setNbVertexModel(e.target.value)}>
@@ -6887,7 +6909,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                         <option value="stableDiffusion">Stable Diffusion 3.5</option>
                         <option value="nanoBanana">Gemini (레퍼런스)</option>
                         <option value="a2eImage">A2E (Manga/General)</option>
-          <option value="flux2Pro">Flux 2 Pro (레퍼런스 반영)</option>
+                        <option value="a2eNanoBanana">A2E Gemini (레퍼런스)</option>
+                        <option value="flux2Pro">Flux 2 Pro (fal.ai)</option>
                       </select>
                     </div>
                     <div style={{flex:1}}>
