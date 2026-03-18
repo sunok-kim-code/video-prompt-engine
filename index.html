@@ -1119,6 +1119,10 @@ async function callFlux2Pro(prompt, opts={}) {
     if (!res.ok) {
       const errText = await res.text();
       console.error('[Flux2Pro] Error:', errText.substring(0, 500));
+      // 403 = billing/balance issue
+      if (res.status === 403) {
+        throw new Error('Flux 2 Pro: fal.ai 잔액 부족 — fal.ai/dashboard/billing 에서 충전해주세요');
+      }
       // If edit endpoint fails, retry without references as text-to-image
       if (hasRefs && imageUrls.length > 0 && (res.status === 422 || res.status === 400)) {
         console.warn('[Flux2Pro] Edit failed, retrying as text-to-image...');
@@ -3592,23 +3596,9 @@ Rules:
       } catch (gemErr) {
         const errMsg = gemErr.message || '';
         if (errMsg.includes('policy') || errMsg.includes('filtered') || errMsg.includes('Prohibited') || errMsg.includes('SAFETY')) {
-          log('⚠️ Google 콘텐츠 정책 필터 — 프롬프트 순화 후 재시도...', 'warn');
-          const sanitized = (basePrompt + refInstruction)
-            .replace(/\b(blood|gore|violent|kill|murder|dead|death|nude|naked|sexy|erotic|weapon|gun|knife|sword|fight|attack|war|battle|explosion|drug|alcohol|cigarette|smoking)\b/gi, '')
-            .replace(/\b(피|폭력|살인|시체|나체|무기|총|칼|전쟁|폭발|마약|술|담배)\b/g, '')
-            .replace(/\s{2,}/g, ' ').trim();
-          try {
-            return await callNanoBanana(sanitized, geminiOpts);
-          } catch (retryErr) {
-            if (hasFalKey()) {
-              log('⚠️ 재시도 실패 — Flux 2 Pro (fal.ai)로 자동 전환', 'warn');
-              return await callFlux2Pro(sanitized, {
-                referenceImages: refs.length > 0 ? refs : undefined,
-                aspectRatio: opts.aspectRatio || '3:4'
-              });
-            }
-            throw retryErr;
-          }
+          log('⛔ Google 콘텐츠 정책 필터에 의해 차단됨 — 프롬프트를 수정해주세요', 'error');
+        } else {
+          log(`${nbInfo.name} 오류: ${errMsg.substring(0, 200)}`, 'error');
         }
         throw gemErr;
       }
@@ -3820,38 +3810,11 @@ Rules:
         return urls;
       } catch (nbErr) {
         const errMsg = nbErr.message || '';
-        // Google content policy filter — sanitize prompt and retry, then fallback to Flux 2 Pro
         if (errMsg.includes('policy') || errMsg.includes('filtered') || errMsg.includes('Prohibited')) {
-          log('⚠️ Google 콘텐츠 정책 필터 감지 — 프롬프트 순화 후 재시도...', 'warn');
-          const sanitized = basePrompt
-            .replace(/\b(blood|gore|violent|kill|murder|dead|death|nude|naked|sexy|erotic|weapon|gun|knife|sword|fight|attack|war|battle|explosion|drug|alcohol|cigarette|smoking)\b/gi, '')
-            .replace(/\b(피|폭력|살인|시체|나체|무기|총|칼|전쟁|폭발|마약|술|담배)\b/g, '')
-            .replace(/\s{2,}/g, ' ').trim();
-          try {
-            const retryUrls = await callA2eNanoBanana(sanitized, {
-              referenceImages: refs.length > 0 ? refs : undefined
-            });
-            return retryUrls;
-          } catch (retryErr) {
-            const retryMsg = retryErr.message || '';
-            // Still blocked — try Flux 2 Pro as fallback if fal.ai key available
-            if (hasFalKey() && (retryMsg.includes('policy') || retryMsg.includes('filtered') || retryMsg.includes('Prohibited'))) {
-              log('⚠️ 재시도 실패 — Flux 2 Pro (fal.ai)로 자동 전환합니다', 'warn');
-              try {
-                const fallbackUrls = await callFlux2Pro(sanitized, {
-                  referenceImages: refs.length > 0 ? refs : undefined,
-                  aspectRatio: opts.aspectRatio || '3:4'
-                });
-                return fallbackUrls;
-              } catch (fluxErr) {
-                log(`Flux 2 Pro 폴백도 실패: ${(fluxErr.message||'').substring(0, 150)}`, 'error');
-                throw fluxErr;
-              }
-            }
-            throw retryErr;
-          }
+          log('⛔ Google 콘텐츠 정책 필터에 의해 차단됨 — 프롬프트를 수정해주세요', 'error');
+        } else {
+          log(`A2E NanoBanana 오류: ${errMsg.substring(0, 200)}`, 'error');
         }
-        log(`A2E NanoBanana 오류: ${errMsg.substring(0, 200)}`, 'error');
         throw nbErr;
       }
     }
