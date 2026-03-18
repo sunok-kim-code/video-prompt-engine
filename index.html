@@ -2194,54 +2194,79 @@ Rules:
     const tailTipY = bubbleH + th;
     const pad = 2;
 
-    // For roundness < 100, use rounded-rectangle approach with bezier corners
+    // Helper: compute bezier tail segments that flow seamlessly from body edge
+    // leftPt/rightPt = {x,y} junction points on body, leftTan/rightTan = tangent direction at junction
+    const buildTailSegments = (leftPt, rightPt, leftTan, rightTan) => {
+      if (ts === 'straight') {
+        return [
+          `L ${rightPt.x} ${rightPt.y}`,
+          `L ${tailTipX} ${tailTipY}`,
+          `L ${leftPt.x} ${leftPt.y}`
+        ];
+      } else if (ts === 'round') {
+        // Rounded tip with smooth bezier approach
+        const tipRadius = Math.max(tw * 0.25, 3);
+        const cR1x = rightPt.x + rightTan.x * th * 0.5;
+        const cR1y = rightPt.y + rightTan.y * th * 0.5;
+        const cR2x = tailTipX + tipRadius * 0.8;
+        const cR2y = tailTipY - th * 0.1;
+        const cL1x = tailTipX - tipRadius * 0.8;
+        const cL1y = tailTipY - th * 0.1;
+        const cL2x = leftPt.x + leftTan.x * th * 0.5;
+        const cL2y = leftPt.y + leftTan.y * th * 0.5;
+        return [
+          `C ${cR1x} ${cR1y} ${cR2x} ${cR2y} ${tailTipX + tipRadius * 0.3} ${tailTipY}`,
+          `A ${tipRadius} ${tipRadius * 0.8} 0 1 1 ${tailTipX - tipRadius * 0.3} ${tailTipY}`,
+          `C ${cL1x} ${cL1y} ${cL2x} ${cL2y} ${leftPt.x} ${leftPt.y}`
+        ];
+      } else {
+        // Normal bezier — smooth S-curve from body to tip and back
+        // Control points follow the tangent at the junction, then curve toward tip
+        const handleLen = th * 0.55; // how far control points extend along tangent
+        const pinchFactor = 0.2; // how narrow the tip area is
+        const cR1x = rightPt.x + rightTan.x * handleLen;
+        const cR1y = rightPt.y + rightTan.y * handleLen;
+        const cR2x = tailTipX + tw * pinchFactor;
+        const cR2y = tailTipY - th * 0.12;
+        const cL1x = tailTipX - tw * pinchFactor * 1.2;
+        const cL1y = tailTipY - th * 0.12;
+        const cL2x = leftPt.x + leftTan.x * handleLen;
+        const cL2y = leftPt.y + leftTan.y * handleLen;
+        return [
+          `C ${cR1x} ${cR1y} ${cR2x} ${cR2y} ${tailTipX} ${tailTipY}`,
+          `C ${cL1x} ${cL1y} ${cL2x} ${cL2y} ${leftPt.x} ${leftPt.y}`
+        ];
+      }
+    };
+
+    // ===== Rounded-rectangle mode (roundness < 95) =====
     if (rn < 95) {
-      // Corner radius: 0 at rn=0 → full half-size at rn=100
       const maxR = Math.min(rx, ry);
-      const cr = maxR * Math.max(0.04, rn / 100); // corner radius
+      const cr = maxR * Math.max(0.04, rn / 100);
       const L = pad, T = pad, R = bubbleW - pad, B = bubbleH - pad;
 
-      // Tail attachment on bottom edge
+      // Tail junction points on bottom edge — ensure they stay within the straight segment
+      const tRight = Math.min(R - cr - 2, tailBaseX + tw);
       const tLeft = Math.max(L + cr + 2, tailBaseX - tw);
-      const tRight = Math.min(R - cr - 2, tailBaseX + tw * 0.8);
 
-      // Build tail segments based on tail style
-      const tailSegments = (() => {
-        if (ts === 'straight') {
-          return [
-            `L ${tRight} ${B}`, `L ${tailTipX} ${tailTipY}`, `L ${tLeft} ${B}`
-          ];
-        } else if (ts === 'round') {
-          const midY = B + th * 0.6;
-          return [
-            `L ${tRight} ${B}`,
-            `Q ${tRight + tw * 0.1} ${midY} ${tailTipX + tw * 0.3} ${tailTipY}`,
-            `A ${tw * 0.4} ${tw * 0.35} 0 1 1 ${tailTipX - tw * 0.3} ${tailTipY}`,
-            `Q ${tLeft - tw * 0.1} ${midY} ${tLeft} ${B}`
-          ];
-        } else {
-          // normal (bezier curve)
-          const ctrlR2X = tRight + (tailTipX - tRight) * 0.15;
-          const ctrlR2Y = B + (tailTipY - B) * 0.15;
-          const ctrlR1X = tailTipX + tw * 0.2;
-          const ctrlR1Y = tailTipY - th * 0.15;
-          const ctrlL2X = tailTipX - tw * 0.3;
-          const ctrlL2Y = tailTipY - th * 0.15;
-          const ctrlL1X = tLeft + (tailTipX - tLeft) * 0.15;
-          const ctrlL1Y = B + (tailTipY - B) * 0.15;
-          return [
-            `L ${tRight} ${B}`,
-            `C ${ctrlR2X} ${ctrlR2Y} ${ctrlR1X} ${ctrlR1Y} ${tailTipX} ${tailTipY}`,
-            `C ${ctrlL2X} ${ctrlL2Y} ${ctrlL1X} ${ctrlL1Y} ${tLeft} ${B}`
-          ];
-        }
-      })();
+      // For rounded-rect, bottom edge is horizontal → tangent at junction is downward
+      const rightPt = {x: tRight, y: B};
+      const leftPt = {x: tLeft, y: B};
+      // Tangent: pointing away from body toward tail tip direction
+      const rightTan = {x: 0.15, y: 1};  // slightly outward + down
+      const leftTan = {x: -0.15, y: 1};  // slightly outward + down
+
+      const tailSegs = buildTailSegments(leftPt, rightPt, leftTan, rightTan);
 
       const path = [
         `M ${L + cr} ${T}`,
         `L ${R - cr} ${T}`, `Q ${R} ${T} ${R} ${T + cr}`,
         `L ${R} ${B - cr}`, `Q ${R} ${B} ${R - cr} ${B}`,
-        ...tailSegments,
+        // Bottom edge right → tail right junction
+        `L ${tRight} ${B}`,
+        // Tail segments (right junction → tip → left junction)
+        ...tailSegs,
+        // Bottom edge left junction → bottom-left corner
         `L ${L + cr} ${B}`, `Q ${L} ${B} ${L} ${B - cr}`,
         `L ${L} ${T + cr}`, `Q ${L} ${T} ${L + cr} ${T}`,
         'Z'
@@ -2249,49 +2274,38 @@ Rules:
       return path.join(' ');
     }
 
-    // roundness >= 95: full ellipse mode
-    const leftX = Math.max(cx - rx + 4, tailBaseX - tw);
-    const rightX = Math.min(cx + rx - 4, tailBaseX + tw * 0.8);
-    const leftRelX = (leftX - cx) / rx;
-    const rightRelX = (rightX - cx) / rx;
-    const leftY = cy + ry * Math.sqrt(Math.max(0.01, 1 - leftRelX * leftRelX));
-    const rightY = cy + ry * Math.sqrt(Math.max(0.01, 1 - rightRelX * rightRelX));
+    // ===== Full ellipse mode (roundness >= 95) =====
+    // Find junction points on ellipse for the tail
+    const tLeftX = Math.max(cx - rx + 4, tailBaseX - tw);
+    const tRightX = Math.min(cx + rx - 4, tailBaseX + tw * 0.8);
+    const leftRelX = (tLeftX - cx) / rx;
+    const rightRelX = (tRightX - cx) / rx;
+    const tLeftY = cy + ry * Math.sqrt(Math.max(0.01, 1 - leftRelX * leftRelX));
+    const tRightY = cy + ry * Math.sqrt(Math.max(0.01, 1 - rightRelX * rightRelX));
 
-    // Build tail segments based on style
-    const ellipseTail = (() => {
-      if (ts === 'straight') {
-        return [
-          `L ${leftX} ${leftY}`, `L ${tailTipX} ${tailTipY}`, `L ${rightX} ${rightY}`
-        ];
-      } else if (ts === 'round') {
-        const midLY = leftY + (tailTipY - leftY) * 0.5;
-        const midRY = rightY + (tailTipY - rightY) * 0.5;
-        return [
-          `Q ${leftX} ${midLY} ${tailTipX - tw * 0.3} ${tailTipY}`,
-          `A ${tw * 0.4} ${tw * 0.35} 0 1 1 ${tailTipX + tw * 0.3} ${tailTipY}`,
-          `Q ${rightX} ${midRY} ${rightX} ${rightY}`
-        ];
-      } else {
-        // normal bezier
-        const ctrlL1X = leftX + (tailTipX - leftX) * 0.15;
-        const ctrlL1Y = leftY + (tailTipY - leftY) * 0.1;
-        const ctrlL2X = tailTipX - tw * 0.3;
-        const ctrlL2Y = tailTipY - th * 0.15;
-        const ctrlR1X = tailTipX + tw * 0.2;
-        const ctrlR1Y = tailTipY - th * 0.15;
-        const ctrlR2X = rightX + (tailTipX - rightX) * 0.15;
-        const ctrlR2Y = rightY + (tailTipY - rightY) * 0.1;
-        return [
-          `C ${ctrlL1X} ${ctrlL1Y} ${ctrlL2X} ${ctrlL2Y} ${tailTipX} ${tailTipY}`,
-          `C ${ctrlR1X} ${ctrlR1Y} ${ctrlR2X} ${ctrlR2Y} ${rightX} ${rightY}`
-        ];
-      }
-    })();
+    // Tangent to ellipse at junction points — derivative of (cx+rx*cos(t), cy+ry*sin(t))
+    // At bottom half: sin(t) > 0, so tangent direction = (-rx*sin(t), ry*cos(t)), normalized
+    // We need outward-pointing tangent (away from body center, toward tail)
+    const leftTanRaw = {x: -(tLeftX - cx) * ry / rx, y: rx * Math.sqrt(Math.max(0.01, 1 - leftRelX * leftRelX))};
+    const leftTanLen = Math.sqrt(leftTanRaw.x * leftTanRaw.x + leftTanRaw.y * leftTanRaw.y) || 1;
+    // Right junction tangent
+    const rightTanRaw = {x: (tRightX - cx) * ry / rx, y: rx * Math.sqrt(Math.max(0.01, 1 - rightRelX * rightRelX))};
+    const rightTanLen = Math.sqrt(rightTanRaw.x * rightTanRaw.x + rightTanRaw.y * rightTanRaw.y) || 1;
 
+    const leftPt = {x: tLeftX, y: tLeftY};
+    const rightPt = {x: tRightX, y: tRightY};
+    // Tangent should point generally downward (away from ellipse center toward tail tip)
+    const leftTan = {x: leftTanRaw.x / leftTanLen, y: Math.abs(leftTanRaw.y / leftTanLen)};
+    const rightTan = {x: rightTanRaw.x / rightTanLen, y: Math.abs(rightTanRaw.y / rightTanLen)};
+
+    const tailSegs = buildTailSegments(leftPt, rightPt, leftTan, rightTan);
+
+    // Draw the ellipse arc from rightPt → (top) → leftPt, then tail segments back to rightPt
     const path = [
-      `M ${rightX} ${rightY}`,
-      `A ${rx} ${ry} 0 1 1 ${leftX} ${leftY}`,
-      ...ellipseTail,
+      `M ${tRightX} ${tRightY}`,
+      `A ${rx} ${ry} 0 1 1 ${tLeftX} ${tLeftY}`,
+      // Tail: left junction → tip → right junction
+      ...tailSegs,
       'Z'
     ];
     return path.join(' ');
@@ -2519,25 +2533,33 @@ Rules:
       }
     } else {
       // Rounded rect (narration etc.)
-      const r = (bt.radius || 8) * scale / 2;
-      ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, r);
-      ctx.fillStyle = bt.bg; ctx.fill();
-      if (bt.border !== 'none') {
-        ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border;
-        if (bt.dashed) ctx.setLineDash([6 * scale, 4 * scale]);
-        ctx.stroke();
-      }
-      // Non-ellipse tail for rounded rect types
       if (bt.tail) {
-        const tx = bx + bw * tailPos, ty = by + bh;
-        const tw = 8 * tailWid * scale, th = 16 * tailLen * scale;
-        ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.moveTo(tx - tw, ty - 2 * scale);
-        ctx.quadraticCurveTo(tx - tw * 0.5, ty + th * 0.8, tx, ty + th);
-        ctx.quadraticCurveTo(tx + tw, ty + th * 0.8, tx + tw * 1.5, ty - 2 * scale);
+        // Unified path: body + tail as single shape via buildBubblePath
+        const rrRx = bw / 2 - 2 * scale, rrRy = bh / 2 - 2 * scale;
+        const rrRoundness = b.roundness ?? 30; // lower default for rect types
+        const pathStr = buildBubblePath(bw / 2, bh / 2, rrRx, rrRy, tailPos, tailLen, tailWid, bw, bh, 1, rrRoundness, b.tailStyle);
+        ctx.save();
+        ctx.translate(bx, by);
+        const p2d = new Path2D(pathStr);
+        ctx.fillStyle = bt.bg; ctx.fill(p2d);
+        ctx.shadowColor = 'transparent';
+        if (bt.border !== 'none') {
+          ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border;
+          if (bt.dashed) ctx.setLineDash([6 * scale, 4 * scale]);
+          ctx.lineJoin = 'round';
+          ctx.stroke(p2d);
+          ctx.setLineDash([]);
+        }
+        ctx.restore();
+      } else {
+        const r = (bt.radius || 8) * scale / 2;
+        ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, r);
         ctx.fillStyle = bt.bg; ctx.fill();
-        ctx.strokeStyle = bt.border; ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.stroke();
+        if (bt.border !== 'none') {
+          ctx.lineWidth = (bt.borderWidth || 2) * scale; ctx.strokeStyle = bt.border;
+          if (bt.dashed) ctx.setLineDash([6 * scale, 4 * scale]);
+          ctx.stroke();
+        }
       }
     }
 
@@ -5144,15 +5166,14 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                     } else {
                                       return <ellipse cx={cx2} cy={cy2} rx={rx2} ry={ry2} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash}/>;
                                     }
+                                  } else if (bt.tail) {
+                                    const rrRx = W/2 - 2, rrRy = H/2 - 2;
+                                    const rrRn = obj.roundness ?? 30;
+                                    const pathD = buildBubblePath(W/2, H/2, rrRx, rrRy, tailPos, tailLen, tailWid, W, H, 1, rrRn, obj.tailStyle);
+                                    return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash} strokeLinejoin="round"/>;
                                   } else {
-                                    return (<>
-                                      <rect x="1" y="1" width={W-2} height={H-2} rx={(bt.radius||8)*scale} ry={(bt.radius||8)*scale}
-                                        fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash}/>
-                                      {bt.tail && (() => {
-                                        const tx=W*tailPos, tw=8*tailWid*scale, th=16*tailLen*scale;
-                                        return <polygon points={`${tx-tw},${H-2} ${tx},${H+th} ${tx+tw*1.5},${H-2}`} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2}/>;
-                                      })()}
-                                    </>);
+                                    return <rect x="1" y="1" width={W-2} height={H-2} rx={(bt.radius||8)*scale} ry={(bt.radius||8)*scale}
+                                        fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeDasharray={dash}/>;
                                   }
                                 })()}
                               </svg>
