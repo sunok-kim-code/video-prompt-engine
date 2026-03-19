@@ -5047,6 +5047,16 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       let anchoredPrompt = enhancePanelExpression(panel.imagePrompt, panel);
       if (stateDirective) anchoredPrompt += stateDirective;
       if (styleAnchor) anchoredPrompt += ' Maintain consistent style: ' + styleAnchor;
+
+      // Add previous panel scene context for visual continuity
+      if (i > 0) {
+        const prevPanel = sb[i - 1];
+        const prevDesc = prevPanel?.description || prevPanel?.imagePrompt || '';
+        if (prevDesc) {
+          anchoredPrompt += `\n[PREVIOUS SCENE] ${prevDesc.substring(0, 200)}. Continue naturally from this scene — maintain consistent lighting, time of day, and environment.`;
+        }
+      }
+
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
 
       const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, charStates);
