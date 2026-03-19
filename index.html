@@ -1023,13 +1023,22 @@ async function callA2eNanoBanana(prompt, opts={}) {
     console.log('[A2E NanoBanana] Uploaded', inputImages.length, 'reference images:', inputImages);
   }
 
-  // 1) Start task — NanoBanana uses Gemini, 4000 char limit is fine
-  console.log('[A2E NanoBanana] Prompt length:', prompt.length, '(limit 4000)');
+  // 1) Start task — NanoBanana (Gemini), 2000 char UI limit
+  console.log('[A2E NanoBanana] Prompt length:', prompt.length, ', refs:', inputImages.length);
   const startBody = {
     name: 'webtoon_ref_' + Date.now(),
-    prompt: prompt.substring(0, 4000)
+    prompt: prompt.substring(0, 2000)
   };
-  if (inputImages.length > 0) startBody.input_images = inputImages;
+  if (inputImages.length > 0) {
+    startBody.input_images = inputImages;
+    // quality_settings: lower creativity = closer to references
+    startBody.quality_settings = {
+      creativity_level: 'low',
+      detail_level: 'detailed',
+      style_consistency: true
+    };
+    startBody.composition_mode = 'blend';
+  }
 
   const baseUrl = 'https://video.a2e.ai/api/v1/userNanoBanana';
   let startData = null;
@@ -3813,42 +3822,58 @@ Rules:
       if (!hasA2eKey()) { log('A2E API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
       const isRealistic = artStyle === 'realistic' || artStyle === 'cinematic' || artStyle === 'portrait';
       const reqKey = isRealistic ? 'high_aes_general_v21_L' : 'high_aes';
-      const modelName = a2eModelType === 'seedream' ? 'Seedream' : (reqKey === 'high_aes' ? 'Manga' : 'General');
 
-      // A2E supports max 2 reference images — prioritize characters over bg/props
+      // Prioritize character refs (max 4 for NanoBanana, max 2 for T2I)
       const charRefs = refs.filter(r => !r.description?.startsWith('background') && !r.description?.includes('prop'));
-      const a2eRefs = charRefs.slice(0, 2);
-      const hasRefs = a2eRefs.length > 0;
+      const hasRefs = charRefs.length > 0;
 
-      // Keep prompt clean — focus on scene, let input_images handle reference
-      const a2ePrompt = basePrompt;
-      log(`A2E ${modelName} 사용 (${hasRefs ? '캐릭터 레퍼런스 ' + a2eRefs.length + '명, ' : ''}프롬프트 ${a2ePrompt.length}자)`, 'info');
+      // When reference images present → use NanoBanana (Gemini, 4 refs, quality_settings)
+      // When no refs → use Text to Image (cheaper, no content filter)
+      if (hasRefs) {
+        const nbRefs = charRefs.slice(0, 4); // NanoBanana supports up to 4
+        log(`A2E NanoBanana 자동 선택 (레퍼런스 ${nbRefs.length}명, Gemini 기반, creativity=low)`, 'info');
+        try {
+          const urls = await callA2eNanoBanana(basePrompt, {
+            referenceImages: nbRefs
+          });
+          return urls;
+        } catch (nbErr) {
+          const errMsg = nbErr.message || '';
+          if (errMsg.includes('policy') || errMsg.includes('filtered') || errMsg.includes('Prohibited')) {
+            log('⚠️ NanoBanana Google 정책 필터 — A2E T2I로 폴백 (레퍼런스 2개)', 'warn');
+            // Fallback to Text to Image with max 2 refs
+            try {
+              const fallbackRefs = charRefs.slice(0, 2);
+              const urls = await callA2eImage(basePrompt, {
+                aspectRatio: opts.aspectRatio || '3:4',
+                reqKey: reqKey,
+                modelType: a2eModelType,
+                referenceImages: fallbackRefs
+              });
+              return urls;
+            } catch (t2iErr) {
+              log(`A2E T2I 폴백 실패: ${(t2iErr.message||'').substring(0, 200)}`, 'error');
+              throw t2iErr;
+            }
+          }
+          log(`A2E NanoBanana 오류: ${errMsg.substring(0, 200)}`, 'error');
+          throw nbErr;
+        }
+      }
+
+      // No references — use Text to Image (cheaper: 10 coins vs 15-20)
+      const modelName = a2eModelType === 'seedream' ? 'Seedream' : (reqKey === 'high_aes' ? 'Manga' : 'General');
+      log(`A2E ${modelName} 사용 (레퍼런스 없음, 프롬프트 ${basePrompt.length}자)`, 'info');
 
       try {
-        const urls = await callA2eImage(a2ePrompt, {
+        const urls = await callA2eImage(basePrompt, {
           aspectRatio: opts.aspectRatio || '3:4',
           reqKey: reqKey,
-          modelType: a2eModelType,
-          referenceImages: hasRefs ? a2eRefs : undefined
+          modelType: a2eModelType
         });
         return urls;
       } catch (a2eErr) {
         const errMsg = a2eErr.message || '';
-        // If failed with refs, retry without refs but warn user
-        if (hasRefs && errMsg.includes('실패')) {
-          log(`⚠️ A2E 레퍼런스 실패 — 레퍼런스 없이 재생성 (캐릭터 불일치 가능)`, 'warn');
-          try {
-            const fallbackUrls = await callA2eImage(a2ePrompt, {
-              aspectRatio: opts.aspectRatio || '3:4',
-              reqKey: reqKey,
-              modelType: a2eModelType
-            });
-            return fallbackUrls;
-          } catch (retryErr) {
-            log(`A2E 재시도 실패: ${(retryErr.message||'').substring(0, 200)}`, 'error');
-            throw retryErr;
-          }
-        }
         log(`A2E 오류: ${errMsg.substring(0, 200)}`, 'error');
         throw a2eErr;
       }
