@@ -3321,19 +3321,18 @@ Rules:
       if (obj.type === 'panel' || obj.type === 'image') {
         try {
           let imgSrc = obj.src;
-          // Convert external URLs to base64 to avoid CORS canvas tainting
+          // Convert external URLs to base64 via proxy to avoid CORS canvas tainting
           if (imgSrc && imgSrc.startsWith('http') && !imgSrc.startsWith('data:')) {
             try {
-              const resp = await fetch(imgSrc);
-              const blob = await resp.blob();
-              imgSrc = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
+              const proxyResp = await fetch('/api/proxy-image?url=' + encodeURIComponent(imgSrc));
+              const proxyData = await proxyResp.json();
+              if (proxyData.dataUri) {
+                imgSrc = proxyData.dataUri;
+              } else {
+                console.warn('Proxy failed:', proxyData.error);
+              }
             } catch (fetchErr) {
-              console.warn('Failed to fetch image for export:', fetchErr.message);
+              console.warn('Failed to proxy image for export:', fetchErr.message);
             }
           }
           const img = await loadImage(imgSrc);
