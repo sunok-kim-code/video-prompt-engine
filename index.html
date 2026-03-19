@@ -5060,13 +5060,21 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         }
       }
 
-      log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize})`);
+      // Determine aspect ratio from panel imageSize (user-editable) or auto from shotSize
+      const panelAR = panel.imageSize || (() => {
+        const shot = (panel.shotSize || 'medium').toLowerCase();
+        if (shot.includes('extreme_wide') || shot.includes('wide') || shot === 'establishing') return '16:9';
+        if (shot.includes('close') || shot.includes('extreme_close')) return '9:16';
+        return '1:1'; // medium shots → square
+      })();
+      const sizeLabel = panelAR === '16:9' ? '2560x1440' : panelAR === '9:16' ? '1440x2560' : '1920x1920';
+      log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize}, ${sizeLabel})`);
 
       const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, charStates);
-      log(`패널 ${i+1}: 레퍼런스 이미지 ${refImages.length}개, 에셋 설명 ${assetDescriptions.length}개, 캐릭터 ${panelCharIds.length}명`);
+      log(`패널 ${i+1}: 레퍼런스 ${refImages.length}개, 에셋 ${assetDescriptions.length}개, 캐릭터 ${panelCharIds.length}명`);
 
       try {
-        const images = await callImage(anchoredPrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
+        const images = await callImage(anchoredPrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: panelAR, characterIds: panelCharIds});
         // callImage returns null when content filter blocks — skip this panel
         const img0 = images?.[0];
         if (!img0 || img0 === 'undefined' || img0.endsWith(',undefined')) {
@@ -6924,6 +6932,15 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                       <input value={editingSbData.mood || ''} onChange={e => setEditingSbData(prev => ({...prev, mood: e.target.value}))} placeholder="분위기" />
                                     </div>
                                     <div className="sb-edit-row">
+                                      <label>이미지 사이즈</label>
+                                      <select value={editingSbData.imageSize || ''} onChange={e => setEditingSbData(prev => ({...prev, imageSize: e.target.value}))}>
+                                        <option value="">자동 (샷에 따라)</option>
+                                        <option value="1:1">1920×1920 (정사각형)</option>
+                                        <option value="16:9">2560×1440 (가로형)</option>
+                                        <option value="9:16">1440×2560 (세로형)</option>
+                                      </select>
+                                    </div>
+                                    <div className="sb-edit-row">
                                       <label>설명</label>
                                       <textarea value={editingSbData.description || ''} onChange={e => setEditingSbData(prev => ({...prev, description: e.target.value}))} rows={3} />
                                     </div>
@@ -6976,6 +6993,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                       <span className="tag" style={{background:'#ffeaa7',color:'#636e72'}}>{panel.shotSize}</span>
                                       <span className="tag" style={{background:'#dfe6e9',color:'#636e72'}}>{panel.cameraAngle}</span>
                                       <span className="tag tag-mood">{panel.mood}</span>
+                                      <span className="tag" style={{background:'#a29bfe',color:'#fff',fontSize:9}}>{panel.imageSize ? (panel.imageSize === '16:9' ? '가로' : panel.imageSize === '9:16' ? '세로' : '정사각') : '자동'}</span>
                                       {/* State change badges */}
                                       {panel.characters?.some(pc => pc.outfitOverride) && <span className="outfit-tag">의상변경</span>}
                                       {i > 0 && panel.characters?.some(pc => {
