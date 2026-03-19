@@ -1229,7 +1229,7 @@ async function callNinjaChat(prompt, opts={}) {
   const apiKey = getNinjaChatKey();
   if (!apiKey) throw new Error('NinjaChat API 키가 필요합니다. 설정에서 입력해주세요.');
 
-  const model = opts.model || 'flux-kontext-max';
+  const model = opts.model || 'ninja-vision-1';
   let imageUrl = null;
 
   // Handle reference images: upload first data URI to A2E R2, then use public URL
@@ -1241,25 +1241,29 @@ async function callNinjaChat(prompt, opts={}) {
         try {
           imageUrl = await uploadImageToA2eR2(imgData);
           console.log('[NinjaChat] Reference image uploaded to R2:', imageUrl);
-          break; // NinjaChat only supports one reference image
+          break;
         } catch (e) {
           console.warn('[NinjaChat] Reference upload failed:', e.message);
         }
       } else if (typeof imgData === 'string' && imgData.startsWith('http')) {
         imageUrl = imgData;
-        break; // Already public URL
+        break;
       }
     }
   }
 
-  // Map aspect ratio to size
+  // Map aspect ratio to size (WxH format)
   const ar = opts.aspectRatio || '3:4';
-  let size = '1440x2560'; // default 3:4
-  if (ar === '1:1') size = '1920x1920';
-  else if (ar === '16:9') size = '2560x1440';
+  let size = '1024x1536'; // 3:4 portrait (webtoon default)
+  if (ar === '1:1') size = '1024x1024';
+  else if (ar === '16:9') size = '1536x1024';
+  else if (ar === '9:16') size = '1024x1536';
+  else if (ar === '4:3') size = '1536x1024';
+  else if (ar === '2:3') size = '1024x1536';
 
   const body = {
     prompt: prompt.substring(0, 4000),
+    negative_prompt: opts.negativePrompt || 'blurry, deformed, bad anatomy, extra limbs, text, watermark, signature',
     model: model,
     size: size,
     n: 1
@@ -2139,7 +2143,7 @@ function App() {
   const [imageProvider, setImageProvider] = useState('imagen4');
   const [nbVertexModel, setNbVertexModel] = useState('gemini-2.0-flash'); // Vertex AI NanoBanana model key
   const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | seedream5
-  const [ninjaChatModel, setNinjaChatModel] = useState('flux-kontext-max'); // NinjaChat model selection
+  const [ninjaChatModel, setNinjaChatModel] = useState('ninja-vision-1'); // NinjaChat model selection
 
   // Shared assets (project-level)
   const [sharedAssets, setSharedAssets] = useState({characters:{}, backgrounds:{}, props:{}});
@@ -5782,19 +5786,20 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         )}
         {imageProvider === 'ninjaChat' && (
           <select className="form-select" style={{width:180,marginLeft:4,background:'linear-gradient(135deg,#f3e5f5,#e1bee7)',borderColor:'#ce93d8'}} value={ninjaChatModel} onChange={e=>setNinjaChatModel(e.target.value)}>
-            <option value="flux-kontext-max">Flux Kontext Max</option>
-            <option value="flux-2-flex">Flux 2 Flex</option>
-            <option value="flux-1-pro-ultra">Flux 1 Pro Ultra</option>
-            <option value="recraft-v3">Recraft v3</option>
-            <option value="google-imagen-4">Google Imagen 4</option>
-            <option value="nano-banana-pro">Nano Banana Pro</option>
-            <option value="seedream">Seedream</option>
-            <option value="flux-2-pro">Flux 2 Pro</option>
-            <option value="flux-kontext-pro">Flux Kontext Pro</option>
-            <option value="nano-banana-2">Nano Banana 2</option>
-            <option value="flux-1-fill">Flux 1 Fill</option>
-            <option value="flux-2-klein">Flux 2 Klein</option>
-            <option value="nano-banana">Nano Banana</option>
+            <option value="ninja-vision-1">Ninja Vision 1 (기본)</option>
+            <option value="flux-kontext-max">Flux Kontext Max ($0.10)</option>
+            <option value="flux-2-flex">Flux 2 Flex ($0.08)</option>
+            <option value="flux-1-pro-ultra">Flux 1 Pro Ultra ($0.10)</option>
+            <option value="recraft-v3">Recraft v3 ($0.10)</option>
+            <option value="google-imagen-4">Google Imagen 4 ($0.10)</option>
+            <option value="nano-banana-pro">Nano Banana Pro ($0.10)</option>
+            <option value="seedream">Seedream ($0.10)</option>
+            <option value="flux-2-pro">Flux 2 Pro ($0.05)</option>
+            <option value="flux-kontext-pro">Flux Kontext Pro ($0.05)</option>
+            <option value="nano-banana-2">Nano Banana 2 ($0.05)</option>
+            <option value="flux-1-fill">Flux 1 Fill ($0.05)</option>
+            <option value="flux-2-klein">Flux 2 Klein ($0.03)</option>
+            <option value="nano-banana">Nano Banana ($0.03)</option>
           </select>
         )}
         <label style={{marginLeft:16}}>아트 스타일</label>
