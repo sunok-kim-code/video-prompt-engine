@@ -7155,8 +7155,40 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                     <button className="btn btn-outline btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
                                     <button className="btn btn-success btn-xs" onClick={()=>saveSinglePanelToFirebase(i)} disabled={running}>💾</button>
                                     <button className="btn btn-outline btn-xs" onClick={()=>savePanelImage(panels[i], `panel_${i+1}.png`)}>⬇</button>
+                                    <button className="btn btn-outline btn-xs" onClick={() => {
+                                      const input = document.createElement('input');
+                                      input.type = 'file';
+                                      input.accept = 'image/*';
+                                      input.onchange = (e) => {
+                                        const file = e.target.files[0];
+                                        if (!file) return;
+                                        const reader = new FileReader();
+                                        reader.onload = (ev) => {
+                                          setPanels(prev => { const np = [...prev]; np[i] = ev.target.result; return np; });
+                                          log(`패널 ${i+1} 이미지 교체됨`, 'success');
+                                        };
+                                        reader.readAsDataURL(file);
+                                      };
+                                      input.click();
+                                    }}>📂 교체</button>
                                   </>) : (
                                     <button className="btn btn-primary btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>생성</button>
+                                    <button className="btn btn-outline btn-xs" onClick={() => {
+                                      const input = document.createElement('input');
+                                      input.type = 'file';
+                                      input.accept = 'image/*';
+                                      input.onchange = (e) => {
+                                        const file = e.target.files[0];
+                                        if (!file) return;
+                                        const reader = new FileReader();
+                                        reader.onload = (ev) => {
+                                          setPanels(prev => { const np = [...prev]; np[i] = ev.target.result; return np; });
+                                          log(`패널 ${i+1} 이미지 불러옴`, 'success');
+                                        };
+                                        reader.readAsDataURL(file);
+                                      };
+                                      input.click();
+                                    }}>📂 불러오기</button>
                                   )}
                                 </div>
                               </div>
