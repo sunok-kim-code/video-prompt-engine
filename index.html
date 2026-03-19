@@ -3820,23 +3820,8 @@ Rules:
       const a2eRefs = charRefs.slice(0, 2);
       const hasRefs = a2eRefs.length > 0;
 
-      let a2ePrompt;
-      if (hasRefs) {
-        // Build strong reference-following prompt
-        const refLabels = a2eRefs.map((r, idx) => {
-          const desc = r.description || '';
-          const nameMatch = desc.match(/^([^,]+)/);
-          return `[Reference Image ${idx+1}]: ${nameMatch ? nameMatch[1].trim() : 'Character ' + (idx+1)}`;
-        }).join('. ');
-        const refPrefix = `YOU MUST COPY the characters from the reference images EXACTLY. `
-          + `Match every detail: face shape, eye shape, eye color, hairstyle, hair color, skin tone, body proportions, clothing design, accessories. `
-          + `DO NOT change or reimagine any visual detail from the references. `
-          + `${refLabels}. `;
-        const refSuffix = `\n[REMINDER] The generated image MUST look like the same characters from the reference images. Copy their appearance pixel-by-pixel.`;
-        a2ePrompt = refPrefix + basePrompt + refSuffix;
-      } else {
-        a2ePrompt = basePrompt;
-      }
+      // Keep prompt clean — focus on scene, let input_images handle reference
+      const a2ePrompt = basePrompt;
       log(`A2E ${modelName} 사용 (${hasRefs ? '캐릭터 레퍼런스 ' + a2eRefs.length + '명, ' : ''}프롬프트 ${a2ePrompt.length}자)`, 'info');
 
       try {
