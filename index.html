@@ -1274,10 +1274,9 @@ async function callNinjaChat(prompt, opts={}) {
     const res = await fetch('/api/ninjachat-images', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + apiKey,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify({...body, _apiKey: apiKey})
     });
 
     if (res.status === 429) {

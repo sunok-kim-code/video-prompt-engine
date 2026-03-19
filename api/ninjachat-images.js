@@ -5,7 +5,7 @@ module.exports = async (req, res) => {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -16,18 +16,19 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ error: 'Authorization header required' });
+    // Extract API key from body (avoids Vercel stripping Authorization header)
+    const { _apiKey, ...bodyWithoutKey } = req.body || {};
+    if (!_apiKey) {
+      return res.status(401).json({ error: 'API key required in _apiKey field' });
     }
 
     const response = await fetch('https://ninjachat.ai/api/v1/images', {
       method: 'POST',
       headers: {
-        'Authorization': authHeader,
+        'Authorization': 'Bearer ' + _apiKey,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(req.body)
+      body: JSON.stringify(bodyWithoutKey)
     });
 
     const data = await response.json();
