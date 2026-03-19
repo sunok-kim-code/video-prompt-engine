@@ -4807,6 +4807,29 @@ Rules:
           }
         }
         setPanels(loadedPanels);
+
+        // Background: convert any external URLs to base64 for reliable export
+        const extUrlCount = loadedPanels.filter(p => p && typeof p === 'string' && p.startsWith('http')).length;
+        if (extUrlCount > 0) {
+          console.log(`[loadEpisode] Converting ${extUrlCount} external URL panels to base64...`);
+          (async () => {
+            const converted = [...loadedPanels];
+            let changed = 0;
+            for (let pi = 0; pi < converted.length; pi++) {
+              if (converted[pi] && typeof converted[pi] === 'string' && converted[pi].startsWith('http')) {
+                try {
+                  const b64 = await urlToBase64(converted[pi]);
+                  if (b64 && b64.startsWith('data:')) { converted[pi] = b64; changed++; }
+                } catch(e) { /* keep original */ }
+              }
+            }
+            if (changed > 0) {
+              setPanels(converted);
+              console.log(`[loadEpisode] Converted ${changed}/${extUrlCount} panels to base64`);
+            }
+          })();
+        }
+
         if (s4.bubbleOverlays && Array.isArray(s4.bubbleOverlays)) {
           setBubbleOverlays(s4.bubbleOverlays);
           console.log('[loadEpisode] bubbleOverlays loaded:', s4.bubbleOverlays.length, '개');
