@@ -837,7 +837,7 @@ async function callA2eImage(prompt, opts={}) {
         }
       } catch (e) { console.warn('[A2E T2I] ref upload failed:', e.message); }
     }
-    console.log('[A2E T2I] Uploaded', inputImages.length, 'reference images');
+    console.log('[A2E T2I] Uploaded', inputImages.length, 'reference images:', inputImages);
   }
 
   // 1) Start task — use model_type for new API, req_key as fallback for legacy
@@ -973,8 +973,14 @@ async function uploadImageToA2eR2(base64Data) {
   // Fallback: construct URL using key field if available
   if (data.key || data.file_key) {
     const key = data.key || data.file_key;
+    // If key is not a full URL, prefix with A2E CDN
+    if (!key.startsWith('http')) {
+      const cdnUrl = 'https://30days.ai2everyone.com/' + key;
+      console.log('[A2E R2] using CDN URL from key:', cdnUrl);
+      return cdnUrl;
+    }
     console.log('[A2E R2] using key-based URL:', key);
-    return key; // API may accept just the key/path
+    return key;
   }
   // Last resort: strip query params from presigned URL
   const stripped = uploadUrl.split('?')[0];
