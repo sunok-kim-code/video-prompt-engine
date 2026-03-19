@@ -1285,6 +1285,7 @@ async function callNinjaChat(prompt, opts={}) {
     }
 
     const data = await res.json();
+    if (data._refUploadStatus) console.log('[NinjaChat] Ref upload status:', data._refUploadStatus);
     if (data.images?.length > 0) {
       const imgUrl = data.images[0].url;
       return [imgUrl];

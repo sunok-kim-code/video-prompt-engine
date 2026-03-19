@@ -120,15 +120,23 @@ module.exports = async (req, res) => {
     delete forwardBody._apiKey;
 
     // If _refBase64 is provided, upload to public hosting and set as image URL
+    let refUploadStatus = 'no_ref';
     if (req.body._refBase64) {
       const b64 = req.body._refBase64;
       delete forwardBody._refBase64;
+      refUploadStatus = 'uploading';
       try {
         const publicUrl = await uploadToFreeImage(b64);
         forwardBody.image = publicUrl;
-        console.log('[NinjaChat proxy] Ref image uploaded:', publicUrl);
+        refUploadStatus = 'uploaded: ' + publicUrl;
       } catch (uploadErr) {
-        console.warn('[NinjaChat proxy] Image upload failed, proceeding without ref:', uploadErr.message);
+        refUploadStatus = 'upload_failed: ' + uploadErr.message;
+        // Don't proceed without ref — return error so client knows
+        return res.status(400).json({
+          error: 'ref_upload_failed',
+          message: 'Reference image upload failed: ' + uploadErr.message,
+          refUploadStatus
+        });
       }
     }
 
@@ -136,6 +144,11 @@ module.exports = async (req, res) => {
       'Authorization': 'Bearer ' + apiKey,
       'Content-Type': 'application/json'
     }, forwardBody);
+
+    // Add debug info to successful response
+    if (result.data && typeof result.data === 'object') {
+      result.data._refUploadStatus = refUploadStatus;
+    }
 
     return res.status(result.status).json(result.data);
   } catch (error) {

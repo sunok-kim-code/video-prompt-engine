@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/ninjachat-images.js": {
+      "maxDuration": 60
+    }
+  }
+}
