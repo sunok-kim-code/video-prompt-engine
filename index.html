@@ -3829,28 +3829,14 @@ Rules:
 
       // A2E supports max 2 reference images — prioritize characters over bg/props
       const charRefs = refs.filter(r => !r.description?.startsWith('background') && !r.description?.includes('prop'));
-      const a2eRefs = charRefs.slice(0, 2); // Only top 2 character refs
+      const a2eRefs = charRefs.slice(0, 2);
       const hasRefs = a2eRefs.length > 0;
 
-      // When using reference images:
-      // - Remove character visual descriptions from prompt (images handle that)
-      // - Focus on scene, action, composition, mood, camera
-      // - Use up to 2000 chars (API likely accepts more than UI's 500 limit)
-      let a2ePrompt;
-      if (hasRefs) {
-        // Strip character appearance details: keep style + scene action only
-        const charNames = a2eRefs.map(r => {
-          const m = r.description?.match(/^(.*?)[,:]/);
-          return m ? m[1].trim() : '';
-        }).filter(Boolean);
-        const refInstruction = 'IMPORTANT: Draw characters EXACTLY as shown in the reference images. Match their face, hair, body, and outfit precisely.';
-        const nameList = charNames.length > 0 ? ` Characters: ${charNames.join(', ')}.` : '';
-        a2ePrompt = refInstruction + nameList + ' ' + stylePrefix + cleanPrompt;
-        log(`A2E 사용 (${styleName} + 캐릭터 레퍼런스 ${a2eRefs.length}명, 프롬프트 ${a2ePrompt.length}자)`, 'info');
-      } else {
-        a2ePrompt = basePrompt;
-        log(`A2E 사용 (${styleName}, 프롬프트 ${a2ePrompt.length}자)`, 'info');
-      }
+      // Send full prompt as-is (no truncation) + reference instruction if refs present
+      const a2ePrompt = hasRefs
+        ? 'IMPORTANT: Draw characters EXACTLY as shown in the reference images. Match their face, hair, body, and outfit precisely.\n' + basePrompt
+        : basePrompt;
+      log(`A2E 사용 (${styleName}${hasRefs ? ' + 캐릭터 레퍼런스 ' + a2eRefs.length + '명' : ''}, 프롬프트 ${a2ePrompt.length}자)`, 'info');
 
       try {
         const urls = await callA2eImage(a2ePrompt, {
