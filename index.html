@@ -616,7 +616,7 @@ async function callNanoBanana(prompt, opts={}) {
     }
     if(!res.ok)throw new Error('NanoBanana '+res.status+': '+(await res.text()).substring(0,200));
     const data=await res.json(); const rp=(data.candidates?.[0]?.content?.parts)||[]; const ip=rp.filter(p=>p.inlineData?.mimeType?.startsWith('image/'));
-    if(!ip.length)throw new Error('No image generated'); return ip.map(p=>`data:${p.inlineData.mimeType};base64,${p.inlineData.data}`);
+    if(!ip.length)throw new Error('No image generated'); return ip.filter(p=>p.inlineData?.data).map(p=>`data:${p.inlineData.mimeType};base64,${p.inlineData.data}`);
   }
   throw new Error('NanoBanana 429: Rate limit exceeded after '+maxRetries+' retries');
 }
@@ -4882,10 +4882,11 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       try {
         const images = await callImage(anchoredPrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
         // callImage returns null when content filter blocks — skip this panel
-        if (!images || !images[0]) {
-          log(`패널 ${i+1} 콘텐츠 필터 거부 — 건너뜀`, 'warn');
+        const img0 = images?.[0];
+        if (!img0 || img0 === 'undefined' || img0.endsWith(',undefined')) {
+          log(`패널 ${i+1} 유효하지 않은 이미지 — 건너뜀`, 'warn');
         } else {
-          newPanels[i] = images[0];
+          newPanels[i] = img0;
           // Capture style anchor from first successful panel
           if (!styleAnchor && panel.imagePrompt) {
             const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
@@ -4899,10 +4900,11 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         try {
           // Retry without reference images but keep asset descriptions + style anchor
           const images = await callImage(anchoredPrompt, {assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
-          if (!images || !images[0]) {
-            log(`패널 ${i+1} 콘텐츠 필터 거부 — 건너뜀`, 'warn');
+          const retryImg = images?.[0];
+          if (!retryImg || retryImg === 'undefined' || retryImg.endsWith(',undefined')) {
+            log(`패널 ${i+1} 유효하지 않은 이미지 — 건너뜀`, 'warn');
           } else {
-            newPanels[i] = images[0];
+            newPanels[i] = retryImg;
             if (!styleAnchor && panel.imagePrompt) {
               const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
               if (sm) { styleAnchor = sm[0]; log(`스타일 앵커 설정: "${styleAnchor}"`, 'info'); }
@@ -5794,7 +5796,11 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                 e.preventDefault();
                                 dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:true};
                               }}>
-                              <img src={obj.src} className="be-obj-img" draggable={false} />
+                              {obj.src && obj.src !== 'undefined' && !obj.src.endsWith(',undefined') ? (
+                                <img src={obj.src} className="be-obj-img" draggable={false} />
+                              ) : (
+                                <div className="be-obj-img" style={{display:'flex',alignItems:'center',justifyContent:'center',background:'#333',color:'#999',fontSize:11,height:'100%'}}>이미지 없음</div>
+                              )}
                               {isSelected && <>
                                 <div data-resize="true" className="be-resize"
                                   onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
