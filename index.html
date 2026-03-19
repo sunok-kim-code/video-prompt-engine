@@ -2535,6 +2535,7 @@ Rules:
     let yPos = 0; // No top margin — panels start from top
     for (let i = 0; i < validPanels.length; i++) {
       const panelSrc = validPanels[i];
+      console.log(`[initEditor] Panel ${i}: type=${typeof panelSrc}, len=${(panelSrc||'').length}, starts=${(panelSrc||'').substring(0,40)}`);
       // Full-width panel — no side margins
       const panelW = PAGE_W;
       let panelH = 960; // default 4:3 for 720px width
@@ -2542,7 +2543,8 @@ Rules:
         const img = await loadImage(panelSrc);
         const ratio = img.height / img.width;
         panelH = Math.round(panelW * ratio);
-      } catch(e) { console.warn('Failed to measure panel', i); }
+        console.log(`[initEditor] Panel ${i}: measured ${img.width}x${img.height} → ${panelW}x${panelH}`);
+      } catch(e) { console.warn('[initEditor] Failed to measure panel', i, ':', e.message); }
 
       const sbPanel = storyboard[i] || {};
       const dialogues = sbPanel.dialogue || [];
@@ -2925,7 +2927,17 @@ Rules:
 
   // ── Shared helpers ──
   const loadImage = (src) => new Promise((res, rej) => {
-    const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src;
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => res(im);
+    im.onerror = () => {
+      // Retry without crossOrigin for external URLs (CORS may block anonymous)
+      const im2 = new Image();
+      im2.onload = () => res(im2);
+      im2.onerror = rej;
+      im2.src = src;
+    };
+    im.src = src;
   });
 
   const downloadDataUrl = async (dataUrl, filename) => {
