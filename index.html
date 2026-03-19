@@ -3429,21 +3429,37 @@ Rules:
   // Pre-load and cache all images (external URLs → base64 via proxy)
   const preloadEditorImages = async (objects) => {
     const cache = {};
-    for (const obj of objects) {
-      if ((obj.type === 'panel' || obj.type === 'image') && obj.src) {
-        if (cache[obj.src]) continue;
-        let imgSrc = obj.src;
+    const imageObjs = objects.filter(o => (o.type === 'panel' || o.type === 'image') && o.src && !cache[o.src]);
+    // Deduplicate by src
+    const uniqueSrcs = [...new Set(imageObjs.map(o => o.src))];
+    const total = uniqueSrcs.length;
+    let loaded = 0;
+
+    // Load in parallel batches of 5 (avoid overwhelming proxy)
+    const BATCH = 5;
+    for (let i = 0; i < uniqueSrcs.length; i += BATCH) {
+      const batch = uniqueSrcs.slice(i, i + BATCH);
+      await Promise.all(batch.map(async (src) => {
+        let imgSrc = src;
         if (imgSrc.startsWith('http') && !imgSrc.startsWith('data:')) {
           try {
             const proxyResp = await fetch('/api/proxy-image?url=' + encodeURIComponent(imgSrc));
             const proxyData = await proxyResp.json();
             if (proxyData.dataUri) imgSrc = proxyData.dataUri;
-          } catch(e) { console.warn('Proxy fetch failed:', e.message); }
+            else console.warn('Proxy no dataUri for:', src.substring(0, 60));
+          } catch(e) { console.warn('Proxy failed:', src.substring(0, 60), e.message); }
+        }
+        if (imgSrc.startsWith('[img:')) {
+          console.warn('Skipping unresolved [img:] token:', imgSrc);
+          loaded++;
+          return;
         }
         try {
-          cache[obj.src] = await loadImage(imgSrc);
-        } catch(e) { console.warn('Image load failed:', obj.src?.substring(0, 60)); }
-      }
+          cache[src] = await loadImage(imgSrc);
+        } catch(e) { console.warn('Image load failed:', src.substring(0, 60)); }
+        loaded++;
+      }));
+      log(`이미지 로딩: ${Math.min(loaded, total)}/${total}`, 'info');
     }
     return cache;
   };
