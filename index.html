@@ -3820,12 +3820,10 @@ Rules:
       const a2eRefs = charRefs.slice(0, 2);
       const hasRefs = a2eRefs.length > 0;
 
-      // A2E tone correction — place at START of prompt for maximum effect
-      const a2eTonefix = 'STYLE: Clean skin, NOT greasy, NOT oily, NOT dark muddy skin tones. ';
       const a2eRefInstruction = hasRefs
         ? 'CRITICAL: Draw characters EXACTLY as shown in reference images — same face, hair, body, outfit, skin tone. '
         : '';
-      const a2ePrompt = a2eTonefix + a2eRefInstruction + basePrompt;
+      const a2ePrompt = a2eRefInstruction + basePrompt;
       log(`A2E ${modelName} 사용 (${hasRefs ? '캐릭터 레퍼런스 ' + a2eRefs.length + '명, ' : ''}프롬프트 ${a2ePrompt.length}자)`, 'info');
 
       try {
