@@ -4436,6 +4436,12 @@ Rules:
       const pid = overridePid || projectId;
       if (!pid) { console.warn('[loadEpisode] no projectId'); return; }
 
+      // Reset editor state when switching episodes
+      setBubbleEditorOpen(false);
+      setEditorPages([]);
+      setCurrentPageIdx(0);
+      setSelectedObjectId(null);
+
       // Auto-save current episode's sourceText before switching
       if (currentEpisode && currentEpisode !== episodeNum && sourceText.trim()) {
         try {
