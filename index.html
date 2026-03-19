@@ -1531,8 +1531,8 @@ const STEP_LABELS = ['1. 스토리 분석','2. 캐릭터/배경 레퍼런스','3
 const ART_STYLES = {
   naverWebtoon: {
     name: '네이버 웹툰',
-    prefix: 'Korean Naver webtoon style, cartoon, clean bold linework, flat cel-shaded coloring, natural color palette matching the scene mood, professional digital illustration. ',
-    charSuffix: ', clean bold linework, distinct facial features, expressive eyes, natural body proportions, flat cel-shaded coloring, webtoon character design, high quality',
+    prefix: 'Korean Naver webtoon style, cartoon, clean bold linework, flat cel-shaded coloring, bright clean color palette, fair luminous skin, professional digital illustration. ',
+    charSuffix: ', clean bold linework, distinct facial features, expressive eyes, natural body proportions, bright fair skin, flat cel-shaded coloring, webtoon character design, high quality',
     bgSuffix: ', clean digital painting, scene-appropriate lighting, moderate detail, Korean webtoon background style',
     propSuffix: ', clean linework, flat coloring, simple shading, webtoon object illustration',
     loras: [
@@ -1541,8 +1541,8 @@ const ART_STYLES = {
   },
   manhwa: {
     name: '만화 스타일',
-    prefix: 'Korean manhwa art style, cartoon, precise ink-like linework, cel shading with vivid colors, dynamic panel composition, detailed expressions. ',
-    charSuffix: ', precise linework, detailed face and hair rendering, vivid cel shading, manhwa character style, high quality',
+    prefix: 'Korean manhwa art style, cartoon, precise ink-like linework, cel shading with vivid colors, dynamic panel composition, detailed expressions, bright fair luminous skin. ',
+    charSuffix: ', precise linework, detailed face and hair rendering, bright fair skin, vivid cel shading, manhwa character style, high quality',
     bgSuffix: ', detailed environment art, depth and perspective, manhwa background style',
     propSuffix: ', precise linework, detailed shading, manhwa object illustration',
     loras: [
@@ -1551,8 +1551,8 @@ const ART_STYLES = {
   },
   romanceWebtoon: {
     name: '로맨스 웹툰',
-    prefix: 'Korean romance webtoon style, cartoon, semi-realistic anime art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition. ',
-    charSuffix: ', beautifully detailed eyes and hair, semi-realistic anime proportions, smooth skin rendering, elegant character design, high quality',
+    prefix: 'Korean romance webtoon style, cartoon, semi-realistic anime art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition, light and airy color palette, bright luminous fair skin with soft translucent glow, NOT heavy NOT greasy NOT dark skin tones, clean pastel-toned shading. ',
+    charSuffix: ', beautifully detailed eyes and hair, semi-realistic anime proportions, bright fair luminous skin, soft translucent skin rendering, elegant character design, high quality',
     bgSuffix: ', atmospheric mood lighting matching the scene emotion, cinematic depth of field, elegant composition, high quality',
     propSuffix: ', delicate rendering, soft shading, elegant illustration style',
     loras: [
@@ -1561,8 +1561,8 @@ const ART_STYLES = {
   },
   blWebtoon: {
     name: 'BL 웹툰',
-    prefix: 'Korean BL (Boys Love) webtoon style, cartoon, semi-realistic anime art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition, bishounen character design, all characters are male. ',
-    charSuffix: ', beautifully detailed eyes and hair, semi-realistic anime proportions, bishounen male character design, sharp jawline, tall elegant male proportions, smooth skin rendering, high quality',
+    prefix: 'Korean BL (Boys Love) webtoon style, cartoon, semi-realistic anime art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition, bishounen character design, all characters are male, light and airy color palette, bright luminous fair skin with soft translucent glow, NOT heavy NOT greasy NOT dark skin tones, clean pastel-toned shading. ',
+    charSuffix: ', beautifully detailed eyes and hair, semi-realistic anime proportions, bishounen male character design, sharp jawline, tall elegant male proportions, bright fair luminous skin, soft translucent skin rendering, high quality',
     bgSuffix: ', atmospheric romantic mood lighting, cinematic depth of field, elegant composition, soft warm tones, high quality',
     propSuffix: ', delicate rendering, soft shading, elegant illustration style',
     defaultGender: 'male',
@@ -1572,9 +1572,8 @@ const ART_STYLES = {
   },
   tlWebtoon: {
     name: 'TL 웹툰 (성인)',
-    prefix: 'Korean adult webtoon (TL/mature) style, semi-realistic detailed art, anatomically accurate and expressive character rendering, sensual atmosphere, rich skin tones with detailed highlights and shadows on bare skin, intimate close-up compositions, soft warm cinematic lighting emphasizing body contours, smooth gradient shading, high detail on facial expressions and body language, mature romance illustration. ',
-    // charSuffix is used for reference sheets (T-pose, clean bg) — keep it clean to avoid content filters
-    charSuffix: ', beautifully detailed eyes and hair, semi-realistic proportions, detailed skin rendering with natural highlights, expressive eyes and lips, smooth skin texture, elegant character design, high quality',
+    prefix: 'Korean adult webtoon (TL/mature) style, semi-realistic detailed art, anatomically accurate and expressive character rendering, sensual atmosphere, luminous fair skin with soft translucent highlights, intimate close-up compositions, soft warm cinematic lighting emphasizing body contours, smooth gradient shading, high detail on facial expressions and body language, mature romance illustration, NOT heavy NOT greasy NOT dark muddy skin tones. ',
+    charSuffix: ', beautifully detailed eyes and hair, semi-realistic proportions, bright luminous fair skin with soft translucent glow, expressive eyes and lips, smooth skin texture, elegant character design, high quality',
     bgSuffix: ', atmospheric lighting, warm soft tones, cinematic depth of field, mood-driven environment, detailed interior settings, high quality',
     propSuffix: ', delicate detailed rendering, soft warm lighting, elegant object illustration',
     loras: [
@@ -3621,7 +3620,7 @@ Rules:
     const isRefSheet = /character reference sheet|full body.*front view|clean.*background.*T-pose|reference sheet/i.test(prompt);
     if (isRefSheet && artStyle === 'tlWebtoon') {
       // Use romance-style prefix for reference sheets — same art quality without mature keywords
-      stylePrefix = 'Korean romance webtoon style, semi-realistic detailed art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition. ';
+      stylePrefix = 'Korean romance webtoon style, semi-realistic detailed art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition, bright luminous fair skin. ';
     }
 
     // Strip Korean onomatopoeia / sound effects + conflicting style keywords from prompt
