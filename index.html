@@ -3831,8 +3831,12 @@ Rules:
 
       log(`A2E ${modelName} 사용 (${hasRefs ? '레퍼런스 ' + a2eRefs.length + '개, ' : ''}프롬프트 ${basePrompt.length}자)`, 'info');
 
+      // A2E skin tone adjustment — only affects skin rendering
+      const a2eSkinFix = ', bright fair translucent skin tone';
+      const a2ePrompt = basePrompt + a2eSkinFix;
+
       try {
-        const urls = await callA2eImage(basePrompt, {
+        const urls = await callA2eImage(a2ePrompt, {
           aspectRatio: opts.aspectRatio || '3:4',
           reqKey: reqKey,
           modelType: a2eModelType,
