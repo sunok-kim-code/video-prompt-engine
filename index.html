@@ -6081,7 +6081,20 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                 dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:true};
                               }}>
                               {obj.src && obj.src !== 'undefined' && !obj.src.endsWith(',undefined') ? (
-                                <img src={obj.src} className="be-obj-img" draggable={false} />
+                                <img src={obj.src} className="be-obj-img" draggable={false}
+                                  onLoad={(e) => {
+                                    // Auto-adjust panel height to match actual image ratio
+                                    const imgEl = e.target;
+                                    if (imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0) {
+                                      const realRatio = imgEl.naturalHeight / imgEl.naturalWidth;
+                                      const expectedH = Math.round(obj.w * realRatio);
+                                      if (Math.abs(expectedH - obj.h) > 5) {
+                                        setEditorPages(prev => prev.map((pg, pi) => pi !== pageIdx ? pg : {
+                                          ...pg, objects: pg.objects.map(o => o.id !== obj.id ? o : {...o, h: expectedH})
+                                        }));
+                                      }
+                                    }
+                                  }} />
                               ) : (
                                 <div className="be-obj-img" style={{display:'flex',alignItems:'center',justifyContent:'center',background:'#333',color:'#999',fontSize:11,height:'100%'}}>이미지 없음</div>
                               )}
