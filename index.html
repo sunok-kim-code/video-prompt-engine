@@ -2384,7 +2384,7 @@ Rules:
     box: {name:'사각형', tail:true, bg:'#fff', border:'#222', borderWidth:3, boxShape:true, radius:10, fontWeight:500, shadow:true},
     boxRound: {name:'원형', tail:true, bg:'#fff', border:'#222', borderWidth:2, ellipse:true, fontWeight:500, shadow:true, defaultTailStyle:'straight'},
     wave: {name:'물결', tail:true, bg:'#fff', border:'#5555cc', borderWidth:2, waveShape:true, fontWeight:400, shadow:true, color:'#333'},
-    narration:{name:'나레이션', tail:false, bg:'rgba(0,0,0,0.75)', border:'none', borderWidth:0, radius:4, fontWeight:500, color:'#fff', shadow:true},
+    narration:{name:'나레이션', tail:false, bg:'transparent', border:'none', borderWidth:0, radius:0, fontWeight:500, color:'#000', shadow:false},
     whisper:{name:'속삭임', tail:true, bg:'#f0f0f0', border:'#aaa', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, color:'#555', shadow:true},
     text:{name:'텍스트', tail:false, bg:'#ffffff', border:'none', borderWidth:0, radius:2, fontWeight:500, color:'#111', shadow:false, plainText:true},
     textCircle:{name:'텍스트원형', tail:false, bg:'#ffffff', border:'none', borderWidth:0, ellipse:true, fontWeight:500, color:'#111', shadow:false, plainText:true},
@@ -2577,7 +2577,7 @@ Rules:
         pageObj.objects.push({
           id: 'n_'+i+'_'+ts, type: 'bubble', bubbleStyle: 'narration',
           text: narrationText, x: nx, y: yPos + 10,
-          w: nw, h: nh, fontSize: 13,
+          w: nw, h: nh, fontSize: 30,
           fontFamily: "'Noto Sans KR',sans-serif",
           tailPos: 0.3, tailSize: 1.0,
           zIndex: 10 + dialogues.length
@@ -2682,9 +2682,9 @@ Rules:
     const newBubble = {
       id: 'b_' + Date.now(), type: 'bubble', bubbleStyle, text: '',
       x: pos.x, y: pos.y,
-      w: bubbleStyle === 'narration' ? 300 : bubbleStyle === 'boxRound' ? 130 : 180,
-      h: bubbleStyle === 'narration' ? 44 : bubbleStyle === 'boxRound' ? 110 : 80,
-      fontSize: 25,
+      w: bubbleStyle === 'narration' ? 400 : bubbleStyle === 'boxRound' ? 130 : 180,
+      h: bubbleStyle === 'narration' ? 50 : bubbleStyle === 'boxRound' ? 110 : 80,
+      fontSize: bubbleStyle === 'narration' ? 30 : 25,
       fontFamily: "'Noto Sans KR',sans-serif",
       tailPos: 0.3,
       tailSize: 1.0,
