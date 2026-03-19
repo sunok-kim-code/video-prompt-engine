@@ -3646,18 +3646,54 @@ Rules:
       children: children
     };
 
+    // PSD max size is 30000px — split into chunks if needed
+    const PSD_MAX_H = 29000;
+    const psdPages = [];
+    if (contentH <= PSD_MAX_H) {
+      psdPages.push({ startY: 0, height: contentH, children: children });
+    } else {
+      const totalPsdPages = Math.ceil(contentH / PSD_MAX_H);
+      for (let p = 0; p < totalPsdPages; p++) {
+        const startY = p * PSD_MAX_H;
+        const sliceH = Math.min(PSD_MAX_H, contentH - startY);
+        const pageChildren = children
+          .filter(c => {
+            const cTop = c.top;
+            const cBottom = cTop + (c.canvas?.height || 0);
+            return cBottom > startY && cTop < startY + sliceH;
+          })
+          .map(c => ({ ...c, top: c.top - startY }));
+        psdPages.push({ startY, height: sliceH, children: pageChildren });
+      }
+    }
+
     try {
-      const buffer = agPsd.writePsd(psd);
-      const blob = new Blob([buffer], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${analysis?.title || 'webtoon'}_${currentEpisode || ''}화.psd`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-      log(`✓ PSD 내보내기 완료 (${children.length}개 레이어, ${PAGE_W}×${contentH}px)`, 'success');
+      for (let pi = 0; pi < psdPages.length; pi++) {
+        const pg = psdPages[pi];
+        const compositeCanvas = document.createElement('canvas');
+        compositeCanvas.width = PAGE_W;
+        compositeCanvas.height = pg.height;
+        const compCtx = compositeCanvas.getContext('2d');
+        compCtx.fillStyle = '#ffffff';
+        compCtx.fillRect(0, 0, PAGE_W, pg.height);
+        for (const child of pg.children) {
+          if (child.canvas) compCtx.drawImage(child.canvas, child.left, child.top);
+        }
+
+        const psd = { width: PAGE_W, height: pg.height, canvas: compositeCanvas, children: pg.children };
+        const buffer = agPsd.writePsd(psd);
+        const blob = new Blob([buffer], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const suffix = psdPages.length > 1 ? `_part${pi+1}` : '';
+        a.href = url;
+        a.download = `${analysis?.title || 'webtoon'}_${currentEpisode || ''}화${suffix}.psd`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      log(`✓ PSD 내보내기 완료 (${psdPages.length}개 파일, ${children.length}개 레이어)`, 'success');
     } catch(e) {
       log(`PSD 내보내기 실패: ${e.message}`, 'error');
       console.error('PSD export error:', e);
