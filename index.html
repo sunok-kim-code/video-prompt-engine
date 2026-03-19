@@ -6460,11 +6460,37 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                     {assetTab === 'props' && <span className="asset-badge prop">소품</span>}
                   </div>
                   <div className="asset-item-desc">
-                    {assetTab === 'characters' ? asset.appearance : asset.description}
+                    {assetTab === 'characters' ? (
+                      <details>
+                        <summary style={{cursor:'pointer',fontSize:12}}>{(asset.appearance||'').substring(0, 60)}...</summary>
+                        <textarea style={{width:'100%',fontSize:11,marginTop:4,padding:4,border:'1px solid #ddd',borderRadius:4,minHeight:50,resize:'vertical'}}
+                          defaultValue={asset.appearance || ''}
+                          onBlur={async (e) => {
+                            const val = e.target.value.trim();
+                            if (val === asset.appearance) return;
+                            const updated = {...asset, appearance: val};
+                            setSharedAssets(prev => ({...prev, characters: {...prev.characters, [id]: updated}}));
+                            if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
+                            log(`${asset.name} 외형 설명 업데이트됨`, 'success');
+                          }}
+                          placeholder="캐릭터 외형 설명..." />
+                      </details>
+                    ) : asset.description}
                   </div>
-                  {assetTab === 'characters' && asset.outfit && (
-                    <div className="asset-item-meta">
-                      <span>기본 의상: {asset.outfit}</span>
+                  {assetTab === 'characters' && (
+                    <div className="asset-item-meta" style={{display:'flex',alignItems:'center',gap:4}}>
+                      <span style={{flexShrink:0,fontSize:11}}>의상:</span>
+                      <input type="text" style={{flex:1,fontSize:11,padding:'2px 6px',border:'1px solid #ddd',borderRadius:4}}
+                        defaultValue={asset.outfit || ''}
+                        onBlur={async (e) => {
+                          const val = e.target.value.trim();
+                          if (val === asset.outfit) return;
+                          const updated = {...asset, outfit: val};
+                          setSharedAssets(prev => ({...prev, characters: {...prev.characters, [id]: updated}}));
+                          if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
+                          log(`${asset.name} 의상 업데이트: ${val}`, 'success');
+                        }}
+                        placeholder="기본 의상 설명..." />
                     </div>
                   )}
                   <div className="asset-item-meta">
