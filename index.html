@@ -1252,19 +1252,14 @@ async function callNinjaChat(prompt, opts={}) {
     }
   }
 
-  // Map aspect ratio to size (WxH format) — match other providers (768x1024 base)
+  // Map aspect ratio to NinjaChat official sizes: 1920x1920, 2560x1440, 1440x2560
   const ar = opts.aspectRatio || '3:4';
-  let size = '768x1024'; // 3:4 portrait (same as other providers)
-  if (ar === '1:1') size = '768x768';
-  else if (ar === '16:9') size = '1024x576';
-  else if (ar === '9:16') size = '576x1024';
-  else if (ar === '4:3') size = '1024x768';
-  else if (ar === '2:3') size = '683x1024';
-  else if (ar === '3:2') size = '1024x683';
+  let size = '1440x2560'; // portrait (3:4, 9:16, 2:3)
+  if (ar === '1:1') size = '1920x1920';
+  else if (ar === '16:9' || ar === '4:3' || ar === '3:2') size = '2560x1440';
 
   const body = {
     prompt: prompt.substring(0, 4000),
-    negative_prompt: opts.negativePrompt || 'blurry, deformed, bad anatomy, extra limbs, text, watermark, signature',
     model: model,
     size: size,
     n: 1
