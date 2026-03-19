@@ -932,10 +932,9 @@ async function callA2eImage(prompt, opts={}) {
     } else if (status === 'failed') {
       const failMsg = pollObj.failed_message || 'unknown';
       console.error('[A2E T2I] Task failed:', JSON.stringify(pollObj).substring(0, 500));
-      // If failed with reference images, retry without them
-      if (inputImages.length > 0 && !opts._retryNoRef) {
-        console.warn('[A2E T2I] Failed with references, retrying without:', failMsg);
-        return await callA2eImage(prompt, {...opts, referenceImages: undefined, _retryNoRef: true});
+      // Don't silently retry without refs — let caller decide
+      if (inputImages.length > 0) {
+        console.error('[A2E T2I] ⚠️ FAILED with reference images:', failMsg);
       }
       throw new Error('A2E 생성 실패: ' + failMsg);
     }
@@ -3836,11 +3835,12 @@ Rules:
       const a2eRefs = charRefs.slice(0, 2);
       const hasRefs = a2eRefs.length > 0;
 
-      // A2E tends toward heavy/dark renders — add tone correction
-      const a2eTonefix = '\nStyle: light and airy color palette, bright luminous fair skin with soft translucent glow, clean pastel-toned shading. NOT heavy, NOT greasy, NOT dark muddy skin tones.';
-      const a2ePrompt = hasRefs
-        ? 'IMPORTANT: Draw characters EXACTLY as shown in the reference images. Match their face, hair, body, and outfit precisely.\n' + basePrompt + a2eTonefix
-        : basePrompt + a2eTonefix;
+      // A2E tone correction — place at START of prompt for maximum effect
+      const a2eTonefix = 'STYLE: Light airy color palette, bright luminous fair skin, soft translucent glow, clean pastel shading. Avoid heavy dark greasy muddy tones. ';
+      const a2eRefInstruction = hasRefs
+        ? 'CRITICAL: Draw characters EXACTLY as shown in reference images — same face, hair, body, outfit, skin tone. '
+        : '';
+      const a2ePrompt = a2eTonefix + a2eRefInstruction + basePrompt;
       log(`A2E ${modelName} 사용 (${hasRefs ? '캐릭터 레퍼런스 ' + a2eRefs.length + '명, ' : ''}프롬프트 ${a2ePrompt.length}자)`, 'info');
 
       try {
@@ -3853,6 +3853,21 @@ Rules:
         return urls;
       } catch (a2eErr) {
         const errMsg = a2eErr.message || '';
+        // If failed with refs, retry without refs but warn user
+        if (hasRefs && errMsg.includes('실패')) {
+          log(`⚠️ A2E 레퍼런스 실패 — 레퍼런스 없이 재생성 (캐릭터 불일치 가능)`, 'warn');
+          try {
+            const fallbackUrls = await callA2eImage(a2ePrompt, {
+              aspectRatio: opts.aspectRatio || '3:4',
+              reqKey: reqKey,
+              modelType: a2eModelType
+            });
+            return fallbackUrls;
+          } catch (retryErr) {
+            log(`A2E 재시도 실패: ${(retryErr.message||'').substring(0, 200)}`, 'error');
+            throw retryErr;
+          }
+        }
         log(`A2E 오류: ${errMsg.substring(0, 200)}`, 'error');
         throw a2eErr;
       }
