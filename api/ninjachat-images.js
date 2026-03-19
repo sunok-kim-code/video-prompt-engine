@@ -3,6 +3,47 @@
 
 const https = require('https');
 
+function httpsPost(url, headers, body) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const postData = typeof body === 'string' ? body : JSON.stringify(body);
+    const options = {
+      hostname: parsed.hostname,
+      port: 443,
+      path: parsed.pathname + parsed.search,
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Length': Buffer.byteLength(postData)
+      }
+    };
+
+    const req = https.request(options, (response) => {
+      // Follow redirects (301, 302, 307, 308)
+      if ([301, 302, 307, 308].includes(response.statusCode) && response.headers.location) {
+        const redirectUrl = response.headers.location.startsWith('http')
+          ? response.headers.location
+          : `https://${parsed.hostname}${response.headers.location}`;
+        return httpsPost(redirectUrl, headers, postData).then(resolve).catch(reject);
+      }
+
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        try {
+          resolve({ status: response.statusCode, data: JSON.parse(data) });
+        } catch (e) {
+          resolve({ status: response.statusCode, data: { raw: data.substring(0, 500) } });
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(postData);
+    req.end();
+  });
+}
+
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -14,43 +55,16 @@ module.exports = async (req, res) => {
   try {
     const apiKey = (req.body && req.body._apiKey) || req.headers['x-api-key'] || '';
     if (!apiKey) {
-      return res.status(401).json({ error: 'API key required', bodyKeys: Object.keys(req.body || {}) });
+      return res.status(401).json({ error: 'API key required' });
     }
 
-    // Remove _apiKey from forwarded body
     const forwardBody = { ...req.body };
     delete forwardBody._apiKey;
-    const postData = JSON.stringify(forwardBody);
 
-    const result = await new Promise((resolve, reject) => {
-      const options = {
-        hostname: 'ninjachat.ai',
-        port: 443,
-        path: '/api/v1/images',
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + apiKey,
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData)
-        }
-      };
-
-      const request = https.request(options, (response) => {
-        let data = '';
-        response.on('data', (chunk) => { data += chunk; });
-        response.on('end', () => {
-          try {
-            resolve({ status: response.statusCode, data: JSON.parse(data) });
-          } catch (e) {
-            resolve({ status: response.statusCode, data: { raw: data.substring(0, 500) } });
-          }
-        });
-      });
-
-      request.on('error', reject);
-      request.write(postData);
-      request.end();
-    });
+    const result = await httpsPost('https://www.ninjachat.ai/api/v1/images', {
+      'Authorization': 'Bearer ' + apiKey,
+      'Content-Type': 'application/json'
+    }, forwardBody);
 
     return res.status(result.status).json(result.data);
   } catch (error) {
