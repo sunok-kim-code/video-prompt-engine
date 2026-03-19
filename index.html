@@ -1252,14 +1252,15 @@ async function callNinjaChat(prompt, opts={}) {
     }
   }
 
-  // Map aspect ratio to size (WxH format)
+  // Map aspect ratio to size (WxH format) — match other providers (768x1024 base)
   const ar = opts.aspectRatio || '3:4';
-  let size = '1024x1536'; // 3:4 portrait (webtoon default)
-  if (ar === '1:1') size = '1024x1024';
-  else if (ar === '16:9') size = '1536x1024';
-  else if (ar === '9:16') size = '1024x1536';
-  else if (ar === '4:3') size = '1536x1024';
-  else if (ar === '2:3') size = '1024x1536';
+  let size = '768x1024'; // 3:4 portrait (same as other providers)
+  if (ar === '1:1') size = '768x768';
+  else if (ar === '16:9') size = '1024x576';
+  else if (ar === '9:16') size = '576x1024';
+  else if (ar === '4:3') size = '1024x768';
+  else if (ar === '2:3') size = '683x1024';
+  else if (ar === '3:2') size = '1024x683';
 
   const body = {
     prompt: prompt.substring(0, 4000),
