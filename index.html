@@ -3320,9 +3320,25 @@ Rules:
     for (const obj of sorted) {
       if (obj.type === 'panel' || obj.type === 'image') {
         try {
-          const img = await loadImage(obj.src);
+          let imgSrc = obj.src;
+          // Convert external URLs to base64 to avoid CORS canvas tainting
+          if (imgSrc && imgSrc.startsWith('http') && !imgSrc.startsWith('data:')) {
+            try {
+              const resp = await fetch(imgSrc);
+              const blob = await resp.blob();
+              imgSrc = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+            } catch (fetchErr) {
+              console.warn('Failed to fetch image for export:', fetchErr.message);
+            }
+          }
+          const img = await loadImage(imgSrc);
           ctx.drawImage(img, obj.x, obj.y, obj.w, obj.h);
-        } catch (e) { console.warn('Failed to load image:', obj.src); }
+        } catch (e) { console.warn('Failed to load image for export:', obj.src?.substring(0, 80)); }
       } else if (obj.type === 'bubble') {
         drawBubbleOnCanvas(ctx, obj, obj.x, obj.y, obj.w, obj.h, 1);
       } else if (obj.type === 'sfx') {
