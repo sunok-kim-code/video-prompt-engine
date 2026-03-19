@@ -1229,7 +1229,7 @@ async function callNinjaChat(prompt, opts={}) {
   const apiKey = getNinjaChatKey();
   if (!apiKey) throw new Error('NinjaChat API 키가 필요합니다. 설정에서 입력해주세요.');
 
-  const model = opts.model || 'ninja-vision-1';
+  const model = opts.model || 'flux-2-pro';
   let imageUrl = null;
 
   // Handle reference images: upload first data URI to A2E R2, then use public URL
@@ -2139,7 +2139,7 @@ function App() {
   const [imageProvider, setImageProvider] = useState('imagen4');
   const [nbVertexModel, setNbVertexModel] = useState('gemini-2.0-flash'); // Vertex AI NanoBanana model key
   const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | seedream5
-  const [ninjaChatModel, setNinjaChatModel] = useState('ninja-vision-1'); // NinjaChat model selection
+  const [ninjaChatModel, setNinjaChatModel] = useState('flux-2-pro'); // NinjaChat model selection
 
   // Shared assets (project-level)
   const [sharedAssets, setSharedAssets] = useState({characters:{}, backgrounds:{}, props:{}});
@@ -5782,7 +5782,6 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         )}
         {imageProvider === 'ninjaChat' && (
           <select className="form-select" style={{width:180,marginLeft:4,background:'linear-gradient(135deg,#f3e5f5,#e1bee7)',borderColor:'#ce93d8'}} value={ninjaChatModel} onChange={e=>setNinjaChatModel(e.target.value)}>
-            <option value="ninja-vision-1">Ninja Vision 1 (기본)</option>
             <option value="flux-kontext-max">Flux Kontext Max ($0.10)</option>
             <option value="flux-2-flex">Flux 2 Flex ($0.08)</option>
             <option value="flux-1-pro-ultra">Flux 1 Pro Ultra ($0.10)</option>
