@@ -2244,6 +2244,32 @@ Rules:
       const chars = prev.characters.map(c => c.id === charId ? {...c, [field]: value} : c);
       return {...prev, characters: chars};
     });
+    // Also sync to sharedAssets
+    setSharedAssets(prev => {
+      const existing = prev.characters?.[charId];
+      if (!existing) return prev;
+      return {...prev, characters: {...prev.characters, [charId]: {...existing, [field]: value}}};
+    });
+  };
+
+  // Save character edits to Firebase (analysis + sharedAssets)
+  const saveCharEdits = async (charId) => {
+    const char = analysis?.characters?.find(c => c.id === charId);
+    if (!char) return;
+    try {
+      // Save analysis to Firebase
+      if (projectId && currentEpisode) {
+        await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis});
+      }
+      // Save to shared assets
+      const asset = sharedAssets.characters?.[charId];
+      if (asset && projectId) {
+        const updated = {...asset, appearance: char.appearance, outfit: char.outfit, refPrompt: char.refPrompt};
+        await fbSaveAsset(projectId, 'characters', charId, updated);
+        setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: updated}}));
+      }
+      log(`${char.name} 수정사항 저장 완료`, 'success');
+    } catch(e) { log(`저장 실패: ${e.message}`, 'error'); }
   };
   // Update a background field in analysis
   const updateAnalysisBg = (bgId, field, value) => {
@@ -6477,6 +6503,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                             if (val === asset.appearance) return;
                             const updated = {...asset, appearance: val};
                             setSharedAssets(prev => ({...prev, characters: {...prev.characters, [id]: updated}}));
+                            // Sync to analysis
+                            setAnalysis(prev => prev ? {...prev, characters: prev.characters.map(c => c.id === id ? {...c, appearance: val} : c)} : prev);
                             if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
                             log(`${asset.name} 외형 설명 업데이트됨`, 'success');
                           }}
@@ -6494,6 +6522,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                           if (val === asset.outfit) return;
                           const updated = {...asset, outfit: val};
                           setSharedAssets(prev => ({...prev, characters: {...prev.characters, [id]: updated}}));
+                          // Sync to analysis
+                          setAnalysis(prev => prev ? {...prev, characters: prev.characters.map(c => c.id === id ? {...c, outfit: val} : c)} : prev);
                           if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
                           log(`${asset.name} 의상 업데이트: ${val}`, 'success');
                         }}
@@ -6768,6 +6798,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                   value={c.refPrompt || ''} onChange={e => updateAnalysisChar(c.id, 'refPrompt', e.target.value)} />
                               </details>
                               <div className="action-bar" style={{marginTop:6}}>
+                                <button className="btn btn-primary btn-xs"
+                                  onClick={() => saveCharEdits(c.id)}>💾 저장</button>
                                 <button className="btn btn-outline btn-xs"
                                   onClick={() => openPromptEditor('charRef', c.id, c.refPrompt + getCharSuffix(), c.name, (p) => regenerateCharRef(c.id, p))} disabled={running}>프롬프트 편집 후 생성</button>
                                 <button className="btn btn-outline btn-xs"
