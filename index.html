@@ -3924,10 +3924,12 @@ Rules:
       const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
 
-      // Collect reference images for Grok Edit (character + background, max 3)
+      // Collect reference images for Grok Edit — characters first, then others (max 3)
       const grokRefImages = [];
       if (opts.referenceImages?.length > 0) {
-        for (const ref of opts.referenceImages) {
+        const grokCharRefs = opts.referenceImages.filter(r => !r.description?.startsWith('background') && !r.description?.includes('prop'));
+        const grokOtherRefs = opts.referenceImages.filter(r => r.description?.startsWith('background') || r.description?.includes('prop'));
+        for (const ref of [...grokCharRefs, ...grokOtherRefs]) {
           if (grokRefImages.length >= 3) break;
           const img = ref.image || ref;
           if (typeof img === 'string' && img.startsWith('data:')) {
@@ -4018,15 +4020,18 @@ Rules:
     // ========== A2E NanoBanana (Gemini Flash + Reference Images via A2E) ==========
     if (imageProvider === 'a2eNanoBanana') {
       if (!hasA2eKey()) { log('A2E API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
-      const refCount = refs.length;
-      if (refCount > 0) {
-        log(`A2E NanoBanana 사용 (레퍼런스 ${refCount}개, 최대 4개)`, 'info');
+      // Character refs first, then bg/props (max 4)
+      const nbCharRefs = refs.filter(r => !r.description?.startsWith('background') && !r.description?.includes('prop'));
+      const nbOtherRefs = refs.filter(r => r.description?.startsWith('background') || r.description?.includes('prop'));
+      const nbRefs = [...nbCharRefs, ...nbOtherRefs].slice(0, 4);
+      if (nbRefs.length > 0) {
+        log(`A2E NanoBanana 사용 (캐릭터 ${nbCharRefs.length}개 + 기타 ${Math.min(nbOtherRefs.length, 4 - nbCharRefs.length)}개)`, 'info');
       } else {
         log('A2E NanoBanana 사용 (이미지 생성)', 'info');
       }
       try {
         const urls = await callA2eNanoBanana(basePrompt, {
-          referenceImages: refs.length > 0 ? refs : undefined
+          referenceImages: nbRefs.length > 0 ? nbRefs : undefined
         });
         return urls;
       } catch (nbErr) {
@@ -4043,15 +4048,18 @@ Rules:
     // ========== Flux 2 Pro (fal.ai — reference images via /edit endpoint) ==========
     if (imageProvider === 'flux2Pro') {
       if (!hasFalKey()) { log('fal.ai API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
-      const refCount = refs.length;
-      if (refCount > 0) {
-        log(`Flux 2 Pro 사용 (레퍼런스 ${refCount}개, 최대 8개)`, 'info');
+      // Character refs first, then others (max 8)
+      const fluxCharRefs = refs.filter(r => !r.description?.startsWith('background') && !r.description?.includes('prop'));
+      const fluxOtherRefs = refs.filter(r => r.description?.startsWith('background') || r.description?.includes('prop'));
+      const fluxRefs = [...fluxCharRefs, ...fluxOtherRefs].slice(0, 8);
+      if (fluxRefs.length > 0) {
+        log(`Flux 2 Pro 사용 (캐릭터 ${fluxCharRefs.length}개 + 기타 ${fluxRefs.length - fluxCharRefs.length}개)`, 'info');
       } else {
         log('Flux 2 Pro 사용 (텍스트→이미지)', 'info');
       }
       try {
         const urls = await callFlux2Pro(basePrompt, {
-          referenceImages: refs.length > 0 ? refs : undefined,
+          referenceImages: fluxRefs.length > 0 ? fluxRefs : undefined,
           aspectRatio: opts.aspectRatio || '3:4'
         });
         return urls;
