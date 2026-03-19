@@ -1229,24 +1229,16 @@ async function callNinjaChat(prompt, opts={}) {
   const apiKey = getNinjaChatKey();
   if (!apiKey) throw new Error('NinjaChat API 키가 필요합니다. 설정에서 입력해주세요.');
 
-  const model = opts.model || 'flux-2-pro';
-  let imageUrl = null;
+  const model = opts.model || 'ninja-vision-1';
+  let refBase64 = null;
 
-  // Handle reference images: upload first data URI to A2E R2, then use public URL
+  // Get first character reference image as base64 (proxy will upload to public hosting)
   const refs = opts.referenceImages || [];
   if (refs.length > 0) {
     for (const ref of refs) {
       const imgData = ref.image || ref;
       if (typeof imgData === 'string' && imgData.startsWith('data:')) {
-        try {
-          imageUrl = await uploadImageToA2eR2(imgData);
-          console.log('[NinjaChat] Reference image uploaded to R2:', imageUrl);
-          break;
-        } catch (e) {
-          console.warn('[NinjaChat] Reference upload failed:', e.message);
-        }
-      } else if (typeof imgData === 'string' && imgData.startsWith('http')) {
-        imageUrl = imgData;
+        refBase64 = imgData;
         break;
       }
     }
@@ -1264,11 +1256,8 @@ async function callNinjaChat(prompt, opts={}) {
     size: size,
     n: 1
   };
-  if (imageUrl) {
-    body.image = imageUrl;
-  }
 
-  console.log(`[NinjaChat] Model: ${model}, size: ${size}, has_ref: ${!!imageUrl}`);
+  console.log(`[NinjaChat] Model: ${model}, size: ${size}, has_ref: ${!!refBase64}`);
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch('/api/ninjachat-images', {
@@ -1277,7 +1266,7 @@ async function callNinjaChat(prompt, opts={}) {
         'Content-Type': 'application/json',
         'X-Api-Key': apiKey
       },
-      body: JSON.stringify({...body, _apiKey: apiKey})
+      body: JSON.stringify({...body, _apiKey: apiKey, ...(refBase64 ? {_refBase64: refBase64} : {})})
     });
 
     if (res.status === 429) {

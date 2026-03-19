@@ -1,5 +1,6 @@
 // Vercel Serverless Function: /api/ninjachat-images
 // Proxies image generation requests to NinjaChat API to avoid CORS
+// Handles base64 reference images by uploading to imgbb for public URL
 
 const https = require('https');
 
@@ -12,34 +13,93 @@ function httpsPost(url, headers, body) {
       port: 443,
       path: parsed.pathname + parsed.search,
       method: 'POST',
-      headers: {
-        ...headers,
-        'Content-Length': Buffer.byteLength(postData)
-      }
+      headers: { ...headers, 'Content-Length': Buffer.byteLength(postData) }
     };
-
     const req = https.request(options, (response) => {
-      // Follow redirects (301, 302, 307, 308)
       if ([301, 302, 307, 308].includes(response.statusCode) && response.headers.location) {
         const redirectUrl = response.headers.location.startsWith('http')
           ? response.headers.location
           : `https://${parsed.hostname}${response.headers.location}`;
         return httpsPost(redirectUrl, headers, postData).then(resolve).catch(reject);
       }
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        try { resolve({ status: response.statusCode, data: JSON.parse(data) }); }
+        catch (e) { resolve({ status: response.statusCode, data: { raw: data.substring(0, 500) } }); }
+      });
+    });
+    req.on('error', reject);
+    req.write(postData);
+    req.end();
+  });
+}
 
+// Upload base64 image to imgbb.com (free, no API key needed for anonymous)
+function uploadToImgbb(base64Data) {
+  return new Promise((resolve, reject) => {
+    // Strip data URI prefix if present
+    const b64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
+    const formData = `image=${encodeURIComponent(b64)}`;
+
+    const options = {
+      hostname: 'api.imgbb.com',
+      port: 443,
+      path: '/1/upload?key=00000000000000000000000000000000',  // anonymous upload
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(formData)
+      }
+    };
+
+    const req = https.request(options, (response) => {
       let data = '';
       response.on('data', (chunk) => { data += chunk; });
       response.on('end', () => {
         try {
-          resolve({ status: response.statusCode, data: JSON.parse(data) });
-        } catch (e) {
-          resolve({ status: response.statusCode, data: { raw: data.substring(0, 500) } });
-        }
+          const parsed = JSON.parse(data);
+          if (parsed.data?.url) resolve(parsed.data.url);
+          else reject(new Error('imgbb upload failed: ' + data.substring(0, 200)));
+        } catch (e) { reject(new Error('imgbb parse error')); }
       });
     });
-
     req.on('error', reject);
-    req.write(postData);
+    req.write(formData);
+    req.end();
+  });
+}
+
+// Alternative: upload using freeimage.host (no API key needed)
+function uploadToFreeImage(base64Data) {
+  return new Promise((resolve, reject) => {
+    const b64 = base64Data.replace(/^data:image\/\w+;base64,/, '');
+    const formData = `key=6d207e02198a847aa98d0a2a901485a5&action=upload&source=${encodeURIComponent(b64)}&format=json`;
+
+    const options = {
+      hostname: 'freeimage.host',
+      port: 443,
+      path: '/api/1/upload',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(formData)
+      }
+    };
+
+    const req = https.request(options, (response) => {
+      let data = '';
+      response.on('data', (chunk) => { data += chunk; });
+      response.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.image?.url) resolve(parsed.image.url);
+          else reject(new Error('freeimage upload failed: ' + data.substring(0, 200)));
+        } catch (e) { reject(new Error('freeimage parse error')); }
+      });
+    });
+    req.on('error', reject);
+    req.write(formData);
     req.end();
   });
 }
@@ -54,12 +114,23 @@ module.exports = async (req, res) => {
 
   try {
     const apiKey = (req.body && req.body._apiKey) || req.headers['x-api-key'] || '';
-    if (!apiKey) {
-      return res.status(401).json({ error: 'API key required' });
-    }
+    if (!apiKey) return res.status(401).json({ error: 'API key required' });
 
     const forwardBody = { ...req.body };
     delete forwardBody._apiKey;
+
+    // If _refBase64 is provided, upload to public hosting and set as image URL
+    if (req.body._refBase64) {
+      const b64 = req.body._refBase64;
+      delete forwardBody._refBase64;
+      try {
+        const publicUrl = await uploadToFreeImage(b64);
+        forwardBody.image = publicUrl;
+        console.log('[NinjaChat proxy] Ref image uploaded:', publicUrl);
+      } catch (uploadErr) {
+        console.warn('[NinjaChat proxy] Image upload failed, proceeding without ref:', uploadErr.message);
+      }
+    }
 
     const result = await httpsPost('https://www.ninjachat.ai/api/v1/images', {
       'Authorization': 'Bearer ' + apiKey,
