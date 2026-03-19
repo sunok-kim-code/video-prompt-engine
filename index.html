@@ -472,7 +472,7 @@ let _apiKeySyncResolve;
 const _apiKeySyncPromise = new Promise(r => { _apiKeySyncResolve = r; });
 function waitForApiKeySync() { return _apiKeySyncPromise; }
 
-const API_KEY_NAMES = ['VERTEX_PROJECT_ID','VERTEX_LOCATION','VERTEX_ACCESS_TOKEN','XAI_API_KEY','STABILITY_API_KEY','FAL_API_KEY','A2E_API_KEY'];
+const API_KEY_NAMES = ['VERTEX_PROJECT_ID','VERTEX_LOCATION','VERTEX_ACCESS_TOKEN','XAI_API_KEY','STABILITY_API_KEY','FAL_API_KEY','A2E_API_KEY','NINJACHAT_API_KEY'];
 
 async function syncApiKeysFromFirestore() {
   const db = getDb();
@@ -794,6 +794,12 @@ async function callStableDiffusion(prompt, opts={}) {
 // ============================================================
 function getFalKey() { const k=localStorage.getItem('FAL_API_KEY'); if(!k)throw new Error('fal.ai API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
 function hasFalKey() { return !!localStorage.getItem('FAL_API_KEY'); }
+
+// ============================================================
+// NINJACHAT API
+// ============================================================
+function getNinjaChatKey() { const k=localStorage.getItem('NINJACHAT_API_KEY'); if(!k)throw new Error('NinjaChat API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
+function hasNinjaChatKey() { return !!localStorage.getItem('NINJACHAT_API_KEY'); }
 
 // ============================================================
 // A2E IMAGE API (video.a2e.ai)
@@ -1214,6 +1220,89 @@ async function callFlux2Pro(prompt, opts={}) {
     throw new Error('Flux 2 Pro: 이미지가 생성되지 않았습니다.');
   }
   throw new Error('Flux 2 Pro: 재시도 초과');
+}
+
+// ============================================================
+// NINJACHAT IMAGE GENERATION
+// ============================================================
+async function callNinjaChat(prompt, opts={}) {
+  const apiKey = getNinjaChatKey();
+  if (!apiKey) throw new Error('NinjaChat API 키가 필요합니다. 설정에서 입력해주세요.');
+
+  const model = opts.model || 'flux-kontext-max';
+  let imageUrl = null;
+
+  // Handle reference images: upload first data URI to A2E R2, then use public URL
+  const refs = opts.referenceImages || [];
+  if (refs.length > 0) {
+    for (const ref of refs) {
+      const imgData = ref.image || ref;
+      if (typeof imgData === 'string' && imgData.startsWith('data:')) {
+        try {
+          imageUrl = await uploadImageToA2eR2(imgData);
+          console.log('[NinjaChat] Reference image uploaded to R2:', imageUrl);
+          break; // NinjaChat only supports one reference image
+        } catch (e) {
+          console.warn('[NinjaChat] Reference upload failed:', e.message);
+        }
+      } else if (typeof imgData === 'string' && imgData.startsWith('http')) {
+        imageUrl = imgData;
+        break; // Already public URL
+      }
+    }
+  }
+
+  // Map aspect ratio to size
+  const ar = opts.aspectRatio || '3:4';
+  let size = '1440x2560'; // default 3:4
+  if (ar === '1:1') size = '1920x1920';
+  else if (ar === '16:9') size = '2560x1440';
+
+  const body = {
+    prompt: prompt.substring(0, 4000),
+    model: model,
+    size: size,
+    n: 1
+  };
+  if (imageUrl) {
+    body.image = imageUrl;
+  }
+
+  console.log(`[NinjaChat] Model: ${model}, size: ${size}, has_ref: ${!!imageUrl}`);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch('https://ninjachat.ai/api/v1/images', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (res.status === 429) {
+      const wait = Math.min(15000 * Math.pow(2, attempt), 60000);
+      console.warn('[NinjaChat] Rate limited, waiting ' + wait/1000 + 's (attempt ' + (attempt+1) + '/3)...');
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+    if (res.status === 402) {
+      throw new Error('NinjaChat: 잔액 부족 — API 계정을 확인해주세요');
+    }
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error('[NinjaChat] Error:', errText.substring(0, 500));
+      throw new Error('NinjaChat ' + res.status + ': ' + errText.substring(0, 300));
+    }
+
+    const data = await res.json();
+    if (data.images?.length > 0) {
+      const imgUrl = data.images[0].url;
+      return [imgUrl];
+    }
+    throw new Error('NinjaChat: 이미지가 생성되지 않았습니다.');
+  }
+  throw new Error('NinjaChat: 재시도 초과');
 }
 
 async function callFalAI(prompt, opts={}) {
@@ -1970,6 +2059,7 @@ function ApiKeyModal({onClose}) {
   const [sk,setSk]=useState(localStorage.getItem('STABILITY_API_KEY')||'');
   const [fk,setFk]=useState(localStorage.getItem('FAL_API_KEY')||'');
   const [ak,setAk]=useState(localStorage.getItem('A2E_API_KEY')||'');
+  const [nk,setNk]=useState(localStorage.getItem('NINJACHAT_API_KEY')||'');
   const save=()=>{
     if(vp)localStorage.setItem('VERTEX_PROJECT_ID',vp);
     if(vl)localStorage.setItem('VERTEX_LOCATION',vl);
@@ -1978,6 +2068,7 @@ function ApiKeyModal({onClose}) {
     if(sk)localStorage.setItem('STABILITY_API_KEY',sk);
     if(fk)localStorage.setItem('FAL_API_KEY',fk);
     if(ak)localStorage.setItem('A2E_API_KEY',ak);
+    if(nk)localStorage.setItem('NINJACHAT_API_KEY',nk);
     // Sync to Firestore for cross-browser access
     const keysToSave = {};
     if(vp) keysToSave.VERTEX_PROJECT_ID = vp;
@@ -1987,6 +2078,7 @@ function ApiKeyModal({onClose}) {
     if(sk) keysToSave.STABILITY_API_KEY = sk;
     if(fk) keysToSave.FAL_API_KEY = fk;
     if(ak) keysToSave.A2E_API_KEY = ak;
+    if(nk) keysToSave.NINJACHAT_API_KEY = nk;
     fbSaveApiKeys(keysToSave).then(() => {
       console.log('[KeySync] Keys saved to Firestore:', Object.keys(keysToSave).join(', '));
     }).catch(e => {
@@ -2010,6 +2102,8 @@ function ApiKeyModal({onClose}) {
       <div className="key-status"><div className={`dot ${hasFalKey()?'on':''}`}/><span>fal.ai {hasFalKey()?'설정됨':'미설정'}</span></div>
       <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">A2E API Key (Text-to-Image)</label><input className="modal-input" type="password" value={ak} onChange={e=>setAk(e.target.value)} placeholder="Bearer token"/></div>
       <div className="key-status"><div className={`dot ${hasA2eKey()?'on':''}`}/><span>A2E {hasA2eKey()?'설정됨':'미설정'}</span></div>
+      <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">NinjaChat API Key (다중 모델)</label><input className="modal-input" type="password" value={nk} onChange={e=>setNk(e.target.value)} placeholder="nj_sk_..."/></div>
+      <div className="key-status"><div className={`dot ${hasNinjaChatKey()?'on':''}`}/><span>NinjaChat {hasNinjaChatKey()?'설정됨':'미설정'}</span></div>
       <div className="modal-actions"><button className="btn-cancel" onClick={onClose}>취소</button><button className="btn-save" onClick={save}>저장</button></div>
     </div></div>
   );
@@ -2045,6 +2139,7 @@ function App() {
   const [imageProvider, setImageProvider] = useState('imagen4');
   const [nbVertexModel, setNbVertexModel] = useState('gemini-2.0-flash'); // Vertex AI NanoBanana model key
   const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | seedream5
+  const [ninjaChatModel, setNinjaChatModel] = useState('flux-kontext-max'); // NinjaChat model selection
 
   // Shared assets (project-level)
   const [sharedAssets, setSharedAssets] = useState({characters:{}, backgrounds:{}, props:{}});
@@ -3897,6 +3992,34 @@ Rules:
       }
     }
 
+    // ========== NinjaChat (다중 모델) ==========
+    if (imageProvider === 'ninjaChat') {
+      if (!hasNinjaChatKey()) { log('NinjaChat API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
+      // Character refs only (like A2E)
+      const charRefs = refs.filter(r => !r.description?.startsWith('background') && !r.description?.includes('prop'));
+      const njcRefs = charRefs.slice(0, 1); // NinjaChat supports 1 reference image
+      const refCount = njcRefs.length;
+      const modelName = ninjaChatModel.split('-').slice(0, 2).join('-');
+
+      if (refCount > 0) {
+        log(`NinjaChat ${modelName} 사용 (레퍼런스 ${refCount}개)`, 'info');
+      } else {
+        log(`NinjaChat ${modelName} 사용 (텍스트→이미지)`, 'info');
+      }
+      try {
+        const urls = await callNinjaChat(basePrompt, {
+          model: ninjaChatModel,
+          referenceImages: refCount > 0 ? njcRefs : undefined,
+          aspectRatio: opts.aspectRatio || '3:4'
+        });
+        return urls;
+      } catch (njcErr) {
+        const errMsg = njcErr.message || '';
+        log(`NinjaChat 오류: ${errMsg.substring(0, 200)}`, 'error');
+        throw njcErr;
+      }
+    }
+
     // ========== Stable Diffusion ==========
     if (imageProvider === 'stableDiffusion') {
       const sdOpts = {aspectRatio: opts.aspectRatio || '3:4'};
@@ -5642,6 +5765,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           <option value="a2eImage">A2E (Manga/General + 레퍼런스)</option>
           <option value="a2eNanoBanana">A2E Gemini (레퍼런스 반영)</option>
           <option value="flux2Pro">Flux 2 Pro (fal.ai 레퍼런스)</option>
+          <option value="ninjaChat">NinjaChat (다중 모델)</option>
         </select>
         {imageProvider === 'a2eImage' && (
           <select className="form-select" style={{width:140,marginLeft:4,background:'linear-gradient(135deg,#fff3e0,#ffe0b2)',borderColor:'#ffb74d'}} value={a2eModelType} onChange={e=>setA2eModelType(e.target.value)}>
@@ -5654,6 +5778,23 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
             {Object.entries(NB_VERTEX_MODELS).map(([key, m]) => (
               <option key={key} value={key}>{m.name}</option>
             ))}
+          </select>
+        )}
+        {imageProvider === 'ninjaChat' && (
+          <select className="form-select" style={{width:180,marginLeft:4,background:'linear-gradient(135deg,#f3e5f5,#e1bee7)',borderColor:'#ce93d8'}} value={ninjaChatModel} onChange={e=>setNinjaChatModel(e.target.value)}>
+            <option value="flux-kontext-max">Flux Kontext Max</option>
+            <option value="flux-2-flex">Flux 2 Flex</option>
+            <option value="flux-1-pro-ultra">Flux 1 Pro Ultra</option>
+            <option value="recraft-v3">Recraft v3</option>
+            <option value="google-imagen-4">Google Imagen 4</option>
+            <option value="nano-banana-pro">Nano Banana Pro</option>
+            <option value="seedream">Seedream</option>
+            <option value="flux-2-pro">Flux 2 Pro</option>
+            <option value="flux-kontext-pro">Flux Kontext Pro</option>
+            <option value="nano-banana-2">Nano Banana 2</option>
+            <option value="flux-1-fill">Flux 1 Fill</option>
+            <option value="flux-2-klein">Flux 2 Klein</option>
+            <option value="nano-banana">Nano Banana</option>
           </select>
         )}
         <label style={{marginLeft:16}}>아트 스타일</label>
@@ -6999,6 +7140,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                         <option value="a2eImage">A2E (Manga/General + 레퍼런스)</option>
                         <option value="a2eNanoBanana">A2E Gemini (레퍼런스)</option>
                         <option value="flux2Pro">Flux 2 Pro (fal.ai)</option>
+                        <option value="ninjaChat">NinjaChat (다중 모델)</option>
                       </select>
                     </div>
                     <div style={{flex:1}}>
