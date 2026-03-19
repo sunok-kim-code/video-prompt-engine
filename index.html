@@ -1230,15 +1230,31 @@ async function callNinjaChat(prompt, opts={}) {
   if (!apiKey) throw new Error('NinjaChat API 키가 필요합니다. 설정에서 입력해주세요.');
 
   const model = opts.model || 'ninja-vision-1';
-  let refBase64 = null;
+  let refImageUrl = null;
 
-  // Get first character reference image as base64 (proxy will upload to public hosting)
+  // Step 1: Upload reference image to public hosting (separate API call)
   const refs = opts.referenceImages || [];
   if (refs.length > 0) {
     for (const ref of refs) {
       const imgData = ref.image || ref;
       if (typeof imgData === 'string' && imgData.startsWith('data:')) {
-        refBase64 = imgData;
+        try {
+          console.log('[NinjaChat] Uploading reference image to public hosting...');
+          const uploadRes = await fetch('/api/upload-ref-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: imgData })
+          });
+          const uploadData = await uploadRes.json();
+          if (uploadData.url) {
+            refImageUrl = uploadData.url;
+            console.log('[NinjaChat] Reference uploaded:', refImageUrl);
+          } else {
+            console.warn('[NinjaChat] Upload failed:', uploadData.error);
+          }
+        } catch (e) {
+          console.warn('[NinjaChat] Reference upload error:', e.message);
+        }
         break;
       }
     }
@@ -1246,7 +1262,7 @@ async function callNinjaChat(prompt, opts={}) {
 
   // Map aspect ratio to NinjaChat official sizes: 1920x1920, 2560x1440, 1440x2560
   const ar = opts.aspectRatio || '3:4';
-  let size = '1440x2560'; // portrait (3:4, 9:16, 2:3)
+  let size = '1440x2560';
   if (ar === '1:1') size = '1920x1920';
   else if (ar === '16:9' || ar === '4:3' || ar === '3:2') size = '2560x1440';
 
@@ -1256,9 +1272,11 @@ async function callNinjaChat(prompt, opts={}) {
     size: size,
     n: 1
   };
+  if (refImageUrl) body.image = refImageUrl;
 
-  console.log(`[NinjaChat] Model: ${model}, size: ${size}, has_ref: ${!!refBase64}`);
+  console.log(`[NinjaChat] Model: ${model}, size: ${size}, has_ref: ${!!refImageUrl}`);
 
+  // Step 2: Call NinjaChat API via proxy
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await fetch('/api/ninjachat-images', {
       method: 'POST',
@@ -1266,7 +1284,7 @@ async function callNinjaChat(prompt, opts={}) {
         'Content-Type': 'application/json',
         'X-Api-Key': apiKey
       },
-      body: JSON.stringify({...body, _apiKey: apiKey, ...(refBase64 ? {_refBase64: refBase64} : {})})
+      body: JSON.stringify({...body, _apiKey: apiKey})
     });
 
     if (res.status === 429) {
