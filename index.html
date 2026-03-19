@@ -2630,6 +2630,73 @@ Rules:
     return [pageObj]; // Always single page
   };
 
+  // Auto-compact: remove empty space between objects by collapsing gaps
+  const compactEditorLayout = () => {
+    setEditorPages(prev => {
+      if (!prev.length || !prev[0]?.objects?.length) return prev;
+      const page = {...prev[0]};
+      const objects = [...page.objects];
+
+      // Group objects by panel (panel + its associated bubbles/sfx at similar y)
+      // Sort all objects by y position
+      const sorted = [...objects].sort((a, b) => (a.y || 0) - (b.y || 0));
+      if (sorted.length < 2) return prev;
+
+      // Find panels and calculate their occupied ranges [top, bottom]
+      const panels = sorted.filter(o => o.type === 'panel' || o.type === 'image');
+      if (panels.length < 2) return prev;
+
+      let totalShift = 0;
+      let changed = false;
+
+      for (let i = 1; i < panels.length; i++) {
+        const prevPanel = panels[i - 1];
+        const currPanel = panels[i];
+        const prevBottom = prevPanel.y + prevPanel.h;
+
+        // Find all objects between these two panels
+        const objectsBetween = sorted.filter(o =>
+          o.id !== currPanel.id && o.y >= prevBottom && o.y < currPanel.y
+        );
+        const actualBottom = objectsBetween.length > 0
+          ? Math.max(prevBottom, ...objectsBetween.map(o => o.y + (o.h || 0)))
+          : prevBottom;
+
+        const gap = currPanel.y - actualBottom;
+        const targetGap = PANEL_GAP;
+
+        if (gap > targetGap + 50) { // Only compact if gap is significantly larger than target
+          const shift = gap - targetGap;
+          totalShift += shift;
+          changed = true;
+
+          // Shift this panel and all objects at or below it
+          objects.forEach(o => {
+            if (o.y >= currPanel.y) {
+              o.y -= shift;
+            }
+          });
+          // Update panels array reference for next iteration
+          panels[i] = {...currPanel, y: currPanel.y - shift};
+        }
+      }
+
+      if (!changed) return prev;
+
+      // Recalculate page height
+      let maxBottom = 0;
+      objects.forEach(o => {
+        const bottom = (o.y || 0) + (o.h || 0);
+        if (bottom > maxBottom) maxBottom = bottom;
+      });
+      page.objects = objects;
+      page.height = maxBottom + 20;
+
+      log(`빈 공간 정리: ${Math.round(totalShift)}px 축소됨`, 'success');
+      return [page];
+    });
+  };
+
   // Save editor layout to Firebase
   const saveEditorLayout = async () => {
     if (!projectId || !currentEpisode) { log('프로젝트/에피소드를 먼저 선택하세요.', 'error'); return; }
@@ -6192,6 +6259,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
               setCurrentPageIdx(0);
               log(`에디터 재초기화 완료: ${newPages.length}페이지`, 'success');
             }} style={{fontSize:12}}>배치 초기화</button>
+            <button className="btn btn-outline btn-sm" onClick={compactEditorLayout} style={{fontSize:12}}>빈 공간 정리</button>
             <div className="be-divider" />
             <button className="btn btn-outline btn-sm be-btn-export" onClick={async () => {
               log('JPG 내보내기 중... (720×4000 단위 분할)', 'info');
