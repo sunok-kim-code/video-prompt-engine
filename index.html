@@ -822,7 +822,7 @@ async function callA2eImage(prompt, opts={}) {
   else if (ar === '3:2') { width = 1024; height = 683; }
   else if (ar === '2:3') { width = 683; height = 1024; }
 
-  // model_type: 'a2e' (default) or 'seedream5' (Seedream 5.0)
+  // model_type: 'a2e' (default) or 'seedream' (Seedream 5.0)
   const modelType = opts.modelType || 'a2e';
 
   // req_key: 'high_aes_general_v21_L' (General/Realistic) or 'high_aes' (Manga)
@@ -2128,7 +2128,7 @@ function App() {
   const [panels, setPanels] = useState([]);
   const [imageProvider, setImageProvider] = useState('imagen4');
   const [nbVertexModel, setNbVertexModel] = useState('gemini-2.0-flash'); // Vertex AI NanoBanana model key
-  const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | seedream5
+  const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | seedream
   const [ninjaChatModel, setNinjaChatModel] = useState('flux-2-pro'); // NinjaChat model selection
 
   // Shared assets (project-level)
@@ -5760,7 +5760,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         {imageProvider === 'a2eImage' && (
           <select className="form-select" style={{width:140,marginLeft:4,background:'linear-gradient(135deg,#fff3e0,#ffe0b2)',borderColor:'#ffb74d'}} value={a2eModelType} onChange={e=>setA2eModelType(e.target.value)}>
             <option value="a2e">A2E (기본)</option>
-            <option value="seedream5">Seedream 5.0</option>
+            <option value="seedream">Seedream 5.0</option>
           </select>
         )}
         {imageProvider === 'nanoBanana' && (
