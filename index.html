@@ -840,14 +840,9 @@ async function callA2eImage(prompt, opts={}) {
     console.log('[A2E T2I] Uploaded', inputImages.length, 'reference images:', inputImages);
   }
 
-  // 1) Start task — A2E UI shows 500 char limit for prompts
-  let finalPrompt = prompt;
-  if (inputImages.length > 0) {
-    // When using reference images, prepend instruction to match them
-    finalPrompt = 'Draw characters EXACTLY matching the reference images provided. ' + prompt;
-  }
-  finalPrompt = finalPrompt.substring(0, 500);
-  console.log('[A2E T2I] Prompt length:', prompt.length, '→', finalPrompt.length, '(limit 500)');
+  // 1) Start task — A2E web UI shows 500 char, but API may accept more. Use 2000 as safe limit.
+  const finalPrompt = prompt.substring(0, 2000);
+  console.log('[A2E T2I] Prompt length:', prompt.length, '→', finalPrompt.length, '(limit 2000)');
 
   const startBody = {
     name: 'webtoon_panel_' + Date.now(),
@@ -3831,27 +3826,37 @@ Rules:
       const isRealistic = artStyle === 'realistic' || artStyle === 'cinematic' || artStyle === 'portrait';
       const reqKey = isRealistic ? 'high_aes_general_v21_L' : 'high_aes';
       const styleName = reqKey === 'high_aes' ? 'Manga' : 'General';
-      const refCount = refs.length;
 
-      // A2E has 500 char prompt limit — when using reference images,
-      // keep prompt short (scene/action/composition) and let refs handle visual details
+      // A2E supports max 2 reference images — prioritize characters over bg/props
+      const charRefs = refs.filter(r => !r.description?.startsWith('background') && !r.description?.includes('prop'));
+      const a2eRefs = charRefs.slice(0, 2); // Only top 2 character refs
+      const hasRefs = a2eRefs.length > 0;
+
+      // When using reference images:
+      // - Remove character visual descriptions from prompt (images handle that)
+      // - Focus on scene, action, composition, mood, camera
+      // - Use up to 2000 chars (API likely accepts more than UI's 500 limit)
       let a2ePrompt;
-      if (refCount > 0) {
-        // Short prompt: style + core scene only (no asset descriptions to save space)
-        const shortPrompt = stylePrefix + cleanPrompt;
-        a2ePrompt = shortPrompt.substring(0, 480) + (shortPrompt.length > 480 ? '...' : '');
-        log(`A2E 사용 (${styleName} + 레퍼런스 ${refCount}개, 프롬프트 ${a2ePrompt.length}자)`, 'info');
+      if (hasRefs) {
+        // Strip character appearance details: keep style + scene action only
+        const charNames = a2eRefs.map(r => {
+          const m = r.description?.match(/^(.*?)[,:]/);
+          return m ? m[1].trim() : '';
+        }).filter(Boolean);
+        const refInstruction = 'IMPORTANT: Draw characters EXACTLY as shown in the reference images. Match their face, hair, body, and outfit precisely.';
+        const nameList = charNames.length > 0 ? ` Characters: ${charNames.join(', ')}.` : '';
+        a2ePrompt = refInstruction + nameList + ' ' + stylePrefix + cleanPrompt;
+        log(`A2E 사용 (${styleName} + 캐릭터 레퍼런스 ${a2eRefs.length}명, 프롬프트 ${a2ePrompt.length}자)`, 'info');
       } else {
-        // Without refs: use full prompt with asset descriptions
-        a2ePrompt = basePrompt.substring(0, 480) + (basePrompt.length > 480 ? '...' : '');
-        log(`A2E 사용 (${styleName}, 프롬프트 ${a2ePrompt.length}자/${basePrompt.length}자)`, 'info');
+        a2ePrompt = basePrompt;
+        log(`A2E 사용 (${styleName}, 프롬프트 ${a2ePrompt.length}자)`, 'info');
       }
 
       try {
         const urls = await callA2eImage(a2ePrompt, {
           aspectRatio: opts.aspectRatio || '3:4',
           reqKey: reqKey,
-          referenceImages: refs.length > 0 ? refs : undefined
+          referenceImages: hasRefs ? a2eRefs : undefined
         });
         return urls;
       } catch (a2eErr) {
