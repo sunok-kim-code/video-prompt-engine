@@ -862,7 +862,7 @@ async function callA2eImage(prompt, opts={}) {
     startBody.aspect_ratio = ar;
   }
   // Only add req_key if not seedream and no reference images
-  if (modelType !== 'seedream' && inputImages.length === 0) {
+  if (!modelType.startsWith('seedream') && inputImages.length === 0) {
     startBody.req_key = reqKey;
   }
   if (inputImages.length > 0) {
