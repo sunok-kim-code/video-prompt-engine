@@ -1271,7 +1271,7 @@ async function callNinjaChat(prompt, opts={}) {
   console.log(`[NinjaChat] Model: ${model}, size: ${size}, has_ref: ${!!imageUrl}`);
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const res = await fetch('https://ninjachat.ai/api/v1/images', {
+    const res = await fetch('/api/ninjachat-images', {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + apiKey,
