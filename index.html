@@ -7460,6 +7460,33 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                     {panels.filter(Boolean).length > 0 && <>
                       <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
                       <button className="btn btn-primary btn-sm" onClick={openBubbleEditor} style={{display:'flex',alignItems:'center',gap:4}}>💬 웹툰 에디터</button>
+                      <button className="btn btn-outline btn-sm" onClick={async () => {
+                        const validPanels = panels.map((p, i) => p ? {img: p, idx: i} : null).filter(Boolean);
+                        if (validPanels.length === 0) return;
+                        log(`패널 ${validPanels.length}개 ZIP 다운로드 중...`, 'info');
+                        const zip = new JSZip();
+                        for (const {img, idx} of validPanels) {
+                          let imgData = img;
+                          if (img.startsWith('http')) {
+                            try {
+                              const resp = await fetch('/api/proxy-image?url=' + encodeURIComponent(img));
+                              const data = await resp.json();
+                              if (data.dataUri) imgData = data.dataUri;
+                            } catch(e) { /* use original */ }
+                          }
+                          if (imgData.startsWith('data:')) {
+                            const b64 = imgData.split(',')[1];
+                            zip.file(`panel_${String(idx+1).padStart(2,'0')}.png`, b64, {base64: true});
+                          }
+                        }
+                        const blob = await zip.generateAsync({type: 'blob'});
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url; a.download = `${analysis?.title || 'webtoon'}_${currentEpisode || ''}화_panels.zip`;
+                        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        log(`✓ ${validPanels.length}개 패널 ZIP 다운로드 완료`, 'success');
+                      }} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>📦 전체 다운로드 (ZIP)</button>
                       <button className="btn btn-outline btn-sm" onClick={exportWebtoonPDF} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>📄 PDF 내보내기</button>
                       <button className="btn btn-outline btn-sm" onClick={() => openViewerLocal()} style={{display:'flex',alignItems:'center',gap:4}}>🔗 새 창으로 보기</button>
                       {projectId && currentEpisode &&
