@@ -2148,7 +2148,7 @@ function App() {
   const [nbVertexModel, setNbVertexModel] = useState('gemini-2.0-flash'); // Vertex AI NanoBanana model key
   const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | zimage | seedream
   const [ninjaChatModel, setNinjaChatModel] = useState('ninja-vision-1'); // NinjaChat model selection
-  const [textModel, setTextModel] = useState('gemini-2.5-flash'); // Text generation model
+  const [textModel] = useState('gemini-3.1-pro-preview'); // Text generation model — fixed to Gemini 3.1 Pro
 
   // Shared assets (project-level)
   const [sharedAssets, setSharedAssets] = useState({characters:{}, backgrounds:{}, props:{}});
@@ -5820,13 +5820,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
             {customStylePrompt && <span style={{position:'absolute',right:8,fontSize:10,color:'var(--success)',fontWeight:600}}>적용됨</span>}
           </div>
         )}
-        <label style={{marginLeft:16}}>텍스트 모델</label>
-        <select className="form-select" style={{width:170,background:'linear-gradient(135deg,#e3f2fd,#bbdefb)',borderColor:'#64b5f6'}} value={textModel} onChange={e=>setTextModel(e.target.value)}>
-          <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-          <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
-          <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro (최신)</option>
-        </select>
+        <span style={{marginLeft:16,fontSize:11,color:'var(--text2)'}}>텍스트: Gemini 3.1 Pro</span>
       </div>
 
       {/* ===== Webtoon Bubble Editor ===== */}
