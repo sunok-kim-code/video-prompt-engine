@@ -1274,7 +1274,8 @@ async function callNinjaChat(prompt, opts={}) {
     const res = await fetch('/api/ninjachat-images', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Api-Key': apiKey
       },
       body: JSON.stringify({...body, _apiKey: apiKey})
     });
