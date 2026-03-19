@@ -2283,8 +2283,8 @@ Rules:
     {value:"monospace", label:'모노스페이스'},
   ];
 
-  const PAGE_W = 700;
-  const PAGE_H = 4000;
+  const PAGE_W = 720;
+  const PAGE_H = 999999; // Single long page — no page splits
 
   // [WebtoonSFX] 붓글씨 스타일 SFX 프리셋 (CSS filter 기반)
   const SFX_PRESETS = {
@@ -2367,46 +2367,33 @@ Rules:
     setSfxText(p.examples[0]);
   };
 
-  // Initialize pages from panels on editor open (async to measure image dimensions)
-  const PANEL_MARGIN = 10; // px margin between panels
+  // Initialize single long page from panels (no page splits, webtoon-style layout)
+  const PANEL_GAP = 20; // Standard webtoon gap between panels
   const initEditorPages = async () => {
     const validPanels = panels.filter(Boolean);
     if (validPanels.length === 0) return [];
-    const newPages = [];
-    let currentPageObj = {id:'p_'+Date.now(), width:PAGE_W, height:PAGE_H, objects:[]};
-    let yPos = PANEL_MARGIN;
+    const pageObj = {id:'p_'+Date.now(), width:PAGE_W, height:PAGE_H, objects:[]};
+    let yPos = 0; // No top margin — panels start from top
     for (let i = 0; i < validPanels.length; i++) {
       const panelSrc = validPanels[i];
-      // Load image to get real aspect ratio
-      let panelW = PAGE_W - PANEL_MARGIN * 2;
-      let panelH = 600;
+      // Full-width panel — no side margins
+      const panelW = PAGE_W;
+      let panelH = 960; // default 4:3 for 720px width
       try {
         const img = await loadImage(panelSrc);
         const ratio = img.height / img.width;
         panelH = Math.round(panelW * ratio);
       } catch(e) { console.warn('Failed to measure panel', i); }
 
-      // Get dialogue/narration from storyboard data for this panel
       const sbPanel = storyboard[i] || {};
       const dialogues = sbPanel.dialogue || [];
       const narrationText = sbPanel.narration || '';
 
-      // Estimate total height needed: panel + bubbles
-      const bubbleCount = dialogues.length + (narrationText ? 1 : 0);
-      const bubbleAreaH = bubbleCount * 90;
-      const totalNeeded = panelH + bubbleAreaH + PANEL_MARGIN;
-
-      // Check if panel + its bubbles fit on current page
-      if (yPos + totalNeeded + PANEL_MARGIN > PAGE_H && currentPageObj.objects.length > 0) {
-        newPages.push(currentPageObj);
-        currentPageObj = {id:'p_'+(Date.now()+i), width:PAGE_W, height:PAGE_H, objects:[]};
-        yPos = PANEL_MARGIN;
-      }
       const ts = Date.now();
       const objId = 'obj_'+i+'_'+ts;
-      currentPageObj.objects.push({
+      pageObj.objects.push({
         id: objId, type: 'panel', src: panelSrc,
-        x: PANEL_MARGIN, y: yPos, w: panelW, h: panelH,
+        x: 0, y: yPos, w: panelW, h: panelH,
         zIndex: 1, panelIndex: i
       });
 
@@ -2417,9 +2404,8 @@ Rules:
         const speakerText = d.speaker ? `${d.speaker}: ${d.text}` : d.text;
         const bw = Math.min(280, panelW * 0.6);
         const bh = 70;
-        // Alternate left/right placement for multiple speakers
-        const bx = PANEL_MARGIN + (di % 2 === 0 ? panelW * 0.05 : panelW - bw - panelW * 0.05);
-        currentPageObj.objects.push({
+        const bx = di % 2 === 0 ? panelW * 0.05 : panelW - bw - panelW * 0.05;
+        pageObj.objects.push({
           id: 'b_'+i+'_d'+di+'_'+ts, type: 'bubble', bubbleStyle: 'speech',
           text: speakerText, x: bx, y: bubbleY,
           w: bw, h: bh, fontSize: 13,
@@ -2435,7 +2421,6 @@ Rules:
       const sfxList = sbPanel.soundEffects || [];
       sfxList.forEach((sfxTxt, si) => {
         if (!sfxTxt || !sfxTxt.trim()) return;
-        // Auto-detect best preset based on text
         let bestPreset = 'impact';
         for (const [key, preset] of Object.entries(SFX_PRESETS)) {
           if (preset.examples.some(ex => sfxTxt.includes(ex.replace('!','')) || ex.replace('!','').includes(sfxTxt.replace('!','')))) {
@@ -2447,10 +2432,9 @@ Rules:
         const sfxFs = 42;
         const sfxW = Math.max(120, sfxTxt.length * sfxFs * 0.7);
         const sfxH = sfxFs * 1.6;
-        // Place SFX scattered around the panel
-        const sfxX = PANEL_MARGIN + panelW * (0.5 + (si % 2 === 0 ? 0.2 : -0.2)) - sfxW / 2;
+        const sfxX = panelW * (0.5 + (si % 2 === 0 ? 0.2 : -0.2)) - sfxW / 2;
         const sfxY = yPos + panelH * (0.2 + si * 0.15);
-        currentPageObj.objects.push({
+        pageObj.objects.push({
           id: 'sfx_'+i+'_s'+si+'_'+ts, type: 'sfx',
           text: sfxTxt, x: sfxX, y: sfxY,
           w: sfxW, h: sfxH, fontSize: sfxFs,
@@ -2469,8 +2453,8 @@ Rules:
       if (narrationText) {
         const nw = Math.min(400, panelW * 0.8);
         const nh = 40;
-        const nx = PANEL_MARGIN + (panelW - nw) / 2;
-        currentPageObj.objects.push({
+        const nx = (panelW - nw) / 2;
+        pageObj.objects.push({
           id: 'n_'+i+'_'+ts, type: 'bubble', bubbleStyle: 'narration',
           text: narrationText, x: nx, y: yPos + 10,
           w: nw, h: nh, fontSize: 13,
@@ -2480,10 +2464,11 @@ Rules:
         });
       }
 
-      yPos += panelH + PANEL_MARGIN;
+      yPos += panelH + PANEL_GAP;
     }
-    if (currentPageObj.objects.length > 0) newPages.push(currentPageObj);
-    return newPages.length > 0 ? newPages : [{id:'p_'+Date.now(), width:PAGE_W, height:PAGE_H, objects:[]}];
+    // Set actual page height to fit all content
+    pageObj.height = yPos > 0 ? yPos : PAGE_H;
+    return [pageObj]; // Always single page
   };
 
   // Save editor layout to Firebase
