@@ -2128,7 +2128,7 @@ function App() {
   const [panels, setPanels] = useState([]);
   const [imageProvider, setImageProvider] = useState('imagen4');
   const [nbVertexModel, setNbVertexModel] = useState('gemini-2.0-flash'); // Vertex AI NanoBanana model key
-  const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | seedream
+  const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | zimage | seedream
   const [ninjaChatModel, setNinjaChatModel] = useState('flux-2-pro'); // NinjaChat model selection
 
   // Shared assets (project-level)
@@ -3907,7 +3907,7 @@ Rules:
       if (!hasA2eKey()) { log('A2E API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
       const isRealistic = artStyle === 'realistic' || artStyle === 'cinematic' || artStyle === 'portrait';
       const reqKey = isRealistic ? 'high_aes_general_v21_L' : 'high_aes';
-      const modelName = a2eModelType.startsWith('seedream') ? 'Seedream 5.0' : (reqKey === 'high_aes' ? 'Manga' : 'General');
+      const modelName = a2eModelType === 'seedream' ? 'Seedream 5.0' : a2eModelType === 'zimage' ? 'Z-Image' : (reqKey === 'high_aes' ? 'Manga' : 'General');
 
       // Character refs only, max 2 for T2I
       const charRefs = refs.filter(r => !r.description?.startsWith('background') && !r.description?.includes('prop'));
@@ -5760,6 +5760,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         {imageProvider === 'a2eImage' && (
           <select className="form-select" style={{width:140,marginLeft:4,background:'linear-gradient(135deg,#fff3e0,#ffe0b2)',borderColor:'#ffb74d'}} value={a2eModelType} onChange={e=>setA2eModelType(e.target.value)}>
             <option value="a2e">A2E (기본)</option>
+            <option value="zimage">Z-Image</option>
             <option value="seedream">Seedream 5.0</option>
           </select>
         )}
