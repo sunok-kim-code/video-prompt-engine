@@ -1244,7 +1244,13 @@ async function callNinjaChat(prompt, opts={}) {
   if (refs.length > 0) {
     for (const ref of refs) {
       const imgData = ref.image || ref;
-      if (typeof imgData === 'string' && imgData.startsWith('data:')) {
+      console.log(`[NinjaChat] Ref candidate: type=${typeof imgData}, len=${(imgData||'').length}, starts=${(imgData||'').substring(0,30)}`);
+      // Skip invalid/short data (broken refs)
+      if (!imgData || typeof imgData !== 'string' || imgData.length < 100) {
+        console.warn('[NinjaChat] Skipping invalid ref (too short or empty)');
+        continue;
+      }
+      if (imgData.startsWith('data:')) {
         try {
           console.log('[NinjaChat] Uploading reference image to public hosting...');
           const uploadRes = await fetch('/api/upload-ref-image', {
@@ -1262,6 +1268,11 @@ async function callNinjaChat(prompt, opts={}) {
         } catch (e) {
           console.warn('[NinjaChat] Reference upload error:', e.message);
         }
+        break;
+      } else if (imgData.startsWith('http')) {
+        // Already a public URL — use directly
+        refImageUrl = imgData;
+        console.log('[NinjaChat] Using existing URL ref:', refImageUrl.substring(0, 80));
         break;
       }
     }
