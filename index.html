@@ -2735,7 +2735,21 @@ Rules:
     const saved = await loadEditorLayout();
     console.log('[BubbleEditor] loadEditorLayout result:', saved ? `${saved.editorPages?.length} pages` : 'null', ', episode:', currentEpisode);
     if (saved && saved.editorPages?.length > 0) {
-      setEditorPages(saved.editorPages);
+      // Fix broken [img:] tokens — replace with actual panel data
+      const fixedPages = saved.editorPages.map(page => ({
+        ...page,
+        objects: (page.objects || []).map(obj => {
+          if ((obj.type === 'panel' || obj.type === 'image') && obj.src && obj.src.startsWith('[img:')) {
+            // Try to restore from panels array using panelIndex
+            const pi = obj.panelIndex;
+            const actualSrc = (pi !== undefined && panels[pi]) ? panels[pi] : null;
+            console.warn(`[BubbleEditor] Fixing broken image token: ${obj.src} → ${actualSrc ? 'restored from panels[' + pi + ']' : 'NOT FOUND'}`);
+            return actualSrc ? {...obj, src: actualSrc} : obj;
+          }
+          return obj;
+        })
+      }));
+      setEditorPages(fixedPages);
       setCurrentPageIdx(saved.currentPageIdx || 0);
       log(`${currentEpisode}화 저장된 배치 불러옴: ${saved.editorPages.length}페이지`, 'success');
     } else if (validCount > 0) {
