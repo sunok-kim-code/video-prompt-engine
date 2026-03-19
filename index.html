@@ -7171,7 +7171,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                       };
                                       input.click();
                                     }}>📂 교체</button>
-                                  </>) : (
+                                  </>) : (<>
                                     <button className="btn btn-primary btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>생성</button>
                                     <button className="btn btn-outline btn-xs" onClick={() => {
                                       const input = document.createElement('input');
@@ -7188,7 +7188,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                         reader.readAsDataURL(file);
                                       };
                                       input.click();
-                                    }}>📂 불러오기</button>
+                                    }}>📂 불러오기</button></>
+
                                   )}
                                 </div>
                               </div>
