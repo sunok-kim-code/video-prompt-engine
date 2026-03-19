@@ -7027,12 +7027,38 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                       <span className="tag tag-mood">{panel.mood}</span>
                                       <span className="tag" style={{background:'#a29bfe',color:'#fff',fontSize:9}}>{panel.imageSize ? (panel.imageSize === '16:9' ? '가로' : panel.imageSize === '9:16' ? '세로' : '정사각') : '자동'}</span>
                                       {/* State change badges */}
-                                      {panel.characters?.some(pc => pc.outfitOverride) && <span className="outfit-tag">의상변경</span>}
+                                      {panel.characters?.some(pc => pc.outfitOverride) && <span className="outfit-tag" style={{cursor:'pointer'}} title="클릭하면 의상 변경을 취소합니다" onClick={(e) => {
+                                        e.stopPropagation();
+                                        setStoryboard(prev => prev.map((p, pi) => {
+                                          if (pi !== i) return p;
+                                          const updatedChars = (p.characters || []).map(pc => {
+                                            const {outfitOverride, ...rest} = pc;
+                                            return rest;
+                                          });
+                                          return {...p, characters: updatedChars};
+                                        }));
+                                        log(`패널 ${i+1} 의상 변경 취소됨 (기본 의상으로 복원)`, 'success');
+                                      }}>의상변경 ✕</span>}
                                       {i > 0 && panel.characters?.some(pc => {
                                         if (!pc.pose) return false;
                                         const prev = storyboard[i-1]?.characters?.find(c => (c.id||c) === (pc.id||pc));
                                         return prev?.pose && prev.pose !== pc.pose;
-                                      }) && <span className="outfit-tag" style={{background:'#e8daef',color:'#6c3483'}}>포즈변경</span>}
+                                      }) && <span className="outfit-tag" style={{background:'#e8daef',color:'#6c3483',cursor:'pointer'}} title="클릭하면 이전 패널 포즈로 되돌립니다" onClick={(e) => {
+                                        e.stopPropagation();
+                                        const prevPanel = storyboard[i-1];
+                                        setStoryboard(prev => prev.map((p, pi) => {
+                                          if (pi !== i) return p;
+                                          const updatedChars = (p.characters || []).map(pc => {
+                                            const prevChar = prevPanel?.characters?.find(c => (c.id||c) === (pc.id||pc));
+                                            if (prevChar?.pose && prevChar.pose !== pc.pose) {
+                                              return {...pc, pose: prevChar.pose};
+                                            }
+                                            return pc;
+                                          });
+                                          return {...p, characters: updatedChars};
+                                        }));
+                                        log(`패널 ${i+1} 포즈를 이전 패널과 동일하게 변경함`, 'success');
+                                      }}>포즈변경 ✕</span>}
                                       <button className="btn btn-outline btn-xs" style={{marginLeft:'auto',fontSize:10}} onClick={() => startSbEdit(i)}>수정</button>
                                     </div>
                                     {/* Character state summary */}
