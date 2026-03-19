@@ -840,9 +840,9 @@ async function callA2eImage(prompt, opts={}) {
     console.log('[A2E T2I] Uploaded', inputImages.length, 'reference images:', inputImages);
   }
 
-  // 1) Start task — A2E web UI shows 500 char, but API may accept more. Use 2000 as safe limit.
-  const finalPrompt = prompt.substring(0, 2000);
-  console.log('[A2E T2I] Prompt length:', prompt.length, '→', finalPrompt.length, '(limit 2000)');
+  // 1) Start task — send full prompt, let A2E backend handle its own limits
+  const finalPrompt = prompt;
+  console.log('[A2E T2I] Prompt length:', finalPrompt.length);
 
   const startBody = {
     name: 'webtoon_panel_' + Date.now(),
