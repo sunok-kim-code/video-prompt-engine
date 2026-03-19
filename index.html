@@ -2856,9 +2856,43 @@ Rules:
     const im = new Image(); im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = rej; im.src = src;
   });
 
-  const downloadDataUrl = (dataUrl, filename) => {
-    const a = document.createElement('a'); a.href = dataUrl; a.download = filename;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  const downloadDataUrl = async (dataUrl, filename) => {
+    try {
+      let blobUrl;
+      if (dataUrl.startsWith('data:')) {
+        // data URI → blob
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        blobUrl = URL.createObjectURL(blob);
+      } else if (dataUrl.startsWith('http')) {
+        // External URL → proxy → blob
+        try {
+          const proxyResp = await fetch('/api/proxy-image?url=' + encodeURIComponent(dataUrl));
+          const proxyData = await proxyResp.json();
+          if (proxyData.dataUri) {
+            const res = await fetch(proxyData.dataUri);
+            const blob = await res.blob();
+            blobUrl = URL.createObjectURL(blob);
+          }
+        } catch(e) {
+          // Direct fetch fallback
+          const res = await fetch(dataUrl);
+          const blob = await res.blob();
+          blobUrl = URL.createObjectURL(blob);
+        }
+      }
+      if (!blobUrl) blobUrl = dataUrl;
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      if (blobUrl.startsWith('blob:')) setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch(e) {
+      console.warn('Download failed, opening in new tab:', e.message);
+      window.open(dataUrl, '_blank');
+    }
   };
 
   // Generate a unified bubble+tail SVG path with variable roundness and tail style.
