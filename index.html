@@ -2954,6 +2954,17 @@ Rules:
     im.src = src;
   });
 
+  // Convert external URL image to base64 data URI via proxy
+  const urlToBase64 = async (url) => {
+    if (!url || !url.startsWith('http') || url.startsWith('data:')) return url;
+    try {
+      const resp = await fetch('/api/proxy-image?url=' + encodeURIComponent(url));
+      const data = await resp.json();
+      if (data.dataUri) return data.dataUri;
+    } catch(e) { console.warn('[urlToBase64] proxy failed:', e.message); }
+    return url; // fallback to original URL
+  };
+
   const downloadDataUrl = async (dataUrl, filename) => {
     try {
       let blobUrl;
@@ -5430,7 +5441,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         if (!img0 || img0 === 'undefined' || img0.endsWith(',undefined')) {
           log(`패널 ${i+1} 유효하지 않은 이미지 — 건너뜀`, 'warn');
         } else {
-          newPanels[i] = img0;
+          // Convert external URL to base64 immediately for reliable export later
+          newPanels[i] = await urlToBase64(img0);
           // Capture style anchor from first successful panel
           if (!styleAnchor && panel.imagePrompt) {
             const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
@@ -5448,7 +5460,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           if (!retryImg || retryImg === 'undefined' || retryImg.endsWith(',undefined')) {
             log(`패널 ${i+1} 유효하지 않은 이미지 — 건너뜀`, 'warn');
           } else {
-            newPanels[i] = retryImg;
+            newPanels[i] = await urlToBase64(retryImg);
             if (!styleAnchor && panel.imagePrompt) {
               const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
               if (sm) { styleAnchor = sm[0]; log(`스타일 앵커 설정: "${styleAnchor}"`, 'info'); }
@@ -5818,7 +5830,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       log(`패널 ${idx+1} 재생성 중... (asset ${assetDescriptions.length}개 참조)`);
       const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
       const newPanels = [...panels];
-      newPanels[idx] = images[0];
+      newPanels[idx] = await urlToBase64(images[0]);
       setPanels(newPanels);
       log(`패널 ${idx+1} 재생성 완료`, 'success');
     } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
