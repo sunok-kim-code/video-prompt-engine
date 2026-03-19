@@ -1267,11 +1267,13 @@ async function callNinjaChat(prompt, opts={}) {
     }
   }
 
-  // Map aspect ratio to NinjaChat official sizes: 1920x1920, 2560x1440, 1440x2560
+  // Map aspect ratio to webtoon-friendly sizes
   const ar = opts.aspectRatio || '3:4';
-  let size = '1440x2560';
-  if (ar === '1:1') size = '1920x1920';
-  else if (ar === '16:9' || ar === '4:3' || ar === '3:2') size = '2560x1440';
+  let size = '1024x1536'; // 2:3 portrait — best for webtoon panels (720x1080 in editor)
+  if (ar === '1:1') size = '1024x1024';
+  else if (ar === '16:9') size = '1536x1024';
+  else if (ar === '4:3') size = '1024x768';
+  else if (ar === '3:4') size = '1024x1536';
 
   const body = {
     prompt: prompt.substring(0, 4000),
