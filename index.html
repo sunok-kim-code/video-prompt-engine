@@ -5180,7 +5180,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
   const [batchProgress, setBatchProgress] = useState(null); // {current, total, episode, step}
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchConfig, setBatchConfig] = useState({
-    step1Provider:'imagen4', step2Provider:'imagen4', step3Provider:'grokImage', step4Provider:'grokImage',
+    step1Provider:'ninjaChat', step2Provider:'ninjaChat', step3Provider:'ninjaChat', step4Provider:'ninjaChat',
     step1ArtStyle:'', step2ArtStyle:'', step3ArtStyle:'', step4ArtStyle:'',
     forceRerun: false, // 이미 완료된 에피소드도 강제 재실행
   });
@@ -5255,7 +5255,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         try {
           // Step 1: Story Analysis
           setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 1: 스토리 분석'});
-          setImageProvider(config.step1Provider || 'imagen4');
+          setImageProvider(config.step1Provider || 'ninjaChat');
           if (config.step1ArtStyle) setArtStyle(config.step1ArtStyle);
           log(`${epNum}화 Step 1: 스토리 분석 (${config.step1Provider} / ${ART_STYLES[config.step1ArtStyle || artStyle]?.name})`, 'info');
           const analysisResult = await runStep1();
@@ -5263,7 +5263,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
 
           // Step 2: Reference Generation
           setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 2: 레퍼런스 생성'});
-          setImageProvider(config.step2Provider || 'imagen4');
+          setImageProvider(config.step2Provider || 'ninjaChat');
           if (config.step2ArtStyle) setArtStyle(config.step2ArtStyle);
           log(`${epNum}화 Step 2: 레퍼런스 생성 (${config.step2Provider} / ${ART_STYLES[config.step2ArtStyle || artStyle]?.name})`, 'info');
           const refsResult = await runStep2(analysisResult);
@@ -5271,7 +5271,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
 
           // Step 3: Storyboard
           setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 3: 스토리보드'});
-          setImageProvider(config.step3Provider || 'grokImage');
+          setImageProvider(config.step3Provider || 'ninjaChat');
           if (config.step3ArtStyle) setArtStyle(config.step3ArtStyle);
           log(`${epNum}화 Step 3: 스토리보드 생성 (${config.step3Provider} / ${ART_STYLES[config.step3ArtStyle || artStyle]?.name})`, 'info');
           const sbResult = await runStep3(analysisResult);
@@ -5279,7 +5279,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
 
           // Step 4: Panel Generation
           setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Step 4: 패널 이미지 생성'});
-          setImageProvider(config.step4Provider || 'grokImage');
+          setImageProvider(config.step4Provider || 'ninjaChat');
           if (config.step4ArtStyle) setArtStyle(config.step4ArtStyle);
           log(`${epNum}화 Step 4: 패널 이미지 생성 (${config.step4Provider} / ${ART_STYLES[config.step4ArtStyle || artStyle]?.name})`, 'info');
           const panelsResult = await runStep4(sbResult, refsResult);
@@ -7133,10 +7133,10 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
             <div className="batch-modal-body">
               {/* Per-step config */}
               {[
-                {num: 1, label: 'Step 1: 스토리 분석', provKey: 'step1Provider', artKey: 'step1ArtStyle', defProv: 'imagen4'},
-                {num: 2, label: 'Step 2: 레퍼런스 생성', provKey: 'step2Provider', artKey: 'step2ArtStyle', defProv: 'imagen4'},
-                {num: 3, label: 'Step 3: 스토리보드', provKey: 'step3Provider', artKey: 'step3ArtStyle', defProv: 'grokImage'},
-                {num: 4, label: 'Step 4: 패널 이미지', provKey: 'step4Provider', artKey: 'step4ArtStyle', defProv: 'grokImage'},
+                {num: 1, label: 'Step 1: 스토리 분석', provKey: 'step1Provider', artKey: 'step1ArtStyle', defProv: 'ninjaChat'},
+                {num: 2, label: 'Step 2: 레퍼런스 생성', provKey: 'step2Provider', artKey: 'step2ArtStyle', defProv: 'ninjaChat'},
+                {num: 3, label: 'Step 3: 스토리보드', provKey: 'step3Provider', artKey: 'step3ArtStyle', defProv: 'ninjaChat'},
+                {num: 4, label: 'Step 4: 패널 이미지', provKey: 'step4Provider', artKey: 'step4ArtStyle', defProv: 'ninjaChat'},
               ].map(st => (
                 <div key={st.num} className="batch-config-section" style={{padding:10,background:'var(--surface2)',borderRadius:8}}>
                   <div className="batch-config-label" style={{fontSize:13,fontWeight:700,marginBottom:6}}>{st.label}</div>
