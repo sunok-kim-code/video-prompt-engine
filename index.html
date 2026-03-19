@@ -3260,12 +3260,20 @@ Rules:
   const exportPageAsJpeg = async (pageIdx) => {
     if (pageIdx < 0 || pageIdx >= editorPages.length) return null;
     const page = editorPages[pageIdx];
+    // Calculate actual content height from objects (not PAGE_H which may be 999999)
+    let contentH = 0;
+    for (const obj of page.objects) {
+      const bottom = (obj.y || 0) + (obj.h || 0);
+      if (bottom > contentH) contentH = bottom;
+    }
+    contentH = Math.max(contentH + 20, 100); // Add small padding, min 100px
+    const actualH = Math.min(contentH, page.height || contentH);
     const canvas = document.createElement('canvas');
     canvas.width = PAGE_W;
-    canvas.height = PAGE_H;
+    canvas.height = actualH;
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, PAGE_W, PAGE_H);
+    ctx.fillRect(0, 0, PAGE_W, actualH);
 
     // Sort objects by zIndex
     const sorted = [...page.objects].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1));
@@ -5927,7 +5935,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
               {editorPages.map((page, pageIdx) => {
                 const scale = editorPanelScale / 100;
                 const displayW = PAGE_W * scale;
-                const displayH = PAGE_H * scale;
+                const displayH = (page.height || PAGE_H) * scale;
                 const isFocused = pageIdx === currentPageIdx;
                 return (
                   <React.Fragment key={page.id}>
