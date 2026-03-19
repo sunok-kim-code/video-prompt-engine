@@ -2490,7 +2490,7 @@ Rules:
   };
 
   // Initialize single long page from panels (no page splits, webtoon-style layout)
-  const PANEL_GAP = 20; // Standard webtoon gap between panels
+  const PANEL_GAP = 300; // Gap between panels
   const initEditorPages = async () => {
     const validPanels = panels.filter(Boolean);
     if (validPanels.length === 0) return [];
