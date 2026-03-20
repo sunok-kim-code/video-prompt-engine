@@ -2198,6 +2198,7 @@ function App() {
   const [coverTitleColor, setCoverTitleColor] = useState('#ffffff');
   const [coverSubColor, setCoverSubColor] = useState('#cccccc');
   const [coverTitleFont, setCoverTitleFont] = useState("'Black Han Sans',sans-serif");
+  const [coverModel, setCoverModel] = useState('imagen4'); // imagen4, nanoBanana, grok
 
   // Completed steps tracking
   const [completedSteps, setCompletedSteps] = useState(new Set());
@@ -2963,34 +2964,86 @@ Rules:
   };
 
   // ── Cover Image Functions ──
+  const COVER_W = 720, COVER_H = 1098;
+
+  const buildCoverPrompt = () => {
+    const chars = analysis.characters || [];
+    const mainChars = chars.slice(0, 3);
+    const genre = analysis.genre || '웹툰';
+    const title = analysis.title || projectTitle || '무제';
+    const mood = analysis.overallMood || analysis.tone || '';
+    const setting = analysis.setting || analysis.worldSetting || '';
+
+    // Storyboard scene descriptions for richer context
+    const sceneDescs = (storyboard || []).slice(0, 5).map(s =>
+      s.visualDescription || s.imagePrompt || s.description || ''
+    ).filter(Boolean).slice(0, 3);
+
+    const parts = [
+      `Professional webtoon cover illustration for "${title}".`,
+      `Genre: ${genre}.`,
+      mood ? `Mood/Atmosphere: ${mood}.` : '',
+      setting ? `Setting: ${setting}.` : '',
+    ];
+
+    // Main characters with detail
+    mainChars.forEach((c, i) => {
+      const desc = c.visualDescription || c.appearance || '';
+      const outfit = c.outfit || '';
+      if (desc) parts.push(`${i === 0 ? 'Main' : 'Supporting'} character "${c.name}": ${desc}${outfit ? ', wearing ' + outfit : ''}.`);
+    });
+
+    // Key scene atmosphere from storyboard
+    if (sceneDescs.length > 0) {
+      parts.push(`Key scene atmosphere: ${sceneDescs.join('. ')}.`);
+    }
+
+    parts.push(
+      `Style: High-quality digital art, cinematic lighting, vibrant colors, dramatic composition suitable for a webtoon cover.`,
+      `Vertical composition (portrait 720x1098). Absolutely NO text, NO title, NO letters, NO words in the image.`
+    );
+
+    return parts.filter(Boolean).join(' ');
+  };
+
   const generateCoverImage = async () => {
     if (!analysis) { log('먼저 Step 1 분석을 완료해주세요.', 'error'); return; }
     setCoverGenerating(true);
     try {
-      const chars = analysis.characters || [];
-      const mainChar = chars[0];
-      const genre = analysis.genre || '웹툰';
+      const coverPrompt = buildCoverPrompt();
       const title = analysis.title || projectTitle || '무제';
-      const mood = analysis.overallMood || analysis.tone || '';
+      const genre = analysis.genre || '웹툰';
+      const modelName = coverModel === 'imagen4' ? 'Imagen 4' : coverModel === 'nanoBanana' ? 'Gemini Flash' : 'Grok';
+      log(`표지 이미지 생성 중... (${modelName})`, 'info');
 
-      // Build cover prompt
-      const coverPrompt = [
-        `Professional webtoon cover illustration for "${title}".`,
-        `Genre: ${genre}. Mood: ${mood}.`,
-        mainChar ? `Main character: ${mainChar.visualDescription || mainChar.appearance || mainChar.name}` : '',
-        `Style: High-quality digital art, cinematic lighting, vibrant colors, dramatic composition.`,
-        `The image should be visually striking and suitable as a book/webtoon cover.`,
-        `Vertical composition (portrait orientation). NO text, NO title, NO letters in the image.`,
-      ].filter(Boolean).join(' ');
+      let resultImage = null;
 
-      log('표지 이미지 생성 중... (Imagen 4)', 'info');
-      const results = await callImagen(coverPrompt, {aspectRatio: '3:4'});
-      if (results && results.length > 0) {
-        setCoverImage(results[0]);
+      if (coverModel === 'imagen4') {
+        const results = await callImagen(coverPrompt, {aspectRatio: '2:3'});
+        if (results?.length > 0) resultImage = results[0];
+      } else if (coverModel === 'nanoBanana') {
+        // Gemini Flash with optional character reference images
+        const refImages = [];
+        const charAssets = sharedAssets?.characters || {};
+        Object.values(charAssets).forEach(a => { if (a.image) refImages.push(a.image); });
+        const results = await callNanoBanana(coverPrompt, {
+          aspectRatio: '2:3',
+          referenceImages: refImages.slice(0, 4)
+        });
+        if (results?.length > 0) resultImage = results[0];
+      } else if (coverModel === 'grok') {
+        const results = await callGrokImage(coverPrompt);
+        if (results?.length > 0) resultImage = results[0];
+      }
+
+      if (resultImage) {
+        setCoverImage(resultImage);
         setCoverTitle(title);
         setCoverSubtitle(genre);
         setCoverEditorOpen(true);
         log('✓ 표지 이미지 생성 완료', 'success');
+      } else {
+        log('표지 이미지 생성 결과가 없습니다.', 'error');
       }
     } catch(e) {
       log('표지 생성 실패: ' + e.message, 'error');
@@ -3002,7 +3055,7 @@ Rules:
 
   const renderCoverCanvas = (targetCanvas, imgSrc) => {
     return new Promise((resolve) => {
-      const W = 720, H = 960;
+      const W = COVER_W, H = COVER_H;
       targetCanvas.width = W;
       targetCanvas.height = H;
       const ctx = targetCanvas.getContext('2d');
@@ -3081,15 +3134,15 @@ Rules:
   const downloadCover = async () => {
     const canvas = document.createElement('canvas');
     await renderCoverCanvas(canvas, coverImage);
-    const dataUrl = canvas.toDataURL('image/png');
-    downloadDataUrl(dataUrl, `${coverTitle || 'cover'}_표지.png`);
-    log('✓ 표지 다운로드 완료', 'success');
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    downloadDataUrl(dataUrl, `${coverTitle || 'cover'}_표지.jpg`);
+    log('✓ 표지 다운로드 완료 (720×1098 JPG)', 'success');
   };
 
   const saveCoverToProject = async () => {
     if (!projectId) { log('프로젝트를 먼저 저장해주세요.', 'error'); return; }
     try {
-      const coverData = { coverImage, coverTitle, coverSubtitle, coverTitleY, coverTitleSize, coverTitleColor, coverSubColor, coverTitleFont };
+      const coverData = { coverImage, coverTitle, coverSubtitle, coverTitleY, coverTitleSize, coverTitleColor, coverSubColor, coverTitleFont, coverModel };
       await fbSavePhase(projectId, 0, 'cover', coverData);
       log('✓ 표지 저장 완료', 'success');
     } catch(e) { log('표지 저장 실패: ' + e.message, 'error'); }
@@ -3107,6 +3160,7 @@ Rules:
         if (data.coverTitleColor) setCoverTitleColor(data.coverTitleColor);
         if (data.coverSubColor) setCoverSubColor(data.coverSubColor);
         if (data.coverTitleFont) setCoverTitleFont(data.coverTitleFont);
+        if (data.coverModel) setCoverModel(data.coverModel);
         return true;
       }
     } catch(e) { console.warn('[loadCover]', e.message); }
@@ -7220,8 +7274,14 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
               onClick={e => e.stopPropagation()}>
               {/* Preview */}
               <div style={{flex:'0 0 360px',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-                <canvas ref={coverCanvasRef} style={{width:360,height:480,borderRadius:12,boxShadow:'0 8px 32px rgba(0,0,0,0.3)'}} />
-                <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center'}}>
+                <canvas ref={coverCanvasRef} style={{width:324,height:494,borderRadius:12,boxShadow:'0 8px 32px rgba(0,0,0,0.3)'}} />
+                <div style={{display:'flex',gap:6,flexWrap:'wrap',justifyContent:'center',alignItems:'center'}}>
+                  <select value={coverModel} onChange={e => setCoverModel(e.target.value)}
+                    style={{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:11}}>
+                    <option value="imagen4">Imagen 4</option>
+                    <option value="nanoBanana">Gemini Flash (레퍼런스)</option>
+                    <option value="grok">Grok</option>
+                  </select>
                   <button className="btn btn-primary btn-sm" onClick={generateCoverImage} disabled={coverGenerating || !analysis}>
                     {coverGenerating ? '🔄 생성 중...' : '🤖 AI 표지 생성'}
                   </button>
@@ -7236,9 +7296,10 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                     };
                     input.click();
                   }}>📁 이미지 업로드</button>
-                  <button className="btn btn-outline btn-sm" onClick={downloadCover} disabled={!coverImage}>📥 PNG 다운로드</button>
+                  <button className="btn btn-outline btn-sm" onClick={downloadCover} disabled={!coverImage}>📥 JPG 다운로드</button>
                   <button className="btn btn-success btn-sm" onClick={async () => { await saveCoverToProject(); setCoverEditorOpen(false); }}>💾 저장 후 닫기</button>
                 </div>
+                <div style={{fontSize:10,color:'var(--text2)',textAlign:'center',marginTop:4}}>720 × 1098 px</div>
               </div>
 
               {/* Controls */}
@@ -7284,6 +7345,10 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
 
                 {!analysis && <div style={{fontSize:11,color:'var(--err)',marginTop:8}}>⚠️ AI 표지 생성을 위해 Step 1 분석을 먼저 완료해주세요</div>}
                 {coverImage && <div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>💡 이미지를 업로드하거나 AI로 재생성할 수 있습니다</div>}
+                <div style={{fontSize:10,color:'var(--text2)',marginTop:4,lineHeight:1.5}}>
+                  📐 표지 크기: 720 × 1098 px (네이버 웹툰 표지 규격)<br/>
+                  🤖 Gemini Flash는 캐릭터 레퍼런스 이미지를 참조합니다
+                </div>
               </div>
             </div>
           </div>
