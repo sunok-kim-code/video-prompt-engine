@@ -2187,6 +2187,18 @@ function App() {
   const [projectList, setProjectList] = useState([]);
   const [showProjects, setShowProjects] = useState(false);
 
+  // Cover image
+  const [coverImage, setCoverImage] = useState(null); // base64 data URI
+  const [coverEditorOpen, setCoverEditorOpen] = useState(false);
+  const [coverGenerating, setCoverGenerating] = useState(false);
+  const [coverTitle, setCoverTitle] = useState('');
+  const [coverSubtitle, setCoverSubtitle] = useState('');
+  const [coverTitleY, setCoverTitleY] = useState(15); // % from top
+  const [coverTitleSize, setCoverTitleSize] = useState(48);
+  const [coverTitleColor, setCoverTitleColor] = useState('#ffffff');
+  const [coverSubColor, setCoverSubColor] = useState('#cccccc');
+  const [coverTitleFont, setCoverTitleFont] = useState("'Black Han Sans',sans-serif");
+
   // Completed steps tracking
   const [completedSteps, setCompletedSteps] = useState(new Set());
 
@@ -2949,6 +2961,165 @@ Rules:
     reader.readAsDataURL(file);
     e.target.value = '';
   };
+
+  // ── Cover Image Functions ──
+  const generateCoverImage = async () => {
+    if (!analysis) { log('먼저 Step 1 분석을 완료해주세요.', 'error'); return; }
+    setCoverGenerating(true);
+    try {
+      const chars = analysis.characters || [];
+      const mainChar = chars[0];
+      const genre = analysis.genre || '웹툰';
+      const title = analysis.title || projectTitle || '무제';
+      const mood = analysis.overallMood || analysis.tone || '';
+
+      // Build cover prompt
+      const coverPrompt = [
+        `Professional webtoon cover illustration for "${title}".`,
+        `Genre: ${genre}. Mood: ${mood}.`,
+        mainChar ? `Main character: ${mainChar.visualDescription || mainChar.appearance || mainChar.name}` : '',
+        `Style: High-quality digital art, cinematic lighting, vibrant colors, dramatic composition.`,
+        `The image should be visually striking and suitable as a book/webtoon cover.`,
+        `Vertical composition (portrait orientation). NO text, NO title, NO letters in the image.`,
+      ].filter(Boolean).join(' ');
+
+      log('표지 이미지 생성 중... (Imagen 4)', 'info');
+      const results = await callImagen(coverPrompt, {aspectRatio: '3:4'});
+      if (results && results.length > 0) {
+        setCoverImage(results[0]);
+        setCoverTitle(title);
+        setCoverSubtitle(genre);
+        setCoverEditorOpen(true);
+        log('✓ 표지 이미지 생성 완료', 'success');
+      }
+    } catch(e) {
+      log('표지 생성 실패: ' + e.message, 'error');
+      console.error('Cover generation error:', e);
+    } finally {
+      setCoverGenerating(false);
+    }
+  };
+
+  const renderCoverCanvas = (targetCanvas, imgSrc) => {
+    return new Promise((resolve) => {
+      const W = 720, H = 960;
+      targetCanvas.width = W;
+      targetCanvas.height = H;
+      const ctx = targetCanvas.getContext('2d');
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(0, 0, W, H);
+
+      const drawText = () => {
+        // Title
+        if (coverTitle) {
+          const titleY = H * (coverTitleY / 100);
+          ctx.font = `bold ${coverTitleSize}px ${coverTitleFont}`;
+          ctx.textAlign = 'center';
+          // Stroke for readability
+          ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+          ctx.lineWidth = 4;
+          ctx.lineJoin = 'round';
+          // Word wrap
+          const maxW = W - 60;
+          const words = coverTitle.split('');
+          let line = '';
+          const lines = [];
+          for (const ch of words) {
+            const test = line + ch;
+            if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = ch; }
+            else line = test;
+          }
+          if (line) lines.push(line);
+          const lineH = coverTitleSize * 1.3;
+          const startY = titleY;
+          lines.forEach((l, i) => {
+            ctx.strokeText(l, W/2, startY + i * lineH);
+            ctx.fillStyle = coverTitleColor;
+            ctx.fillText(l, W/2, startY + i * lineH);
+          });
+          // Subtitle
+          if (coverSubtitle) {
+            ctx.font = `500 ${Math.round(coverTitleSize * 0.45)}px 'Noto Sans KR',sans-serif`;
+            ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+            ctx.lineWidth = 3;
+            const subY = startY + lines.length * lineH + 10;
+            ctx.strokeText(coverSubtitle, W/2, subY);
+            ctx.fillStyle = coverSubColor;
+            ctx.fillText(coverSubtitle, W/2, subY);
+          }
+        }
+        resolve();
+      };
+
+      if (imgSrc) {
+        const img = new Image();
+        img.onload = () => {
+          // Draw cover image (cover-fit)
+          const imgRatio = img.width / img.height;
+          const canvasRatio = W / H;
+          let sx=0, sy=0, sw=img.width, sh=img.height;
+          if (imgRatio > canvasRatio) { sw = img.height * canvasRatio; sx = (img.width - sw)/2; }
+          else { sh = img.width / canvasRatio; sy = (img.height - sh)/2; }
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+          // Gradient overlay for text readability
+          const grad = ctx.createLinearGradient(0, 0, 0, H);
+          grad.addColorStop(0, 'rgba(0,0,0,0.3)');
+          grad.addColorStop(0.5, 'rgba(0,0,0,0.05)');
+          grad.addColorStop(0.85, 'rgba(0,0,0,0.4)');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, W, H);
+          drawText();
+        };
+        img.onerror = () => drawText();
+        img.src = imgSrc;
+      } else {
+        drawText();
+      }
+    });
+  };
+
+  const downloadCover = async () => {
+    const canvas = document.createElement('canvas');
+    await renderCoverCanvas(canvas, coverImage);
+    const dataUrl = canvas.toDataURL('image/png');
+    downloadDataUrl(dataUrl, `${coverTitle || 'cover'}_표지.png`);
+    log('✓ 표지 다운로드 완료', 'success');
+  };
+
+  const saveCoverToProject = async () => {
+    if (!projectId) { log('프로젝트를 먼저 저장해주세요.', 'error'); return; }
+    try {
+      const coverData = { coverImage, coverTitle, coverSubtitle, coverTitleY, coverTitleSize, coverTitleColor, coverSubColor, coverTitleFont };
+      await fbSavePhase(projectId, 0, 'cover', coverData);
+      log('✓ 표지 저장 완료', 'success');
+    } catch(e) { log('표지 저장 실패: ' + e.message, 'error'); }
+  };
+
+  const loadCoverFromProject = async (pid) => {
+    try {
+      const data = await fbLoadPhase(pid, 0, 'cover');
+      if (data && data.coverImage) {
+        setCoverImage(data.coverImage);
+        if (data.coverTitle) setCoverTitle(data.coverTitle);
+        if (data.coverSubtitle) setCoverSubtitle(data.coverSubtitle);
+        if (data.coverTitleY !== undefined) setCoverTitleY(data.coverTitleY);
+        if (data.coverTitleSize !== undefined) setCoverTitleSize(data.coverTitleSize);
+        if (data.coverTitleColor) setCoverTitleColor(data.coverTitleColor);
+        if (data.coverSubColor) setCoverSubColor(data.coverSubColor);
+        if (data.coverTitleFont) setCoverTitleFont(data.coverTitleFont);
+        return true;
+      }
+    } catch(e) { console.warn('[loadCover]', e.message); }
+    return false;
+  };
+
+  // Cover canvas preview ref
+  const coverCanvasRef = React.useRef(null);
+  React.useEffect(() => {
+    if (coverEditorOpen && coverCanvasRef.current) {
+      renderCoverCanvas(coverCanvasRef.current, coverImage);
+    }
+  }, [coverEditorOpen, coverImage, coverTitle, coverSubtitle, coverTitleY, coverTitleSize, coverTitleColor, coverSubColor, coverTitleFont]);
 
   // ── Shared helpers ──
   const loadImage = (src) => new Promise((res, rej) => {
@@ -6046,6 +6217,9 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       setProjectId(pid);
       setProjectTitle(proj.title || '');
 
+      // Load cover image
+      try { await loadCoverFromProject(pid); } catch(e) { /* no cover yet */ }
+
       // Load shared assets
       try {
         const assets = await fbLoadAllAssets(pid);
@@ -7013,6 +7187,108 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       )}
 
       <div className="main-content">
+        {/* Cover Banner */}
+        {projectId && (
+          <div style={{
+            position:'relative', width:'100%', height: coverImage ? 160 : 80,
+            background: coverImage ? 'none' : 'linear-gradient(135deg, #1a1a2e, #16213e)',
+            borderBottom:'1px solid var(--border)', overflow:'hidden',
+            display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer',
+          }} onClick={() => setCoverEditorOpen(true)}>
+            {coverImage && (
+              <img src={coverImage} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',filter:'brightness(0.5)'}} />
+            )}
+            <div style={{position:'relative',zIndex:2,textAlign:'center'}}>
+              {coverTitle && <div style={{fontSize:22,fontWeight:800,color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.7)',letterSpacing:1}}>{coverTitle}</div>}
+              {coverSubtitle && <div style={{fontSize:12,color:'#ccc',marginTop:2,textShadow:'0 1px 4px rgba(0,0,0,0.6)'}}>{coverSubtitle}</div>}
+              {!coverImage && <div style={{fontSize:12,color:'#888',marginTop:4}}>🎨 클릭하여 표지 만들기</div>}
+            </div>
+            <div style={{position:'absolute',right:12,top:12,zIndex:3,display:'flex',gap:6}}>
+              <button className="btn btn-sm" style={{fontSize:10,padding:'3px 10px',background:'rgba(255,255,255,0.15)',color:'#fff',border:'1px solid rgba(255,255,255,0.3)',backdropFilter:'blur(4px)'}}
+                onClick={(e) => { e.stopPropagation(); setCoverEditorOpen(true); }}>✏️ 편집</button>
+              {coverImage && <button className="btn btn-sm" style={{fontSize:10,padding:'3px 10px',background:'rgba(255,255,255,0.15)',color:'#fff',border:'1px solid rgba(255,255,255,0.3)',backdropFilter:'blur(4px)'}}
+                onClick={(e) => { e.stopPropagation(); downloadCover(); }}>📥 다운로드</button>}
+            </div>
+          </div>
+        )}
+
+        {/* Cover Editor Modal */}
+        {coverEditorOpen && (
+          <div style={{position:'fixed',inset:0,zIndex:10000,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center'}}
+            onClick={() => setCoverEditorOpen(false)}>
+            <div style={{background:'var(--surface)',borderRadius:16,padding:24,maxWidth:900,width:'95%',maxHeight:'90vh',overflow:'auto',display:'flex',gap:24}}
+              onClick={e => e.stopPropagation()}>
+              {/* Preview */}
+              <div style={{flex:'0 0 360px',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
+                <canvas ref={coverCanvasRef} style={{width:360,height:480,borderRadius:12,boxShadow:'0 8px 32px rgba(0,0,0,0.3)'}} />
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',justifyContent:'center'}}>
+                  <button className="btn btn-primary btn-sm" onClick={generateCoverImage} disabled={coverGenerating || !analysis}>
+                    {coverGenerating ? '🔄 생성 중...' : '🤖 AI 표지 생성'}
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file'; input.accept = 'image/*';
+                    input.onchange = (e) => {
+                      const file = e.target.files[0]; if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => { setCoverImage(reader.result); };
+                      reader.readAsDataURL(file);
+                    };
+                    input.click();
+                  }}>📁 이미지 업로드</button>
+                  <button className="btn btn-outline btn-sm" onClick={downloadCover} disabled={!coverImage}>📥 PNG 다운로드</button>
+                  <button className="btn btn-success btn-sm" onClick={async () => { await saveCoverToProject(); setCoverEditorOpen(false); }}>💾 저장 후 닫기</button>
+                </div>
+              </div>
+
+              {/* Controls */}
+              <div style={{flex:1,display:'flex',flexDirection:'column',gap:12}}>
+                <div style={{fontSize:16,fontWeight:700,color:'var(--text)'}}>표지 편집</div>
+
+                <label style={{fontSize:12,color:'var(--text2)'}}>제목</label>
+                <input value={coverTitle} onChange={e => setCoverTitle(e.target.value)}
+                  style={{padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:14,fontWeight:700}} placeholder="웹툰 제목" />
+
+                <label style={{fontSize:12,color:'var(--text2)'}}>부제목 / 장르</label>
+                <input value={coverSubtitle} onChange={e => setCoverSubtitle(e.target.value)}
+                  style={{padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:13}} placeholder="장르 또는 부제" />
+
+                <label style={{fontSize:12,color:'var(--text2)'}}>제목 위치 (위에서 {coverTitleY}%)</label>
+                <input type="range" min="5" max="90" value={coverTitleY} onChange={e => setCoverTitleY(parseInt(e.target.value))} />
+
+                <label style={{fontSize:12,color:'var(--text2)'}}>제목 크기 ({coverTitleSize}px)</label>
+                <input type="range" min="20" max="80" value={coverTitleSize} onChange={e => setCoverTitleSize(parseInt(e.target.value))} />
+
+                <div style={{display:'flex',gap:12}}>
+                  <div style={{flex:1}}>
+                    <label style={{fontSize:12,color:'var(--text2)'}}>제목 색상</label>
+                    <input type="color" value={coverTitleColor} onChange={e => setCoverTitleColor(e.target.value)} style={{width:'100%',height:32,borderRadius:6,border:'1px solid var(--border)',cursor:'pointer'}} />
+                  </div>
+                  <div style={{flex:1}}>
+                    <label style={{fontSize:12,color:'var(--text2)'}}>부제목 색상</label>
+                    <input type="color" value={coverSubColor} onChange={e => setCoverSubColor(e.target.value)} style={{width:'100%',height:32,borderRadius:6,border:'1px solid var(--border)',cursor:'pointer'}} />
+                  </div>
+                </div>
+
+                <label style={{fontSize:12,color:'var(--text2)'}}>폰트</label>
+                <select value={coverTitleFont} onChange={e => setCoverTitleFont(e.target.value)}
+                  style={{padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:13}}>
+                  <option value="'Black Han Sans',sans-serif">블랙한산스 (기본)</option>
+                  <option value="'Noto Sans KR',sans-serif">Noto Sans</option>
+                  <option value="'Gothic A1',sans-serif">고딕</option>
+                  <option value="'Nanum Myeongjo',serif">나눔명조</option>
+                  <option value="'Do Hyeon',sans-serif">도현</option>
+                  <option value="'Jua',sans-serif">주아</option>
+                  <option value="'Nanum Brush Script',cursive">나눔붓체</option>
+                </select>
+
+                {!analysis && <div style={{fontSize:11,color:'var(--err)',marginTop:8}}>⚠️ AI 표지 생성을 위해 Step 1 분석을 먼저 완료해주세요</div>}
+                {coverImage && <div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>💡 이미지를 업로드하거나 AI로 재생성할 수 있습니다</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Episode Bar */}
         {projectId && (
           <div className="episode-bar">
