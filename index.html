@@ -2199,6 +2199,7 @@ function App() {
   const [coverSubColor, setCoverSubColor] = useState('#cccccc');
   const [coverTitleFont, setCoverTitleFont] = useState("'Black Han Sans',sans-serif");
   const [coverModel, setCoverModel] = useState('imagen4'); // imagen4, nanoBanana, grok
+  const [coverCustomPrompt, setCoverCustomPrompt] = useState('');
 
   // Completed steps tracking
   const [completedSteps, setCompletedSteps] = useState(new Set());
@@ -3006,11 +3007,14 @@ Rules:
     return parts.filter(Boolean).join(' ');
   };
 
-  const generateCoverImage = async () => {
-    if (!analysis) { log('먼저 Step 1 분석을 완료해주세요.', 'error'); return; }
+  const generateCoverImage = async (useCustom) => {
+    if (!useCustom && !analysis) { log('먼저 Step 1 분석을 완료해주세요.', 'error'); return; }
+    if (useCustom && !coverCustomPrompt.trim()) { log('프롬프트를 입력해주세요.', 'error'); return; }
     setCoverGenerating(true);
     try {
-      const coverPrompt = buildCoverPrompt();
+      const coverPrompt = useCustom
+        ? coverCustomPrompt.trim() + ' Vertical composition (portrait 720x1098). NO text, NO title, NO letters in the image.'
+        : buildCoverPrompt();
       const title = analysis.title || projectTitle || '무제';
       const genre = analysis.genre || '웹툰';
       const modelName = coverModel === 'imagen4' ? 'Imagen 4' : coverModel === 'nanoBanana' ? 'Gemini Flash' : 'Grok';
@@ -7282,8 +7286,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                     <option value="nanoBanana">Gemini Flash (레퍼런스)</option>
                     <option value="grok">Grok</option>
                   </select>
-                  <button className="btn btn-primary btn-sm" onClick={generateCoverImage} disabled={coverGenerating || !analysis}>
-                    {coverGenerating ? '🔄 생성 중...' : '🤖 AI 표지 생성'}
+                  <button className="btn btn-primary btn-sm" onClick={() => generateCoverImage(false)} disabled={coverGenerating || !analysis}>
+                    {coverGenerating ? '🔄 생성 중...' : '🤖 자동 생성'}
                   </button>
                   <button className="btn btn-outline btn-sm" onClick={() => {
                     const input = document.createElement('input');
@@ -7300,6 +7304,18 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                   <button className="btn btn-success btn-sm" onClick={async () => { await saveCoverToProject(); setCoverEditorOpen(false); }}>💾 저장 후 닫기</button>
                 </div>
                 <div style={{fontSize:10,color:'var(--text2)',textAlign:'center',marginTop:4}}>720 × 1098 px</div>
+
+                {/* Custom prompt input */}
+                <div style={{width:'100%',marginTop:4}}>
+                  <textarea value={coverCustomPrompt} onChange={e => setCoverCustomPrompt(e.target.value)}
+                    placeholder="직접 프롬프트 입력 (예: 달빛 아래 서있는 검은 머리 소녀, 판타지 배경, 화려한 마법 이펙트...)"
+                    style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:11,resize:'vertical',minHeight:50,maxHeight:120,fontFamily:'inherit'}}
+                    rows={2} />
+                  <button className="btn btn-sm" style={{width:'100%',marginTop:4,background:'linear-gradient(135deg,#6c5ce7,#a29bfe)',color:'#fff',border:'none',fontSize:11}}
+                    onClick={() => generateCoverImage(true)} disabled={coverGenerating || !coverCustomPrompt.trim()}>
+                    {coverGenerating ? '🔄 생성 중...' : '✍️ 프롬프트로 생성'}
+                  </button>
+                </div>
               </div>
 
               {/* Controls */}
