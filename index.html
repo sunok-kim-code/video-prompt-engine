@@ -2736,6 +2736,7 @@ Rules:
     console.log('[BubbleEditor] loadEditorLayout result:', saved ? `${saved.editorPages?.length} pages` : 'null', ', episode:', currentEpisode);
     if (saved && saved.editorPages?.length > 0) {
       // Fix broken [img:] tokens — replace with actual panel data
+      let unfixedCount = 0;
       const fixedPages = saved.editorPages.map(page => ({
         ...page,
         objects: (page.objects || []).map(obj => {
@@ -2743,12 +2744,22 @@ Rules:
             // Try to restore from panels array using panelIndex
             const pi = obj.panelIndex;
             const actualSrc = (pi !== undefined && panels[pi]) ? panels[pi] : null;
-            console.warn(`[BubbleEditor] Fixing broken image token: ${obj.src} → ${actualSrc ? 'restored from panels[' + pi + ']' : 'NOT FOUND'}`);
-            return actualSrc ? {...obj, src: actualSrc} : obj;
+            // Verify restored source is not itself an [img:] token
+            if (actualSrc && !actualSrc.startsWith('[img:')) {
+              console.log(`[BubbleEditor] Restored image token: ${obj.src} → panels[${pi}]`);
+              return {...obj, src: actualSrc};
+            } else {
+              unfixedCount++;
+              console.warn(`[BubbleEditor] Could not restore image token: ${obj.src} (panelIndex: ${pi}, panels[${pi}] is ${actualSrc ? 'also [img:]' : 'undefined'})`);
+              return obj;
+            }
           }
           return obj;
         })
       }));
+      if (unfixedCount > 0) {
+        log(`⚠ ${unfixedCount}개 이미지 토큰 복원 실패 — 패널 데이터를 다시 불러와주세요`, 'error');
+      }
       setEditorPages(fixedPages);
       setCurrentPageIdx(saved.currentPageIdx || 0);
       log(`${currentEpisode}화 저장된 배치 불러옴: ${saved.editorPages.length}페이지`, 'success');
@@ -3443,6 +3454,11 @@ Rules:
     const imageObjs = objects.filter(o => (o.type === 'panel' || o.type === 'image') && o.src && !cache[o.src]);
     // Deduplicate by src
     const uniqueSrcs = [...new Set(imageObjs.map(o => o.src))];
+    // Build panelIndex→src lookup from objects for [img:] fallback
+    const panelIdxMap = {};
+    for (const o of imageObjs) {
+      if (o.panelIndex !== undefined) panelIdxMap[o.src] = o.panelIndex;
+    }
     const total = uniqueSrcs.length;
     let loaded = 0;
 
@@ -3452,6 +3468,19 @@ Rules:
       const batch = uniqueSrcs.slice(i, i + BATCH);
       await Promise.all(batch.map(async (src) => {
         let imgSrc = src;
+        // [img:] token fallback — try to restore from panels[] array
+        if (imgSrc.startsWith('[img:')) {
+          const pi = panelIdxMap[src];
+          const restored = (pi !== undefined && panels[pi]) ? panels[pi] : null;
+          if (restored && !restored.startsWith('[img:')) {
+            console.log(`[preloadEditorImages] Restored [img:] token from panels[${pi}]`);
+            imgSrc = restored;
+          } else {
+            console.warn('Skipping unresolved [img:] token:', imgSrc, '(panelIndex:', pi, ')');
+            loaded++;
+            return;
+          }
+        }
         if (imgSrc.startsWith('http') && !imgSrc.startsWith('data:')) {
           try {
             const proxyResp = await fetch('/api/proxy-image?url=' + encodeURIComponent(imgSrc));
@@ -3459,11 +3488,6 @@ Rules:
             if (proxyData.dataUri) imgSrc = proxyData.dataUri;
             else console.warn('Proxy no dataUri for:', src.substring(0, 60));
           } catch(e) { console.warn('Proxy failed:', src.substring(0, 60), e.message); }
-        }
-        if (imgSrc.startsWith('[img:')) {
-          console.warn('Skipping unresolved [img:] token:', imgSrc);
-          loaded++;
-          return;
         }
         try {
           cache[src] = await loadImage(imgSrc);
@@ -3564,6 +3588,18 @@ Rules:
         if (obj.type === 'panel' || obj.type === 'image') {
           // Panel/image layer — render to canvas
           let imgSrc = obj.src;
+          // [img:] token fallback — try to restore from panels[] array
+          if (imgSrc && imgSrc.startsWith('[img:')) {
+            const pi = obj.panelIndex;
+            const restored = (pi !== undefined && panels[pi]) ? panels[pi] : null;
+            if (restored && !restored.startsWith('[img:')) {
+              console.log(`[exportAsPsd] Restored [img:] token from panels[${pi}]`);
+              imgSrc = restored;
+            } else {
+              console.warn(`[exportAsPsd] Skipping unresolved [img:] token for layer ${idx}`);
+              continue;
+            }
+          }
           if (imgSrc && imgSrc.startsWith('http')) {
             try {
               const proxyResp = await fetch('/api/proxy-image?url=' + encodeURIComponent(imgSrc));
