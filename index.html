@@ -7808,6 +7808,42 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                         }}>+ 대사 추가</button>
                                       </div>
                                     </div>
+                                    {/* Sound Effects editing */}
+                                    <div className="sb-edit-row">
+                                      <label>효과음</label>
+                                      <div style={{display:'flex',flexDirection:'column',gap:4,flex:1}}>
+                                        {(editingSbData.soundEffects || []).map((sfx, si) => (
+                                          <div key={si} style={{display:'flex',gap:4,alignItems:'center'}}>
+                                            <input style={{flex:1}} value={sfx} placeholder="효과음 (예: 쾅!, 휘잉)" onChange={e => {
+                                              const ns = [...(editingSbData.soundEffects||[])]; ns[si] = e.target.value;
+                                              setEditingSbData(prev => ({...prev, soundEffects: ns}));
+                                            }} />
+                                            <button className="btn btn-xs" style={{color:'var(--err)',padding:'2px 6px'}} onClick={() => {
+                                              const ns = (editingSbData.soundEffects||[]).filter((_,j) => j !== si);
+                                              setEditingSbData(prev => ({...prev, soundEffects: ns}));
+                                            }}>×</button>
+                                          </div>
+                                        ))}
+                                        <button className="btn btn-outline btn-xs" onClick={() => {
+                                          setEditingSbData(prev => ({...prev, soundEffects: [...(prev.soundEffects||[]), '']}));
+                                        }}>+ 효과음 추가</button>
+                                        {/* SFX Preset quick-add */}
+                                        <div style={{display:'flex',gap:2,flexWrap:'wrap',marginTop:2}}>
+                                          {Object.entries(SFX_PRESETS).map(([key, preset]) => (
+                                            <details key={key} style={{position:'relative'}}>
+                                              <summary className="btn btn-xs" style={{fontSize:9,padding:'1px 5px',cursor:'pointer',background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:4}}>{preset.name}</summary>
+                                              <div style={{position:'absolute',top:'100%',left:0,zIndex:10,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,padding:4,display:'flex',flexWrap:'wrap',gap:2,minWidth:160,boxShadow:'0 4px 12px rgba(0,0,0,0.15)'}}>
+                                                {preset.examples.map((ex, exi) => (
+                                                  <button key={exi} className="btn btn-xs" style={{fontSize:10,padding:'2px 6px',background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:4}} onClick={() => {
+                                                    setEditingSbData(prev => ({...prev, soundEffects: [...(prev.soundEffects||[]), ex]}));
+                                                  }}>{ex}</button>
+                                                ))}
+                                              </div>
+                                            </details>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
                                     {/* Image prompt */}
                                     <div className="sb-edit-row">
                                       <label>이미지 프롬프트</label>
@@ -7887,6 +7923,13 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                     {panel.dialogue?.map((d, di) => (
                                       <div key={di} style={{fontSize:12,color:'var(--accent)',marginLeft:8}}>💬 {d.speaker}: "{d.text}"</div>
                                     ))}
+                                    {panel.soundEffects?.length > 0 && (
+                                      <div style={{display:'flex',gap:4,flexWrap:'wrap',marginLeft:8,marginTop:2,marginBottom:2}}>
+                                        {panel.soundEffects.map((sfx, si) => (
+                                          <span key={si} style={{fontSize:11,padding:'1px 7px',background:'linear-gradient(135deg,#fdcb6e,#f39c12)',color:'#2d3436',borderRadius:10,fontWeight:600,letterSpacing:0.5}}>💥 {sfx}</span>
+                                        ))}
+                                      </div>
+                                    )}
                                     {panel.narration && <div style={{fontSize:12,color:'var(--text2)',fontStyle:'italic',marginLeft:8}}>📝 {panel.narration}</div>}
                                     <details style={{marginTop:6}}>
                                       <summary style={{fontSize:11,color:'var(--text2)',cursor:'pointer'}}>이미지 프롬프트</summary>
