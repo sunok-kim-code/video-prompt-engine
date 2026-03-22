@@ -613,10 +613,30 @@ async function callNanoBanana(prompt, opts={}) {
         if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+'] — COPY THIS EXACTLY'});
         refCount++;
       } else if(typeof imgSrc === 'string' && imgSrc.startsWith('http')){
-        // 2) HTTP URL — fetch and convert to base64 for Gemini inline
+        // 2) HTTP URL — try direct fetch first, fallback to server proxy for CORS-blocked URLs
         try{
-          const resp=await fetch(imgSrc);
-          const blob=await resp.blob();
+          let blob;
+          try {
+            const resp=await fetch(imgSrc);
+            blob=await resp.blob();
+          } catch(corsErr) {
+            // Direct fetch failed (likely CORS) — use server-side proxy
+            console.log(`[NanoBanana] 직접 fetch 실패, 프록시 사용: ${imgSrc.substring(0,60)}...`);
+            const proxyResp = await fetch('/api/proxy-image?url=' + encodeURIComponent(imgSrc));
+            const proxyData = await proxyResp.json();
+            if (proxyData.dataUri) {
+              const proxyB64 = extractBase64(proxyData.dataUri);
+              if (proxyB64) {
+                const mime = proxyData.dataUri.match(/^data:([^;]+);/)?.[1] || 'image/png';
+                parts.push({inlineData:{mimeType:mime,data:proxyB64}});
+                if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+'] — COPY THIS EXACTLY'});
+                refCount++;
+                console.log(`[NanoBanana] 프록시 경유 변환 성공: ${imgSrc.substring(0,60)}...`);
+                continue;
+              }
+            }
+            throw new Error('Proxy failed: ' + (proxyData.error || 'unknown'));
+          }
           const arrayBuf=await blob.arrayBuffer();
           const uint8=new Uint8Array(arrayBuf);
           let binary='';for(let i=0;i<uint8.length;i++)binary+=String.fromCharCode(uint8[i]);
