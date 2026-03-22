@@ -6037,8 +6037,10 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, charStates);
       // Add previous panel image as style/continuity reference
       if (i > 0 && newPanels[i - 1] && typeof newPanels[i - 1] === 'string' && (newPanels[i - 1].startsWith('data:') || newPanels[i - 1].startsWith('http'))) {
-        if (!refImages.includes(newPanels[i - 1])) {
-          refImages.push(newPanels[i - 1]);
+        const prevImgStr = newPanels[i - 1];
+        const alreadyHas = refImages.some(r => (r.image || r) === prevImgStr);
+        if (!alreadyHas) {
+          refImages.push({image: prevImgStr, description: 'previous panel — use ONLY for visual style consistency, lighting reference, and character appearance matching. Do NOT copy the composition or camera angle.'});
           assetDescriptions.push('[Previous panel image — use ONLY for visual style consistency, lighting reference, and character appearance matching. Do NOT copy the composition or camera angle.]');
         }
       }
@@ -6451,12 +6453,12 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
             // Replace all refs with just the previous panel
             refImages.length = 0;
             assetDescriptions.length = 0;
-            refImages.push(prevImg);
+            refImages.push({image: prevImg, description: 'previous panel — use as PRIMARY reference for visual style, lighting, character appearance, and scene continuity. Maintain identical art style and character details. Only change composition and action as described in the prompt.'});
             assetDescriptions.push('[Previous panel image — use as PRIMARY reference for visual style, lighting, character appearance, and scene continuity. Maintain identical art style and character details. Only change composition and action as described in the prompt.]');
             log(`패널 ${idx+1}: 이전 패널 이미지를 단독 레퍼런스로 사용`, 'info');
           } else if (refMode === 'both') {
             // Add prev panel on top of existing refs
-            refImages.push(prevImg);
+            refImages.push({image: prevImg, description: 'previous panel — use for visual style consistency, lighting reference, and character appearance matching. Do NOT copy the composition.'});
             assetDescriptions.push('[Previous panel image — use for visual style consistency, lighting reference, and character appearance matching. Do NOT copy the composition.]');
             log(`패널 ${idx+1}: 기본 레퍼런스 + 이전 패널 이미지 병합`, 'info');
           }
