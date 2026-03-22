@@ -4360,7 +4360,7 @@ Rules:
     'close-up': ['extreme close-up on eyes and expression', 'tight face close-up', 'close-up with blurred background'],
     'over the shoulder': ['over-the-shoulder shot showing both characters', 'POV over shoulder'],
   };
-  const enhancePanelExpression = (prompt, panel) => {
+  const enhancePanelExpression = (prompt, panel, panelIdx, allPanels) => {
     if (!prompt) return prompt;
     let enhanced = prompt;
     // Add mood-specific expression keywords if not already present
@@ -4382,6 +4382,49 @@ Rules:
     if (!/expression|emotion|look|gaze|smile|frown|tears|blush/i.test(prompt)) {
       enhanced += '. Expressive dynamic facial emotion, NOT blank neutral stare.';
     }
+
+    // === GAZE DIRECTION REINFORCEMENT ===
+    // Extract gazeDirection from panel characters and reinforce at prompt end
+    const gazeDirectives = [];
+    if (panel.characters?.length > 0) {
+      for (const pc of panel.characters) {
+        const charId = pc.id || pc;
+        const charName = analysis?.characters?.find(c => c.id === charId)?.name || charId;
+        if (pc.gazeDirection) {
+          gazeDirectives.push(`${charName}: ${pc.gazeDirection}`);
+        }
+      }
+    }
+    if (gazeDirectives.length > 0) {
+      enhanced += `\n[GAZE — CRITICAL] Eye direction MUST match exactly: ${gazeDirectives.join('; ')}. Draw the pupils and iris pointing in the specified direction. This is non-negotiable.`;
+    }
+
+    // === OUTFIT DETAIL REINFORCEMENT ===
+    // Pull structured outfit from episodeOutfits or analysis and reinforce
+    if (panel.characters?.length > 0) {
+      const outfitDetails = [];
+      for (const pc of panel.characters) {
+        const charId = pc.id || pc;
+        const charInfo = analysis?.characters?.find(c => c.id === charId);
+        const charName = charInfo?.name || charId;
+        const epO = episodeOutfits?.[charId] || {};
+        const outfit = pc.outfitOverride || epO.outfit || charInfo?.outfit || '';
+        const accessories = epO.accessories || '';
+        if (outfit) {
+          let detail = `${charName} wears EXACTLY: ${outfit}`;
+          if (accessories) detail += ` with ${accessories}`;
+          detail += '. Do NOT change any clothing detail — same color, same fit, same material as described.';
+          outfitDetails.push(detail);
+        }
+      }
+      if (outfitDetails.length > 0) {
+        enhanced += `\n[OUTFIT LOCK] ${outfitDetails.join(' ')}`;
+      }
+    }
+
+    // === ART STYLE CONSISTENCY DIRECTIVE ===
+    enhanced += '\n[STYLE] Maintain IDENTICAL art style across all panels: same line weight, same coloring technique, same level of detail, same shading method, same face proportions. Do NOT switch between realistic/anime/cartoon styles.';
+
     return enhanced;
   };
 
@@ -4420,7 +4463,7 @@ Rules:
 
     // Build asset-enriched prompt: always append asset descriptions to ensure consistency
     const assetSuffix = opts.assetDescriptions?.length > 0
-      ? '\n\nVISUAL CONSISTENCY - Use these EXACT asset descriptions:\n' + opts.assetDescriptions.join('\n')
+      ? '\n\nVISUAL CONSISTENCY — ABSOLUTE RULES:\n- Every character must look EXACTLY like their description below. NO variations allowed.\n- Outfit details (color, material, fit, accessories) must be IDENTICAL to the description. Do NOT add, remove, or modify any clothing item.\n- Face proportions, eye shape, hair color/style must be IDENTICAL across all panels.\n' + opts.assetDescriptions.join('\n')
       : '';
     const basePrompt = stylePrefix + cleanPrompt + assetSuffix;
     const refs = opts.referenceImages || [];
@@ -5764,11 +5807,11 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       }
 
       // Enrich prompt with expression/mood/camera keywords for more dynamic panels
-      let anchoredPrompt = enhancePanelExpression(panel.imagePrompt, panel);
+      let anchoredPrompt = enhancePanelExpression(panel.imagePrompt, panel, i, sb);
       if (stateDirective) anchoredPrompt += stateDirective;
       if (styleAnchor) anchoredPrompt += ' Maintain consistent style: ' + styleAnchor;
 
-      // Add previous panel scene context — only when same location (scene continuity)
+      // Add previous panel scene context for visual continuity
       if (i > 0) {
         const prevPanel = sb[i - 1];
         const sameLocation = panel.background && prevPanel?.background && panel.background === prevPanel.background;
@@ -5777,6 +5820,14 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
           if (prevDesc) {
             anchoredPrompt += `\n[PREVIOUS SCENE — same location] ${prevDesc.substring(0, 200)}. Continue naturally — maintain consistent lighting, time of day, and environment.`;
           }
+        }
+        // Cross-panel continuity for shared characters (even across locations)
+        const prevCharIds = (prevPanel?.characters || []).map(pc => pc.id || pc);
+        const curCharIds = (panel.characters || []).map(pc => pc.id || pc);
+        const sharedChars = curCharIds.filter(id => prevCharIds.includes(id));
+        if (sharedChars.length > 0) {
+          const sharedNames = sharedChars.map(id => analysis?.characters?.find(c => c.id === id)?.name || id).join(', ');
+          anchoredPrompt += `\n[CONTINUITY] Characters ${sharedNames} appear in both this and previous panel. Their outfit, hairstyle, accessories, and body proportions MUST be pixel-identical to the previous panel. Only expression and pose may change.`;
         }
       }
 
@@ -5802,10 +5853,14 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         } else {
           // Convert external URL to base64 immediately for reliable export later
           newPanels[i] = await urlToBase64(img0);
-          // Capture style anchor from first successful panel
+          // Capture style anchor from first successful panel — comprehensive style lock
           if (!styleAnchor && panel.imagePrompt) {
+            const curStyle = ART_STYLES[artStyle] || ART_STYLES.naverWebtoon;
+            const styleName = curStyle.name || artStyle;
+            // Build robust style anchor from art style config + first panel characteristics
             const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
-            if (sm) { styleAnchor = sm[0]; log(`스타일 앵커 설정: "${styleAnchor}"`, 'info'); }
+            styleAnchor = `${styleName} style. ${sm ? sm[0] : ''} CRITICAL: Every panel must use the EXACT same art style — identical line thickness, identical coloring/shading method, identical level of detail, identical face drawing style (eye shape, nose style, lip detail). The reader must feel all panels were drawn by the same artist in a single sitting.`;
+            log(`스타일 앵커 설정: "${styleName}"`, 'info');
           }
           log(`패널 ${i+1} 완료 (레퍼런스 ${refImages.length}개 사용)`, 'success');
         }
