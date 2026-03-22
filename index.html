@@ -5010,11 +5010,33 @@ Rules:
           const epDoc = await db.collection('webtoon_projects').doc(pid).collection('episodes').doc(String(episodeNum)).get();
           const epData = epDoc.exists ? epDoc.data() : {};
           if (epData.episodeOutfits && typeof epData.episodeOutfits === 'object') {
-            setEpisodeOutfits(epData.episodeOutfits);
-            const outfitCount = Object.values(epData.episodeOutfits).filter(v => v.outfit).length;
-            if (outfitCount > 0) log(`  에피소드 의상 ${outfitCount}명 로드됨`, 'info');
+            const loaded = epData.episodeOutfits;
+            const outfitCount = Object.values(loaded).filter(v => v.outfit).length;
+            // If no episode outfits saved but analysis has outfit data, auto-fill
+            if (outfitCount === 0 && s1?.analysis?.characters?.length > 0) {
+              for (const c of s1.analysis.characters) {
+                if (c.outfit && !loaded[c.id]?.outfit) {
+                  if (!loaded[c.id]) loaded[c.id] = {};
+                  loaded[c.id].outfit = c.outfit;
+                }
+              }
+              const autoFilled = Object.values(loaded).filter(v => v.outfit).length;
+              if (autoFilled > 0) log(`  에피소드 의상 ${autoFilled}명 자동 설정 (분석 결과에서)`, 'info');
+            } else if (outfitCount > 0) {
+              log(`  에피소드 의상 ${outfitCount}명 로드됨`, 'info');
+            }
+            setEpisodeOutfits(loaded);
           } else {
-            setEpisodeOutfits({});
+            // No episode outfits at all — auto-fill from analysis
+            const autoOutfits = {};
+            if (s1?.analysis?.characters?.length > 0) {
+              for (const c of s1.analysis.characters) {
+                if (c.outfit) autoOutfits[c.id] = { outfit: c.outfit };
+              }
+              const autoCount = Object.keys(autoOutfits).length;
+              if (autoCount > 0) log(`  에피소드 의상 ${autoCount}명 자동 설정 (분석 결과에서)`, 'info');
+            }
+            setEpisodeOutfits(autoOutfits);
           }
         }
       } catch(e) { console.warn('[loadEpisode] episodeOutfits load error:', e.message); setEpisodeOutfits({}); }
@@ -5226,9 +5248,25 @@ This is an ADULT webtoon production for mature audiences. You MUST:
     const newCharCount = (parsed.characters?.length || 0) - existingCharCount;
     log(`분석 완료: 캐릭터 ${parsed.characters?.length || 0}명 (기존 ${existingCharCount}, 신규 ${newCharCount}), 배경 ${parsed.backgrounds?.length || 0}개, 소품 ${parsed.props?.length || 0}개, 플롯 ${parsed.plotBeats?.length || 0}개`, 'success');
     setAnalysis(parsed);
+    // Auto-populate episode outfits from analysis (only fill empty fields)
+    if (currentEpisode && parsed.characters?.length > 0) {
+      setEpisodeOutfits(prev => {
+        const updated = {...prev};
+        let filled = 0;
+        for (const c of parsed.characters) {
+          if (!updated[c.id]) updated[c.id] = {};
+          if (!updated[c.id].outfit && c.outfit) {
+            updated[c.id].outfit = c.outfit;
+            filled++;
+          }
+        }
+        if (filled > 0) log(`${currentEpisode}화 의상 자동 설정: ${filled}명 (분석 결과에서 추출)`, 'info');
+        return updated;
+      });
+    }
     setCompletedSteps(prev => new Set([...prev, 0]));
     setStep(1);
-    // Auto-save step 1
+    // Auto-save step 1 + episode outfits
     if (projectId && currentEpisode) {
       try {
         const cs = [...new Set([...completedSteps, 0])];
@@ -8017,7 +8055,18 @@ Return ONLY the detailed English prompt, nothing else.`,
                               {/* Episode outfit inline */}
                               {currentEpisode && (
                                 <div style={{marginTop:4,padding:'6px 8px',background:'linear-gradient(135deg,#ffeaa7,#fdcb6e22)',borderRadius:6,border:'1px solid #f9ca24'}}>
-                                  <div style={{fontSize:11,fontWeight:600,color:'#d35400',marginBottom:4}}>👔 {currentEpisode}화 의상</div>
+                                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
+                                    <div style={{fontSize:11,fontWeight:600,color:'#d35400'}}>👔 {currentEpisode}화 의상</div>
+                                    {c.outfit && (
+                                      <button className="btn btn-xs" style={{fontSize:9,padding:'1px 5px',color:'#d35400',border:'1px solid #f9ca24',background:'transparent'}}
+                                        onClick={() => {
+                                          const updated = {...episodeOutfits, [c.id]: {...(episodeOutfits[c.id]||{}), outfit: c.outfit}};
+                                          setEpisodeOutfits(updated);
+                                          if (projectId && currentEpisode) saveEpisodeOutfits(updated);
+                                          log(`${c.name} 분석 의상 → ${currentEpisode}화 의상으로 동기화`, 'success');
+                                        }}>↓ 분석에서 가져오기</button>
+                                    )}
+                                  </div>
                                   <input
                                     style={{width:'100%',fontSize:11,padding:'3px 6px',borderRadius:4,border:'1px solid var(--border)',background:'var(--bg)',marginBottom:3}}
                                     value={episodeOutfits[c.id]?.outfit || ''}
