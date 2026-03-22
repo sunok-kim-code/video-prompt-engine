@@ -14,7 +14,7 @@
 <script src="https://cdn.jsdelivr.net/npm/ag-psd@20.0.0/dist/bundle.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gaegu:wght@400;700&family=Gothic+A1:wght@400;700&family=Jua&family=Nanum+Brush+Script&family=Nanum+Pen+Script&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gaegu:wght@400;700&family=Gasoek+One&family=Gothic+A1:wght@400;700&family=Gugi&family=Jua&family=Nanum+Brush+Script&family=Nanum+Pen+Script&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Single+Day&family=Sunflower:wght@300;500;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -2196,19 +2196,24 @@ function App() {
   const [episodeOutfits, setEpisodeOutfits] = useState({});
   const [showEpisodeOutfits, setShowEpisodeOutfits] = useState(false);
 
-  // Cover image
-  const [coverImage, setCoverImage] = useState(null); // base64 data URI
-  const [coverEditorOpen, setCoverEditorOpen] = useState(false);
-  const [coverGenerating, setCoverGenerating] = useState(false);
-  const [coverTitle, setCoverTitle] = useState('');
-  const [coverSubtitle, setCoverSubtitle] = useState('');
-  const [coverTitleY, setCoverTitleY] = useState(15); // % from top
-  const [coverTitleSize, setCoverTitleSize] = useState(48);
-  const [coverTitleColor, setCoverTitleColor] = useState('#ffffff');
-  const [coverSubColor, setCoverSubColor] = useState('#cccccc');
-  const [coverTitleFont, setCoverTitleFont] = useState("'Black Han Sans',sans-serif");
-  const [coverModel, setCoverModel] = useState('imagen4'); // imagen4, nanoBanana, grok
-  const [coverCustomPrompt, setCoverCustomPrompt] = useState('');
+  // Standalone Cover Generator (home screen)
+  const [showCoverGenerator, setShowCoverGenerator] = useState(false);
+
+  // Cover Generator state variables
+  const [cgStoryDescription, setCgStoryDescription] = useState('');
+  const [cgReferenceImages, setCgReferenceImages] = useState([]);
+  const [cgWebtoonStyle, setCgWebtoonStyle] = useState('로맨스');
+  const [cgTitle, setCgTitle] = useState('');
+  const [cgIncludeTitle, setCgIncludeTitle] = useState(true);
+  const [cgGeneratedPrompt, setCgGeneratedPrompt] = useState('');
+  const [cgCoverImageUrl, setCgCoverImageUrl] = useState(null);
+  const [cgGenerating, setCgGenerating] = useState(false);
+  const [cgTitleFont, setCgTitleFont] = useState('Black Han Sans');
+  const [cgTitleEffect, setCgTitleEffect] = useState('깔끔');
+  const [cgTitleSize, setCgTitleSize] = useState(60);
+  const [cgTitleYPercent, setCgTitleYPercent] = useState(15);
+  const [cgTitleColor, setCgTitleColor] = useState('#ffffff');
+  const [cgPreviewUrl, setCgPreviewUrl] = useState(null);
 
   // Completed steps tracking
   const [completedSteps, setCompletedSteps] = useState(new Set());
@@ -2972,221 +2977,6 @@ Rules:
     reader.readAsDataURL(file);
     e.target.value = '';
   };
-
-  // ── Cover Image Functions ──
-  const COVER_W = 720, COVER_H = 1098;
-
-  const buildCoverPrompt = () => {
-    const chars = analysis.characters || [];
-    const mainChars = chars.slice(0, 3);
-    const genre = analysis.genre || '웹툰';
-    const title = analysis.title || projectTitle || '무제';
-    const mood = analysis.overallMood || analysis.tone || '';
-    const setting = analysis.setting || analysis.worldSetting || '';
-
-    // Storyboard scene descriptions for richer context
-    const sceneDescs = (storyboard || []).slice(0, 5).map(s =>
-      s.visualDescription || s.imagePrompt || s.description || ''
-    ).filter(Boolean).slice(0, 3);
-
-    const parts = [
-      `Professional webtoon cover illustration for "${title}".`,
-      `Genre: ${genre}.`,
-      mood ? `Mood/Atmosphere: ${mood}.` : '',
-      setting ? `Setting: ${setting}.` : '',
-    ];
-
-    // Main characters with detail
-    mainChars.forEach((c, i) => {
-      const desc = c.visualDescription || c.appearance || '';
-      const outfit = c.outfit || '';
-      if (desc) parts.push(`${i === 0 ? 'Main' : 'Supporting'} character "${c.name}": ${desc}${outfit ? ', wearing ' + outfit : ''}.`);
-    });
-
-    // Key scene atmosphere from storyboard
-    if (sceneDescs.length > 0) {
-      parts.push(`Key scene atmosphere: ${sceneDescs.join('. ')}.`);
-    }
-
-    parts.push(
-      `Style: High-quality digital art, cinematic lighting, vibrant colors, dramatic composition suitable for a webtoon cover.`,
-      `Vertical composition (portrait 720x1098). Absolutely NO text, NO title, NO letters, NO words in the image.`
-    );
-
-    return parts.filter(Boolean).join(' ');
-  };
-
-  const generateCoverImage = async (useCustom) => {
-    if (!useCustom && !analysis) { log('먼저 Step 1 분석을 완료해주세요.', 'error'); return; }
-    if (useCustom && !coverCustomPrompt.trim()) { log('프롬프트를 입력해주세요.', 'error'); return; }
-    setCoverGenerating(true);
-    try {
-      const coverPrompt = useCustom
-        ? coverCustomPrompt.trim() + ' Vertical composition (portrait 720x1098). NO text, NO title, NO letters in the image.'
-        : buildCoverPrompt();
-      const title = analysis.title || projectTitle || '무제';
-      const genre = analysis.genre || '웹툰';
-      const modelName = coverModel === 'imagen4' ? 'Imagen 4' : coverModel === 'nanoBanana' ? 'Gemini Flash' : 'Grok';
-      log(`표지 이미지 생성 중... (${modelName})`, 'info');
-
-      let resultImage = null;
-
-      if (coverModel === 'imagen4') {
-        const results = await callImagen(coverPrompt, {aspectRatio: '2:3'});
-        if (results?.length > 0) resultImage = results[0];
-      } else if (coverModel === 'nanoBanana') {
-        // Gemini Flash with optional character reference images
-        const refImages = [];
-        const charAssets = sharedAssets?.characters || {};
-        Object.values(charAssets).forEach(a => { if (a.image) refImages.push(a.image); });
-        const results = await callNanoBanana(coverPrompt, {
-          aspectRatio: '2:3',
-          referenceImages: refImages.slice(0, 4)
-        });
-        if (results?.length > 0) resultImage = results[0];
-      } else if (coverModel === 'grok') {
-        const results = await callGrokImage(coverPrompt);
-        if (results?.length > 0) resultImage = results[0];
-      }
-
-      if (resultImage) {
-        setCoverImage(resultImage);
-        setCoverTitle(title);
-        setCoverSubtitle(genre);
-        setCoverEditorOpen(true);
-        log('✓ 표지 이미지 생성 완료', 'success');
-      } else {
-        log('표지 이미지 생성 결과가 없습니다.', 'error');
-      }
-    } catch(e) {
-      log('표지 생성 실패: ' + e.message, 'error');
-      console.error('Cover generation error:', e);
-    } finally {
-      setCoverGenerating(false);
-    }
-  };
-
-  const renderCoverCanvas = (targetCanvas, imgSrc) => {
-    return new Promise((resolve) => {
-      const W = COVER_W, H = COVER_H;
-      targetCanvas.width = W;
-      targetCanvas.height = H;
-      const ctx = targetCanvas.getContext('2d');
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillRect(0, 0, W, H);
-
-      const drawText = () => {
-        // Title
-        if (coverTitle) {
-          const titleY = H * (coverTitleY / 100);
-          ctx.font = `bold ${coverTitleSize}px ${coverTitleFont}`;
-          ctx.textAlign = 'center';
-          // Stroke for readability
-          ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-          ctx.lineWidth = 4;
-          ctx.lineJoin = 'round';
-          // Word wrap
-          const maxW = W - 60;
-          const words = coverTitle.split('');
-          let line = '';
-          const lines = [];
-          for (const ch of words) {
-            const test = line + ch;
-            if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = ch; }
-            else line = test;
-          }
-          if (line) lines.push(line);
-          const lineH = coverTitleSize * 1.3;
-          const startY = titleY;
-          lines.forEach((l, i) => {
-            ctx.strokeText(l, W/2, startY + i * lineH);
-            ctx.fillStyle = coverTitleColor;
-            ctx.fillText(l, W/2, startY + i * lineH);
-          });
-          // Subtitle
-          if (coverSubtitle) {
-            ctx.font = `500 ${Math.round(coverTitleSize * 0.45)}px 'Noto Sans KR',sans-serif`;
-            ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-            ctx.lineWidth = 3;
-            const subY = startY + lines.length * lineH + 10;
-            ctx.strokeText(coverSubtitle, W/2, subY);
-            ctx.fillStyle = coverSubColor;
-            ctx.fillText(coverSubtitle, W/2, subY);
-          }
-        }
-        resolve();
-      };
-
-      if (imgSrc) {
-        const img = new Image();
-        img.onload = () => {
-          // Draw cover image (cover-fit)
-          const imgRatio = img.width / img.height;
-          const canvasRatio = W / H;
-          let sx=0, sy=0, sw=img.width, sh=img.height;
-          if (imgRatio > canvasRatio) { sw = img.height * canvasRatio; sx = (img.width - sw)/2; }
-          else { sh = img.width / canvasRatio; sy = (img.height - sh)/2; }
-          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
-          // Gradient overlay for text readability
-          const grad = ctx.createLinearGradient(0, 0, 0, H);
-          grad.addColorStop(0, 'rgba(0,0,0,0.3)');
-          grad.addColorStop(0.5, 'rgba(0,0,0,0.05)');
-          grad.addColorStop(0.85, 'rgba(0,0,0,0.4)');
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, 0, W, H);
-          drawText();
-        };
-        img.onerror = () => drawText();
-        img.src = imgSrc;
-      } else {
-        drawText();
-      }
-    });
-  };
-
-  const downloadCover = async () => {
-    const canvas = document.createElement('canvas');
-    await renderCoverCanvas(canvas, coverImage);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
-    downloadDataUrl(dataUrl, `${coverTitle || 'cover'}_표지.jpg`);
-    log('✓ 표지 다운로드 완료 (720×1098 JPG)', 'success');
-  };
-
-  const saveCoverToProject = async () => {
-    if (!projectId) { log('프로젝트를 먼저 저장해주세요.', 'error'); return; }
-    try {
-      const coverData = { coverImage, coverTitle, coverSubtitle, coverTitleY, coverTitleSize, coverTitleColor, coverSubColor, coverTitleFont, coverModel };
-      await fbSavePhase(projectId, 0, 'cover', coverData);
-      log('✓ 표지 저장 완료', 'success');
-    } catch(e) { log('표지 저장 실패: ' + e.message, 'error'); }
-  };
-
-  const loadCoverFromProject = async (pid) => {
-    try {
-      const data = await fbLoadPhase(pid, 0, 'cover');
-      if (data && data.coverImage) {
-        setCoverImage(data.coverImage);
-        if (data.coverTitle) setCoverTitle(data.coverTitle);
-        if (data.coverSubtitle) setCoverSubtitle(data.coverSubtitle);
-        if (data.coverTitleY !== undefined) setCoverTitleY(data.coverTitleY);
-        if (data.coverTitleSize !== undefined) setCoverTitleSize(data.coverTitleSize);
-        if (data.coverTitleColor) setCoverTitleColor(data.coverTitleColor);
-        if (data.coverSubColor) setCoverSubColor(data.coverSubColor);
-        if (data.coverTitleFont) setCoverTitleFont(data.coverTitleFont);
-        if (data.coverModel) setCoverModel(data.coverModel);
-        return true;
-      }
-    } catch(e) { console.warn('[loadCover]', e.message); }
-    return false;
-  };
-
-  // Cover canvas preview ref
-  const coverCanvasRef = React.useRef(null);
-  React.useEffect(() => {
-    if (coverEditorOpen && coverCanvasRef.current) {
-      renderCoverCanvas(coverCanvasRef.current, coverImage);
-    }
-  }, [coverEditorOpen, coverImage, coverTitle, coverSubtitle, coverTitleY, coverTitleSize, coverTitleColor, coverSubColor, coverTitleFont]);
 
   // ── Shared helpers ──
   const loadImage = (src) => new Promise((res, rej) => {
@@ -6365,9 +6155,6 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       setProjectId(pid);
       setProjectTitle(proj.title || '');
 
-      // Load cover image
-      try { await loadCoverFromProject(pid); } catch(e) { /* no cover yet */ }
-
       // Load shared assets
       try {
         const assets = await fbLoadAllAssets(pid);
@@ -6416,6 +6203,267 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       }
     });
   }, []);
+
+  // ======== Cover Generator Helper Functions ========
+
+  // Webtoon style keywords for prompt generation
+  const WEBTOON_STYLE_KEYWORDS = {
+    '로맨스': {
+      keywords: 'soft lighting, warm color palette, intimate scene, romantic atmosphere, delicate features, beautiful eyes, gentle expression, emotional connection, elegant composition',
+      stylePrefix: 'romantic webtoon style, soft lighting, warm colors, intimate composition,'
+    },
+    'BL': {
+      keywords: 'bishonen, elegant features, emotional depth, dynamic pose, delicate linework, beautiful eyes, expressive, romantic tension, soft shading, sophisticated',
+      stylePrefix: 'BL webtoon style, beautiful characters, elegant features, emotional intensity,'
+    },
+    '성인물': {
+      keywords: 'mature content, sensual pose, confident expression, sophisticated lighting, detailed features, provocative composition, adult aesthetic, dramatic shadows',
+      stylePrefix: 'adult webtoon style, mature aesthetic, sophisticated lighting,'
+    },
+    '로맨틱코미디': {
+      keywords: 'bright colors, cheerful atmosphere, funny expressions, light-hearted, dynamic pose, playful mood, warm lighting, lively composition, comedic timing, expressive face',
+      stylePrefix: 'romantic comedy webtoon style, bright colors, cheerful mood, dynamic poses,'
+    },
+    '시트콤': {
+      keywords: 'comedic expressions, ensemble cast, lively atmosphere, bright colors, exaggerated poses, humorous composition, fun mood, multiple characters, colorful background',
+      stylePrefix: 'sitcom webtoon style, comedic mood, colorful palette, lively characters,'
+    }
+  };
+
+  const cgGeneratePrompt = async () => {
+    if (!cgStoryDescription.trim()) {
+      log('스토리 설명을 입력해주세요', 'error');
+      return;
+    }
+
+    try {
+      const styleKeywords = WEBTOON_STYLE_KEYWORDS[cgWebtoonStyle] || WEBTOON_STYLE_KEYWORDS['로맨스'];
+      const stylePrefix = ART_STYLES.naverWebtoon?.prefix || 'Korean Naver webtoon style, cartoon, clean bold linework,';
+
+      const prompt = await callText(
+        `You are an expert webtoon cover designer. Generate a detailed, professional English image generation prompt for a webtoon cover based on the story and style provided.
+
+Story Description: ${cgStoryDescription}
+Webtoon Style: ${cgWebtoonStyle}
+Style Keywords: ${styleKeywords.keywords}
+
+Create a compelling cover image prompt that:
+1. Captures the essence of the story
+2. Includes the webtoon style characteristics
+3. Follows the style keywords: ${styleKeywords.keywords}
+4. Describes composition, lighting, emotions, character appearance in detail
+5. Specifies the aspect ratio as portrait (2:3, 720x1098)
+6. Includes professional photography/illustration quality keywords
+7. Is optimized for image generation models (Flux, Stable Diffusion, etc.)
+
+Format: Return ONLY the detailed English prompt, nothing else. No markdown, no formatting.`,
+        '',
+        {maxTokens: 512}
+      );
+
+      if (prompt && prompt.trim()) {
+        const styleAdjustedPrompt = stylePrefix + ' ' + prompt.trim();
+        setCgGeneratedPrompt(styleAdjustedPrompt);
+        log('프롬프트 자동 생성 완료', 'success');
+      } else {
+        log('프롬프트 생성 실패', 'error');
+      }
+    } catch (e) {
+      log('프롬프트 생성 오류: ' + e.message, 'error');
+    }
+  };
+
+  const cgGenerateCover = async () => {
+    if (!cgGeneratedPrompt.trim()) {
+      log('프롬프트를 입력해주세요', 'error');
+      return;
+    }
+
+    setCgGenerating(true);
+    try {
+      log('웹툰 표지 생성 중... (720×1098)', 'info');
+      const images = await callImage(cgGeneratedPrompt, {
+        aspectRatio: '2:3',
+        referenceImages: cgReferenceImages.length > 0 ? cgReferenceImages : undefined,
+      });
+
+      if (images && images.length > 0 && images[0]) {
+        setCgCoverImageUrl(images[0]);
+        log('표지 이미지 생성 완료', 'success');
+      } else {
+        log('이미지 생성 실패 - 다시 시도해주세요', 'error');
+      }
+    } catch (e) {
+      log('표지 생성 오류: ' + e.message, 'error');
+    } finally {
+      setCgGenerating(false);
+    }
+  };
+
+  const cgApplyTitleEffect = (canvas, ctx, title, font, effect, color, size) => {
+    const w = canvas.width;
+    const h = canvas.height;
+    const yPos = (cgTitleYPercent / 100) * h;
+
+    ctx.font = `bold ${size}px "${font}"`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+
+    switch (effect) {
+      case '깔끔': // Clean: white text, thin black outline
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(title, w / 2, yPos);
+        ctx.fillStyle = color;
+        ctx.fillText(title, w / 2, yPos);
+        break;
+
+      case '네온': // Neon: glowing colored text
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 20;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.8;
+        ctx.strokeText(title, w / 2, yPos);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(title, w / 2, yPos);
+        break;
+
+      case '그림자': // Shadow: bold text with strong drop shadow
+        ctx.shadowColor = 'rgba(0,0,0,0.7)';
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetX = 4;
+        ctx.shadowOffsetY = 6;
+        ctx.fillStyle = color;
+        ctx.fillText(title, w / 2, yPos);
+        break;
+
+      case '각인': // Engraved: dark text with inner highlight (embossed)
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillText(title, w / 2 + 2, yPos - 2);
+        ctx.fillStyle = color;
+        ctx.fillText(title, w / 2, yPos);
+        break;
+
+      case '그라데이션': // Gradient: text with color gradient
+        const gradient = ctx.createLinearGradient(w / 2 - size * 2, yPos, w / 2 + size * 2, yPos);
+        gradient.addColorStop(0, '#ff6b9d');
+        gradient.addColorStop(0.5, color);
+        gradient.addColorStop(1, '#c06c84');
+        ctx.fillStyle = gradient;
+        ctx.fillText(title, w / 2, yPos);
+        break;
+
+      case '빈티지': // Vintage: warm-toned text with subtle texture
+        ctx.fillStyle = '#d4a574';
+        ctx.fillText(title, w / 2 + 1, yPos + 1);
+        ctx.fillStyle = '#f5deb3';
+        ctx.fillText(title, w / 2, yPos);
+        break;
+
+      case '공포': // Horror: red/dark text with rough edges
+        ctx.strokeStyle = '#8b0000';
+        ctx.lineWidth = 4;
+        ctx.globalAlpha = 0.7;
+        for (let i = 0; i < 3; i++) {
+          ctx.strokeText(title, w / 2 + Math.random() * 4 - 2, yPos + Math.random() * 4 - 2);
+        }
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#cc0000';
+        ctx.fillText(title, w / 2, yPos);
+        break;
+
+      case '판타지': // Fantasy: gold/silver metallic text with glow
+        ctx.shadowColor = '#ffd700';
+        ctx.shadowBlur = 20;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(title, w / 2, yPos);
+        ctx.strokeStyle = '#ffa500';
+        ctx.lineWidth = 2;
+        ctx.strokeText(title, w / 2, yPos);
+        break;
+
+      default:
+        ctx.fillStyle = color;
+        ctx.fillText(title, w / 2, yPos);
+    }
+  };
+
+  const cgRenderWithTitle = async (imageUrl, titleText, titleFont, titleEffect, titleColor, titleSize) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 720;
+        canvas.height = 1098;
+        const ctx = canvas.getContext('2d');
+
+        // Draw the base cover image (scaled to fit)
+        const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
+        const x = (canvas.width - img.width * scale) / 2;
+        const y = (canvas.height - img.height * scale) / 2;
+        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+
+        // Apply title
+        if (titleText && cgIncludeTitle) {
+          cgApplyTitleEffect(canvas, ctx, titleText, titleFont, titleEffect, titleColor, titleSize);
+        }
+
+        resolve(canvas.toDataURL('image/jpeg', 0.95));
+      };
+      img.onerror = () => {
+        log('이미지 로드 실패', 'error');
+        resolve(null);
+      };
+      img.src = imageUrl;
+    });
+  };
+
+  const cgPreviewCover = async () => {
+    if (!cgCoverImageUrl) {
+      log('먼저 표지 이미지를 생성해주세요', 'error');
+      return;
+    }
+
+    try {
+      const previewData = await cgRenderWithTitle(
+        cgCoverImageUrl,
+        cgTitle,
+        cgTitleFont,
+        cgTitleEffect,
+        cgTitleColor,
+        cgTitleSize
+      );
+      setCgPreviewUrl(previewData);
+      log('미리보기 렌더링 완료', 'success');
+    } catch (e) {
+      log('미리보기 오류: ' + e.message, 'error');
+    }
+  };
+
+  const cgDownloadCover = async () => {
+    if (!cgPreviewUrl && !cgCoverImageUrl) {
+      log('다운로드할 이미지가 없습니다', 'error');
+      return;
+    }
+
+    try {
+      const downloadUrl = cgPreviewUrl || cgCoverImageUrl;
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const filename = `webtoon_cover_${cgWebtoonStyle}_${timestamp}.jpg`;
+      await downloadDataUrl(downloadUrl, filename);
+      log('표지 다운로드 완료', 'success');
+    } catch (e) {
+      log('다운로드 오류: ' + e.message, 'error');
+    }
+  };
 
   // ======== Save Panel Image (delegates to shared downloadDataUrl) ========
   const savePanelImage = (dataUrl, filename) => downloadDataUrl(dataUrl, filename || 'panel.png');
@@ -7408,131 +7456,6 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       )}
 
       <div className="main-content">
-        {/* Cover Banner */}
-        {projectId && (
-          <div style={{
-            position:'relative', width:'100%', height: coverImage ? 160 : 80,
-            background: coverImage ? 'none' : 'linear-gradient(135deg, #1a1a2e, #16213e)',
-            borderBottom:'1px solid var(--border)', overflow:'hidden',
-            display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer',
-          }} onClick={() => setCoverEditorOpen(true)}>
-            {coverImage && (
-              <img src={coverImage} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',filter:'brightness(0.5)'}} />
-            )}
-            <div style={{position:'relative',zIndex:2,textAlign:'center'}}>
-              {coverTitle && <div style={{fontSize:22,fontWeight:800,color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.7)',letterSpacing:1}}>{coverTitle}</div>}
-              {coverSubtitle && <div style={{fontSize:12,color:'#ccc',marginTop:2,textShadow:'0 1px 4px rgba(0,0,0,0.6)'}}>{coverSubtitle}</div>}
-              {!coverImage && <div style={{fontSize:12,color:'#888',marginTop:4}}>🎨 클릭하여 표지 만들기</div>}
-            </div>
-            <div style={{position:'absolute',right:12,top:12,zIndex:3,display:'flex',gap:6}}>
-              <button className="btn btn-sm" style={{fontSize:10,padding:'3px 10px',background:'rgba(255,255,255,0.15)',color:'#fff',border:'1px solid rgba(255,255,255,0.3)',backdropFilter:'blur(4px)'}}
-                onClick={(e) => { e.stopPropagation(); setCoverEditorOpen(true); }}>✏️ 편집</button>
-              {coverImage && <button className="btn btn-sm" style={{fontSize:10,padding:'3px 10px',background:'rgba(255,255,255,0.15)',color:'#fff',border:'1px solid rgba(255,255,255,0.3)',backdropFilter:'blur(4px)'}}
-                onClick={(e) => { e.stopPropagation(); downloadCover(); }}>📥 다운로드</button>}
-            </div>
-          </div>
-        )}
-
-        {/* Cover Editor Modal */}
-        {coverEditorOpen && (
-          <div style={{position:'fixed',inset:0,zIndex:10000,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center'}}
-            onClick={() => setCoverEditorOpen(false)}>
-            <div style={{background:'var(--surface)',borderRadius:16,padding:24,maxWidth:900,width:'95%',maxHeight:'90vh',overflow:'auto',display:'flex',gap:24}}
-              onClick={e => e.stopPropagation()}>
-              {/* Preview */}
-              <div style={{flex:'0 0 360px',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-                <canvas ref={coverCanvasRef} style={{width:324,height:494,borderRadius:12,boxShadow:'0 8px 32px rgba(0,0,0,0.3)'}} />
-                <div style={{display:'flex',gap:6,flexWrap:'wrap',justifyContent:'center',alignItems:'center'}}>
-                  <select value={coverModel} onChange={e => setCoverModel(e.target.value)}
-                    style={{padding:'4px 8px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:11}}>
-                    <option value="imagen4">Imagen 4</option>
-                    <option value="nanoBanana">Gemini Flash (레퍼런스)</option>
-                    <option value="grok">Grok</option>
-                  </select>
-                  <button className="btn btn-primary btn-sm" onClick={() => generateCoverImage(false)} disabled={coverGenerating || !analysis}>
-                    {coverGenerating ? '🔄 생성 중...' : '🤖 자동 생성'}
-                  </button>
-                  <button className="btn btn-outline btn-sm" onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file'; input.accept = 'image/*';
-                    input.onchange = (e) => {
-                      const file = e.target.files[0]; if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = () => { setCoverImage(reader.result); };
-                      reader.readAsDataURL(file);
-                    };
-                    input.click();
-                  }}>📁 이미지 업로드</button>
-                  <button className="btn btn-outline btn-sm" onClick={downloadCover} disabled={!coverImage}>📥 JPG 다운로드</button>
-                  <button className="btn btn-success btn-sm" onClick={async () => { await saveCoverToProject(); setCoverEditorOpen(false); }}>💾 저장 후 닫기</button>
-                </div>
-                <div style={{fontSize:10,color:'var(--text2)',textAlign:'center',marginTop:4}}>720 × 1098 px</div>
-
-                {/* Custom prompt input */}
-                <div style={{width:'100%',marginTop:4}}>
-                  <textarea value={coverCustomPrompt} onChange={e => setCoverCustomPrompt(e.target.value)}
-                    placeholder="직접 프롬프트 입력 (예: 달빛 아래 서있는 검은 머리 소녀, 판타지 배경, 화려한 마법 이펙트...)"
-                    style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:11,resize:'vertical',minHeight:50,maxHeight:120,fontFamily:'inherit'}}
-                    rows={2} />
-                  <button className="btn btn-sm" style={{width:'100%',marginTop:4,background:'linear-gradient(135deg,#6c5ce7,#a29bfe)',color:'#fff',border:'none',fontSize:11}}
-                    onClick={() => generateCoverImage(true)} disabled={coverGenerating || !coverCustomPrompt.trim()}>
-                    {coverGenerating ? '🔄 생성 중...' : '✍️ 프롬프트로 생성'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Controls */}
-              <div style={{flex:1,display:'flex',flexDirection:'column',gap:12}}>
-                <div style={{fontSize:16,fontWeight:700,color:'var(--text)'}}>표지 편집</div>
-
-                <label style={{fontSize:12,color:'var(--text2)'}}>제목</label>
-                <input value={coverTitle} onChange={e => setCoverTitle(e.target.value)}
-                  style={{padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:14,fontWeight:700}} placeholder="웹툰 제목" />
-
-                <label style={{fontSize:12,color:'var(--text2)'}}>부제목 / 장르</label>
-                <input value={coverSubtitle} onChange={e => setCoverSubtitle(e.target.value)}
-                  style={{padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:13}} placeholder="장르 또는 부제" />
-
-                <label style={{fontSize:12,color:'var(--text2)'}}>제목 위치 (위에서 {coverTitleY}%)</label>
-                <input type="range" min="5" max="90" value={coverTitleY} onChange={e => setCoverTitleY(parseInt(e.target.value))} />
-
-                <label style={{fontSize:12,color:'var(--text2)'}}>제목 크기 ({coverTitleSize}px)</label>
-                <input type="range" min="20" max="80" value={coverTitleSize} onChange={e => setCoverTitleSize(parseInt(e.target.value))} />
-
-                <div style={{display:'flex',gap:12}}>
-                  <div style={{flex:1}}>
-                    <label style={{fontSize:12,color:'var(--text2)'}}>제목 색상</label>
-                    <input type="color" value={coverTitleColor} onChange={e => setCoverTitleColor(e.target.value)} style={{width:'100%',height:32,borderRadius:6,border:'1px solid var(--border)',cursor:'pointer'}} />
-                  </div>
-                  <div style={{flex:1}}>
-                    <label style={{fontSize:12,color:'var(--text2)'}}>부제목 색상</label>
-                    <input type="color" value={coverSubColor} onChange={e => setCoverSubColor(e.target.value)} style={{width:'100%',height:32,borderRadius:6,border:'1px solid var(--border)',cursor:'pointer'}} />
-                  </div>
-                </div>
-
-                <label style={{fontSize:12,color:'var(--text2)'}}>폰트</label>
-                <select value={coverTitleFont} onChange={e => setCoverTitleFont(e.target.value)}
-                  style={{padding:'8px 12px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:13}}>
-                  <option value="'Black Han Sans',sans-serif">블랙한산스 (기본)</option>
-                  <option value="'Noto Sans KR',sans-serif">Noto Sans</option>
-                  <option value="'Gothic A1',sans-serif">고딕</option>
-                  <option value="'Nanum Myeongjo',serif">나눔명조</option>
-                  <option value="'Do Hyeon',sans-serif">도현</option>
-                  <option value="'Jua',sans-serif">주아</option>
-                  <option value="'Nanum Brush Script',cursive">나눔붓체</option>
-                </select>
-
-                {!analysis && <div style={{fontSize:11,color:'var(--err)',marginTop:8}}>⚠️ AI 표지 생성을 위해 Step 1 분석을 먼저 완료해주세요</div>}
-                {coverImage && <div style={{fontSize:11,color:'var(--text2)',marginTop:4}}>💡 이미지를 업로드하거나 AI로 재생성할 수 있습니다</div>}
-                <div style={{fontSize:10,color:'var(--text2)',marginTop:4,lineHeight:1.5}}>
-                  📐 표지 크기: 720 × 1098 px (네이버 웹툰 표지 규격)<br/>
-                  🤖 Gemini Flash는 캐릭터 레퍼런스 이미지를 참조합니다
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Episode Bar */}
         {projectId && (
           <div className="episode-bar">
@@ -7608,6 +7531,17 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                     setCurrentEpisode(1);
                     log('새 프로젝트 생성됨', 'success');
                   }}>+ 새 프로젝트</button>
+                  <button className="btn btn-sm" style={{background:'linear-gradient(135deg,#9b59b6,#8e44ad)',color:'#fff',border:'none'}} onClick={() => {
+                    setCgStoryDescription('');
+                    setCgReferenceImages([]);
+                    setCgWebtoonStyle('로맨스');
+                    setCgTitle('');
+                    setCgIncludeTitle(true);
+                    setCgGeneratedPrompt('');
+                    setCgCoverImageUrl(null);
+                    setCgPreviewUrl(null);
+                    setShowCoverGenerator(true);
+                  }}>🎨 웹툰 표지 만들기</button>
                 </div>
 
                 <div style={{padding:12,background:'var(--surface2)',borderRadius:8}}>
@@ -7632,6 +7566,262 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                   {projectList.length === 0 && <div className="text-muted">저장된 프로젝트가 없습니다. 새 프로젝트를 만들어 시작하세요.</div>}
                 </div>
               </div>
+
+              {showCoverGenerator && (
+                <div style={{marginTop:20}}>
+                  <div className="card">
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+                      <h2 style={{fontSize:20,fontWeight:700,margin:0}}>🎨 웹툰 표지 생성기</h2>
+                      <button className="btn btn-outline btn-sm" onClick={() => setShowCoverGenerator(false)}>← 돌아가기</button>
+                    </div>
+
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+                      {/* Left Panel: Inputs */}
+                      <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                        {/* Story Description */}
+                        <div>
+                          <label className="form-label">스토리 설명</label>
+                          <textarea
+                            className="form-textarea"
+                            value={cgStoryDescription}
+                            onChange={e => setCgStoryDescription(e.target.value)}
+                            placeholder="표지에 표현할 스토리의 요약, 분위기, 주요 인물 등을 설명해주세요..."
+                            style={{minHeight:120}}
+                          />
+                        </div>
+
+                        {/* Reference Images */}
+                        <div>
+                          <label className="form-label">참고 이미지 (선택)</label>
+                          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8}}>
+                            {cgReferenceImages.map((img, idx) => (
+                              <div key={idx} style={{position:'relative',width:80,height:80}}>
+                                <img src={img} style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:8}} />
+                                <button
+                                  className="btn btn-xs"
+                                  style={{position:'absolute',top:0,right:0,background:'var(--err)',color:'#fff',padding:'2px 6px',borderRadius:'0 8px',border:'none'}}
+                                  onClick={() => setCgReferenceImages(cgReferenceImages.filter((_, i) => i !== idx))}
+                                >×</button>
+                              </div>
+                            ))}
+                          </div>
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            onChange={(e) => {
+                              if (cgReferenceImages.length >= 3) {
+                                log('최대 3개까지만 업로드 가능합니다', 'warn');
+                                return;
+                              }
+                              Array.from(e.target.files || []).forEach(file => {
+                                if (cgReferenceImages.length >= 3) return;
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  setCgReferenceImages(prev => [...prev, ev.target.result]);
+                                };
+                                reader.readAsDataURL(file);
+                              });
+                            }}
+                            style={{fontSize:12}}
+                          />
+                        </div>
+
+                        {/* Webtoon Style */}
+                        <div>
+                          <label className="form-label">웹툰 장르</label>
+                          <select
+                            className="form-select"
+                            value={cgWebtoonStyle}
+                            onChange={e => setCgWebtoonStyle(e.target.value)}
+                          >
+                            <option value="로맨스">로맨스</option>
+                            <option value="BL">BL</option>
+                            <option value="성인물">성인물</option>
+                            <option value="로맨틱코미디">로맨틱코미디</option>
+                            <option value="시트콤">시트콤</option>
+                          </select>
+                        </div>
+
+                        {/* Title Settings */}
+                        <div style={{borderTop:'1px solid var(--border)',paddingTop:16}}>
+                          <label style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,cursor:'pointer'}}>
+                            <input
+                              type="checkbox"
+                              checked={cgIncludeTitle}
+                              onChange={e => setCgIncludeTitle(e.target.checked)}
+                              style={{width:18,height:18,cursor:'pointer'}}
+                            />
+                            <span className="form-label" style={{margin:0}}>제목 추가</span>
+                          </label>
+
+                          {cgIncludeTitle && (
+                            <>
+                              <input
+                                className="form-input"
+                                value={cgTitle}
+                                onChange={e => setCgTitle(e.target.value)}
+                                placeholder="표지에 표시할 제목"
+                                style={{marginBottom:12}}
+                              />
+
+                              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+                                <div>
+                                  <label className="form-label">폰트</label>
+                                  <select
+                                    className="form-select"
+                                    value={cgTitleFont}
+                                    onChange={e => setCgTitleFont(e.target.value)}
+                                    style={{fontSize:11}}
+                                  >
+                                    <option value="Black Han Sans">Black Han Sans</option>
+                                    <option value="Do Hyeon">Do Hyeon</option>
+                                    <option value="Jua">Jua</option>
+                                    <option value="Gothic A1">Gothic A1</option>
+                                    <option value="Nanum Myeongjo">Nanum Myeongjo</option>
+                                    <option value="Gugi">Gugi</option>
+                                    <option value="Sunflower">Sunflower</option>
+                                    <option value="Single Day">Single Day</option>
+                                    <option value="Gasoek One">Gasoek One</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="form-label">효과</label>
+                                  <select
+                                    className="form-select"
+                                    value={cgTitleEffect}
+                                    onChange={e => setCgTitleEffect(e.target.value)}
+                                    style={{fontSize:11}}
+                                  >
+                                    <option value="깔끔">깔끔 (Clean)</option>
+                                    <option value="네온">네온 (Neon)</option>
+                                    <option value="그림자">그림자 (Shadow)</option>
+                                    <option value="각인">각인 (Engraved)</option>
+                                    <option value="그라데이션">그라데이션 (Gradient)</option>
+                                    <option value="빈티지">빈티지 (Vintage)</option>
+                                    <option value="공포">공포 (Horror)</option>
+                                    <option value="판타지">판타지 (Fantasy)</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:12}}>
+                                <div>
+                                  <label className="form-label">크기</label>
+                                  <input
+                                    type="range"
+                                    min="20"
+                                    max="120"
+                                    value={cgTitleSize}
+                                    onChange={e => setCgTitleSize(Number(e.target.value))}
+                                    style={{width:'100%'}}
+                                  />
+                                  <div style={{fontSize:11,color:'var(--text2)',textAlign:'center'}}>{cgTitleSize}px</div>
+                                </div>
+                                <div>
+                                  <label className="form-label">위치 (Y%)</label>
+                                  <input
+                                    type="range"
+                                    min="5"
+                                    max="95"
+                                    value={cgTitleYPercent}
+                                    onChange={e => setCgTitleYPercent(Number(e.target.value))}
+                                    style={{width:'100%'}}
+                                  />
+                                  <div style={{fontSize:11,color:'var(--text2)',textAlign:'center'}}>{cgTitleYPercent}%</div>
+                                </div>
+                                <div>
+                                  <label className="form-label">색상</label>
+                                  <input
+                                    type="color"
+                                    value={cgTitleColor}
+                                    onChange={e => setCgTitleColor(e.target.value)}
+                                    style={{width:'100%',height:36,border:'1px solid var(--border)',borderRadius:8,cursor:'pointer'}}
+                                  />
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right Panel: Generation & Preview */}
+                      <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                        {/* Generated Prompt */}
+                        <div>
+                          <label className="form-label">이미지 생성 프롬프트 (자동 생성됨)</label>
+                          <textarea
+                            className="form-textarea"
+                            value={cgGeneratedPrompt}
+                            onChange={e => setCgGeneratedPrompt(e.target.value)}
+                            placeholder="프롬프트를 수정할 수 있습니다"
+                            style={{minHeight:100,fontFamily:'monospace',fontSize:11}}
+                          />
+                          <button
+                            className="btn btn-primary btn-sm"
+                            onClick={cgGeneratePrompt}
+                            style={{marginTop:8,width:'100%'}}
+                          >
+                            ✨ 프롬프트 자동 생성
+                          </button>
+                        </div>
+
+                        {/* Generate Button */}
+                        <button
+                          className="btn btn-primary"
+                          onClick={cgGenerateCover}
+                          disabled={cgGenerating || !cgGeneratedPrompt.trim()}
+                          style={{width:'100%',padding:'12px'}}
+                        >
+                          {cgGenerating ? '🔄 생성 중...' : '🎨 표지 이미지 생성'}
+                        </button>
+
+                        {/* Preview Section */}
+                        {cgCoverImageUrl && (
+                          <div>
+                            <label className="form-label">생성된 이미지</label>
+                            <img
+                              src={cgCoverImageUrl}
+                              style={{width:'100%',maxHeight:400,objectFit:'contain',borderRadius:8,border:'1px solid var(--border)',marginBottom:8}}
+                            />
+                            <button
+                              className="btn btn-success btn-sm"
+                              onClick={cgPreviewCover}
+                              style={{width:'100%'}}
+                            >
+                              📋 제목 적용 미리보기
+                            </button>
+                          </div>
+                        )}
+
+                        {cgPreviewUrl && (
+                          <div>
+                            <label className="form-label">최종 미리보기</label>
+                            <img
+                              src={cgPreviewUrl}
+                              style={{width:'100%',maxHeight:400,objectFit:'contain',borderRadius:8,border:'2px solid var(--accent)',marginBottom:8}}
+                            />
+                            <button
+                              className="btn btn-success"
+                              onClick={cgDownloadCover}
+                              style={{width:'100%',padding:'10px'}}
+                            >
+                              ⬇️ JPG 다운로드 (720×1098)
+                            </button>
+                          </div>
+                        )}
+
+                        {!cgCoverImageUrl && (
+                          <div style={{padding:40,textAlign:'center',background:'var(--surface2)',borderRadius:8,color:'var(--text2)'}}>
+                            <div style={{fontSize:14}}>스토리와 프롬프트를 입력 후</div>
+                            <div style={{fontSize:14}}>「표지 이미지 생성」 버튼을 클릭하세요</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             // Production workflow
