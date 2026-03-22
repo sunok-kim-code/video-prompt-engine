@@ -6331,7 +6331,7 @@ Return ONLY the detailed English prompt, nothing else.`,
     try {
       log('웹툰 표지 생성 중... (720×1098)', 'info');
       const images = await callImage(cgGeneratedPrompt, {
-        aspectRatio: '2:3',
+        aspectRatio: '3:4',
         referenceImages: cgReferenceImages.length > 0 ? cgReferenceImages : undefined,
       });
 
