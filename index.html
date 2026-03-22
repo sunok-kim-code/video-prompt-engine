@@ -602,14 +602,39 @@ async function callNanoBanana(prompt, opts={}) {
   const parts=[];
   if(opts.referenceImages?.length>0){
     parts.push({text:'REFERENCE IMAGES — You MUST replicate these characters, backgrounds, and props EXACTLY as shown. Copy every visual detail with pixel-level accuracy: facial features, hairstyle, hair color, eye color, eye shape, skin tone, outfit design, outfit colors, body proportions, accessories. Do NOT change, reimagine, or stylize any element differently from these references:'});
+    let refCount = 0;
     for(const ref of opts.referenceImages.slice(0,6)){
-      const b=extractBase64(ref.image);
+      const imgSrc = ref.image || ref;
+      const desc = ref.description || '';
+      // 1) Try extracting base64 from data URI
+      const b=extractBase64(imgSrc);
       if(b){
         parts.push({inlineData:{mimeType:'image/png',data:b}});
-        if(ref.description)parts.push({text:'[Asset: '+ref.description.substring(0,400)+'] — COPY THIS EXACTLY'});
+        if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+'] — COPY THIS EXACTLY'});
+        refCount++;
+      } else if(typeof imgSrc === 'string' && imgSrc.startsWith('http')){
+        // 2) HTTP URL — fetch and convert to base64 for Gemini inline
+        try{
+          const resp=await fetch(imgSrc);
+          const blob=await resp.blob();
+          const arrayBuf=await blob.arrayBuffer();
+          const uint8=new Uint8Array(arrayBuf);
+          let binary='';for(let i=0;i<uint8.length;i++)binary+=String.fromCharCode(uint8[i]);
+          const b64=btoa(binary);
+          const mime=blob.type||'image/png';
+          parts.push({inlineData:{mimeType:mime,data:b64}});
+          if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+'] — COPY THIS EXACTLY'});
+          refCount++;
+          console.log(`[NanoBanana] URL 레퍼런스 → base64 변환 성공: ${imgSrc.substring(0,80)}...`);
+        }catch(e){
+          console.warn(`[NanoBanana] URL 레퍼런스 변환 실패: ${imgSrc.substring(0,80)}`, e.message);
+        }
+      } else {
+        console.warn(`[NanoBanana] 레퍼런스 이미지 무시 (형식 불명):`, typeof imgSrc, imgSrc?.substring?.(0,50));
       }
     }
-    parts.push({text:'END OF REFERENCES. Now generate the following scene using EXACTLY these character/prop designs:'});
+    if(refCount > 0) parts.push({text:'END OF REFERENCES. Now generate the following scene using EXACTLY these character/prop designs:'});
+    console.log(`[NanoBanana] 레퍼런스 ${opts.referenceImages.length}개 중 ${refCount}개 성공적으로 전달`);
   }
   parts.push({text:prompt});
   const body={contents:[{role:'user',parts}],generationConfig:{responseModalities:['TEXT','IMAGE'],temperature:1.0}};
