@@ -6356,23 +6356,87 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     finally { setRunning(false); }
   };
 
-  // Firebase에 개별 패널 이미지 저장
+  // Firebase에 개별 패널 이미지만 저장 (다른 패널은 건드리지 않음)
   const saveSinglePanelToFirebase = async (panelIdx) => {
     if (!projectId || !currentEpisode) { log('프로젝트/에피소드를 먼저 선택하세요', 'error'); return; }
     if (!panels[panelIdx]) { log(`패널 ${panelIdx+1}에 이미지가 없습니다`, 'error'); return; }
     try {
       setRunning(true);
-      log(`패널 ${panelIdx+1} Firebase 저장 중...`, 'info');
-      // Save the entire panels array (with the updated single panel) to maintain consistency
-      await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels, bubbleOverlays});
-      // Also save storyboard if available
-      if (storyboard.length > 0) {
-        await fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard});
+      log(`패널 ${panelIdx+1} Firebase 저장 중... (개별 패널만)`, 'info');
+      const db = getDb(); if (!db) throw new Error('DB 연결 없음');
+      const phaseRef = db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(currentEpisode)).collection('phases').doc('step4_panels');
+      const phaseDoc = await phaseRef.get();
+
+      if (!phaseDoc.exists) {
+        // 기존 저장 데이터 없음 — 전체 저장 fallback
+        log('기존 패널 데이터 없음, 전체 저장으로 전환...', 'info');
+        await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels, bubbleOverlays});
+      } else {
+        const existingData = phaseDoc.data();
+        const imgColl = phaseRef.collection('images');
+
+        // 1) 현재 panels 배열에서 해당 패널만 새 토큰으로 교체
+        // 기존 tokenized panels 배열 가져오기
+        const existingPanels = existingData.panels || [];
+
+        // 해당 패널의 새 이미지를 토큰화
+        const newImgs = [];
+        const tokenized = stripBase64(panels[panelIdx], newImgs, 'panel_' + panelIdx);
+
+        // 기존 panels 배열에서 해당 인덱스의 이전 토큰 ID 찾기
+        const oldToken = existingPanels[panelIdx];
+        const oldImgId = (typeof oldToken === 'string' && oldToken.startsWith('[img:') && oldToken.endsWith(']'))
+          ? oldToken.slice(5, -1) : null;
+
+        // 기존 panels 배열 업데이트 (해당 인덱스만 교체)
+        const updatedPanels = [...existingPanels];
+        // panels 길이가 늘어났으면 확장
+        while (updatedPanels.length < panels.length) updatedPanels.push(null);
+        updatedPanels[panelIdx] = tokenized;
+
+        // 2) 메인 문서 업데이트 (panels 배열만 변경, 나머지 유지)
+        await phaseRef.update({
+          panels: updatedPanels,
+          imageCount: existingData.imageCount || 0,
+          savedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 3) 이전 이미지 문서 삭제 (해당 패널의 것만)
+        if (oldImgId) {
+          try {
+            // 단일 문서 또는 청크 문서 삭제
+            const oldDoc = await imgColl.doc(oldImgId).get();
+            if (oldDoc.exists) {
+              const oldData = oldDoc.data();
+              if (oldData.chunks) {
+                // 청크 문서들도 삭제
+                for (let c = 0; c < oldData.chunks; c++) {
+                  await imgColl.doc(oldImgId + '_c' + c).delete();
+                }
+              }
+              await imgColl.doc(oldImgId).delete();
+            }
+          } catch(e) { console.warn('[saveSinglePanel] old image cleanup:', e.message); }
+        }
+
+        // 4) 새 이미지 문서 저장 (해당 패널의 것만)
+        const CHUNK_SIZE = 800000;
+        for (const im of newImgs) {
+          if (im.data.length > 900000) {
+            const cn = Math.ceil(im.data.length / CHUNK_SIZE);
+            await imgColl.doc(im.id).set({key: im.key, chunks: cn});
+            for (let c = 0; c < cn; c++) {
+              await imgColl.doc(im.id + '_c' + c).set({data: im.data.substring(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE), idx: c});
+              await new Promise(r => setTimeout(r, 200));
+            }
+          } else {
+            await imgColl.doc(im.id).set({key: im.key, data: im.data});
+          }
+        }
+        console.log(`[saveSinglePanel] 패널 ${panelIdx+1}: 이전 토큰=${oldImgId}, 새 이미지=${newImgs.length}개 저장`);
       }
-      const cs = [...new Set([...completedSteps, 0, 1, 2, 3])];
-      await fbSaveEpisode(projectId, currentEpisode, {step: 4, completedSteps: cs});
-      updateEpisodeState(4, cs);
-      log(`✓ 패널 ${panelIdx+1} Firebase 저장 완료!`, 'success');
+
+      log(`✓ 패널 ${panelIdx+1} Firebase 저장 완료! (개별 패널만 업데이트)`, 'success');
     } catch(e) { log(`패널 ${panelIdx+1} Firebase 저장 실패: ${e.message}`, 'error'); }
     finally { setRunning(false); }
   };
