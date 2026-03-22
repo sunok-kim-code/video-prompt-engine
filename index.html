@@ -6291,9 +6291,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       const stylePrefix = ART_STYLES.naverWebtoon?.prefix || 'Korean Naver webtoon style, cartoon, clean bold linework,';
 
       const prompt = await callText(
-        `You are an expert webtoon cover designer. Generate a detailed, professional English image generation prompt for a webtoon cover based on the story and style provided.
-
-Story Description: ${cgStoryDescription}
+        `You are an expert webtoon cover designer. Generate a detailed, professional English image generation prompt for a webtoon cover. Return ONLY the prompt text, nothing else. No markdown, no formatting.`,
+        `Story Description: ${cgStoryDescription}
 Webtoon Style: ${cgWebtoonStyle}
 Style Keywords: ${styleKeywords.keywords}
 
@@ -6306,8 +6305,7 @@ Create a compelling cover image prompt that:
 6. Includes professional photography/illustration quality keywords
 7. Is optimized for image generation models (Flux, Stable Diffusion, etc.)
 
-Format: Return ONLY the detailed English prompt, nothing else. No markdown, no formatting.`,
-        '',
+Return ONLY the detailed English prompt, nothing else.`,
         {maxTokens: 512}
       );
 
