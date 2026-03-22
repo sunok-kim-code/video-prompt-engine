@@ -4287,6 +4287,7 @@ Rules:
 
     // ========== Gemini (Vertex AI NanoBanana — supports multiple models) ==========
     if (imageProvider === 'nanoBanana') {
+      console.log(`[NanoBanana] 선택된 모델 키: "${nbVertexModel}", vertexModel: "${NB_VERTEX_MODELS[nbVertexModel]?.vertexModel || 'NOT FOUND'}"`)
       const nbInfo = NB_VERTEX_MODELS[nbVertexModel] || NB_VERTEX_MODELS['gemini-2.5-flash'];
       const geminiOpts = {...opts, model: nbInfo.vertexModel};
       const refInstruction = refs.length > 0
@@ -4679,7 +4680,7 @@ Rules:
       }
       return await callImagen(imagen4Prompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
-  }, [imageProvider, artStyle, customStylePrompt, getStylePrefix, log, loraModels]);
+  }, [imageProvider, artStyle, customStylePrompt, getStylePrefix, log, loraModels, nbVertexModel]);
 
   // LoRA Training: train a character LoRA from reference images
   const trainCharacterLora = async (charId, charName, images) => {
