@@ -6024,15 +6024,32 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
 
       }
 
-      // Determine aspect ratio from panel imageSize (user-editable) or auto from shotSize
+      // Determine aspect ratio from panel imageSize (user-editable) or auto from shotSize + type
       const panelAR = panel.imageSize || (() => {
         const shot = (panel.shotSize || 'medium').toLowerCase();
-        if (shot.includes('extreme_wide') || shot.includes('wide') || shot === 'establishing') return '16:9';
-        if (shot.includes('close') || shot.includes('extreme_close')) return '9:16';
-        return '1:1'; // medium shots → square
+        const type = (panel.type || '').toLowerCase();
+        const angle = (panel.cameraAngle || '').toLowerCase();
+        // Establishing / extreme wide → cinematic horizontal
+        if (shot.includes('extreme_wide') || type === 'establishing') return '16:9';
+        // Wide shots → slightly horizontal
+        if (shot.includes('wide') && !shot.includes('medium')) return '3:2';
+        // Close-up / extreme close → tall vertical (face/emotion emphasis)
+        if (shot === 'extreme_close') return '2:3';
+        if (shot.includes('close') && !shot.includes('medium')) return '3:4';
+        // Over-shoulder dialogue → horizontal for two-character composition
+        if (angle.includes('over_shoulder')) return '3:2';
+        // Birds-eye → square for overhead composition
+        if (angle.includes('birds_eye')) return '1:1';
+        // Emotion / closeup type → vertical
+        if (type === 'emotion' || type === 'closeup') return '3:4';
+        // Action type → horizontal for movement
+        if (type === 'action') return '3:2';
+        // Dialogue type → slightly vertical
+        if (type === 'dialogue') return '3:4';
+        // Medium shots → square
+        return '1:1';
       })();
-      const sizeLabel = panelAR === '16:9' ? '2560x1440' : panelAR === '9:16' ? '1440x2560' : '1920x1920';
-      log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize}, ${sizeLabel})`);
+      log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize}, ${panel.cameraAngle || ''}, 비율:${panelAR})`);
 
       const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, charStates);
       // Add previous panel image as style/continuity reference
@@ -6467,10 +6484,26 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
         }
       }
 
+      // Determine aspect ratio from panel data (same logic as runStep4)
+      const regenAR = panel.imageSize || (() => {
+        const shot = (panel.shotSize || 'medium').toLowerCase();
+        const type = (panel.type || '').toLowerCase();
+        const angle = (panel.cameraAngle || '').toLowerCase();
+        if (shot.includes('extreme_wide') || type === 'establishing') return '16:9';
+        if (shot.includes('wide') && !shot.includes('medium')) return '3:2';
+        if (shot === 'extreme_close') return '2:3';
+        if (shot.includes('close') && !shot.includes('medium')) return '3:4';
+        if (angle.includes('over_shoulder')) return '3:2';
+        if (angle.includes('birds_eye')) return '1:1';
+        if (type === 'emotion' || type === 'closeup') return '3:4';
+        if (type === 'action') return '3:2';
+        if (type === 'dialogue') return '3:4';
+        return '1:1';
+      })();
       // Skip style prefix when using previous panel reference — let the reference image define the visual style
       const skipStyle = refMode !== 'default';
-      log(`패널 ${idx+1} 재생성 중... (ref ${refImages.length}개, asset ${assetDescriptions.length}개${skipStyle ? ', 스타일 미적용' : ''})`);
-      const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds, skipStyle});
+      log(`패널 ${idx+1} 재생성 중... (ref ${refImages.length}개, 비율:${regenAR}${skipStyle ? ', 스타일 미적용' : ''})`);
+      const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: regenAR, characterIds: panelCharIds, skipStyle});
       const newPanels = [...panels];
       newPanels[idx] = await urlToBase64(images[0]);
       setPanels(newPanels);
