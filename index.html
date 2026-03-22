@@ -594,7 +594,7 @@ async function callImagen(prompt, opts={}) {
 
 async function callNanoBanana(prompt, opts={}) {
   const {projectId,location,accessToken}=await getVertexConfig();
-  const model=opts.model||'gemini-2.0-flash-preview-image-generation';
+  const model=opts.model||'gemini-2-5-flash-image';
   const isGlobal = model.startsWith('gemini-3');
   const loc = isGlobal ? 'global' : location;
   const host = isGlobal ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`;
@@ -1010,8 +1010,8 @@ async function uploadImageToA2eR2(base64Data) {
 
 // Vertex AI NanoBanana model variants (used by Gemini provider)
 const NB_VERTEX_MODELS = {
-  'gemini-2.0-flash': { name: 'Gemini Flash (기본)', vertexModel: 'gemini-2.0-flash-preview-image-generation', maxRefs: 6 },
-  'gemini-3.1-flash': { name: 'Gemini 3.1 Flash', vertexModel: 'gemini-3.1-flash-preview-image-generation', maxRefs: 10 },
+  'gemini-2.5-flash': { name: 'Gemini 2.5 Flash (기본)', vertexModel: 'gemini-2-5-flash-image', maxRefs: 6 },
+  'gemini-3.1-flash': { name: 'Gemini 3.1 Flash', vertexModel: 'gemini-3-1-flash-image', maxRefs: 10 },
   'gemini-3-pro':     { name: 'Gemini 3 Pro (고품질)', vertexModel: 'gemini-3-pro-image-preview', maxRefs: 14 },
 };
 
@@ -2170,7 +2170,7 @@ function App() {
   const [storyboard, setStoryboard] = useState([]);
   const [panels, setPanels] = useState([]);
   const [imageProvider, setImageProvider] = useState('ninjaChat');
-  const [nbVertexModel, setNbVertexModel] = useState('gemini-2.0-flash'); // Vertex AI NanoBanana model key
+  const [nbVertexModel, setNbVertexModel] = useState('gemini-2.5-flash'); // Vertex AI NanoBanana model key
   const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | zimage | seedream
   const [ninjaChatModel, setNinjaChatModel] = useState('ninja-vision-1'); // NinjaChat model selection
   const [textModel] = useState('gemini-3.1-pro-preview'); // Text generation model — fixed to Gemini 3.1 Pro
@@ -4287,7 +4287,7 @@ Rules:
 
     // ========== Gemini (Vertex AI NanoBanana — supports multiple models) ==========
     if (imageProvider === 'nanoBanana') {
-      const nbInfo = NB_VERTEX_MODELS[nbVertexModel] || NB_VERTEX_MODELS['gemini-2.0-flash'];
+      const nbInfo = NB_VERTEX_MODELS[nbVertexModel] || NB_VERTEX_MODELS['gemini-2.5-flash'];
       const geminiOpts = {...opts, model: nbInfo.vertexModel};
       const refInstruction = refs.length > 0
         ? '\n\nCRITICAL: Reference images are provided. You MUST draw the characters and backgrounds EXACTLY as they appear in the reference images. Maintain identical facial features, hairstyle, hair color, eye color, outfit, and body proportions. Do NOT change or reimagine any visual details.'
