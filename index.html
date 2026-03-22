@@ -695,7 +695,7 @@ async function callGrokEdit(prompt, refImages, opts={}) {
   if (refImages.length === 1) {
     body.image = { url: refImages[0], type: 'image_url' };
   } else if (refImages.length > 1) {
-    body.images = refImages.slice(0, 3).map(img => ({ url: img, type: 'image_url' }));
+    body.images = refImages.slice(0, 4).map(img => ({ url: img, type: 'image_url' }));
   }
   const maxRetries = 3;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -4418,18 +4418,24 @@ Rules:
       const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
 
-      // Collect reference images for Grok Edit — characters first, then others (max 3)
+      // Collect ALL reference images for Grok Edit — background + characters + prev panel (max 4)
       const grokRefImages = [];
       if (opts.referenceImages?.length > 0) {
-        const grokCharRefs = opts.referenceImages.filter(r => !r.description?.startsWith('background') && !r.description?.includes('prop'));
-        const grokOtherRefs = opts.referenceImages.filter(r => r.description?.startsWith('background') || r.description?.includes('prop'));
-        for (const ref of [...grokCharRefs, ...grokOtherRefs]) {
-          if (grokRefImages.length >= 3) break;
+        // Priority: background first (scene setting), then characters, then others (prev panel etc.)
+        const bgRefs = opts.referenceImages.filter(r => r.description?.toLowerCase().includes('background'));
+        const charRefs = opts.referenceImages.filter(r => r.description?.toLowerCase().includes('character'));
+        const otherRefs = opts.referenceImages.filter(r => {
+          const d = (r.description || '').toLowerCase();
+          return !d.includes('background') && !d.includes('character');
+        });
+        for (const ref of [...bgRefs, ...charRefs, ...otherRefs]) {
+          if (grokRefImages.length >= 4) break;
           const img = ref.image || ref;
-          if (typeof img === 'string' && img.startsWith('data:')) {
+          if (typeof img === 'string' && (img.startsWith('data:') || img.startsWith('http'))) {
             grokRefImages.push(img);
           }
         }
+        console.log(`[Grok] 레퍼런스 수집: 배경 ${bgRefs.length}개, 캐릭터 ${charRefs.length}개, 기타 ${otherRefs.length}개 → 총 ${grokRefImages.length}개 사용`);
       }
 
       if (grokRefImages.length > 0) {
@@ -4437,14 +4443,15 @@ Rules:
         const refLabels = [];
         if (opts.referenceImages) {
           opts.referenceImages.forEach((ref, idx) => {
-            const desc = ref.description || '';
-            if (desc.startsWith('character')) refLabels.push(`image ${idx+1}: character reference`);
-            else if (desc.startsWith('background')) refLabels.push(`image ${idx+1}: background reference`);
-            else refLabels.push(`image ${idx+1}: reference`);
+            const desc = (ref.description || '').toLowerCase();
+            if (desc.includes('background')) refLabels.push(`image ${idx+1}: background/environment reference — replicate this setting exactly`);
+            else if (desc.includes('character')) refLabels.push(`image ${idx+1}: character reference — copy this character's face, hair, outfit, body exactly`);
+            else if (desc.includes('previous panel')) refLabels.push(`image ${idx+1}: previous panel — match art style, lighting, and character appearance`);
+            else refLabels.push(`image ${idx+1}: visual reference`);
           });
         }
         const refContext = refLabels.length > 0
-          ? `\nRefs: ${refLabels.join(', ')}. Match character appearances, art style, colors from refs exactly.`
+          ? `\nReference images provided: ${refLabels.join('; ')}. You MUST faithfully reproduce the visual details from ALL reference images — backgrounds, characters, art style, color palette.`
           : '';
         const editPrompt = stylePrefix + cleanedPrompt + refContext + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
         log(`Grok Edit 사용 (레퍼런스 ${grokRefImages.length}개 + ${curStyleName}${charCount > 0 ? ' + 캐릭터 '+charCount+'명' : ''})`, 'info');
