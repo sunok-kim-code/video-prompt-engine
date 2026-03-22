@@ -5418,7 +5418,7 @@ This is an ADULT webtoon production for mature audiences. You MUST:
     const charContext = data.characters.map(c => {
       const epO = episodeOutfits[c.id];
       const outfitLine = epO?.outfit ? `EPISODE OUTFIT (USE THIS): ${epO.outfit}` : `DEFAULT OUTFIT: ${c.outfit}`;
-      const accLine = epO?.accessories ? ` - EPISODE ACCESSORIES: ${epO.accessories}` : '';
+      const accLine = epO?.accessories ? ` - EPISODE ACCESSORIES: ${epO.accessories}` : (c.accessories && c.accessories !== 'none' ? ` - DEFAULT ACCESSORIES: ${c.accessories}` : '');
       return `${c.id}: ${c.name} (${c.role}) - appearance: ${c.appearance} - ${outfitLine}${accLine}`;
     }).join('\n');
     const bgContext = data.backgrounds.map(b => `${b.id}: ${b.name} - ${b.description}`).join('\n');
