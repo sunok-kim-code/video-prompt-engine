@@ -5255,13 +5255,17 @@ This is an ADULT webtoon production for mature audiences. You MUST:
     for (let i = 0; i < data.characters.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
       const char = data.characters[i];
-      // Check shared asset first
-      if (sa.characters[char.id]?.image) {
+      // Check shared asset first — but skip cache if episode outfit is set (needs regeneration)
+      const hasEpisodeOutfit = !!(episodeOutfits?.[char.id]?.outfit);
+      if (sa.characters[char.id]?.image && !hasEpisodeOutfit) {
         refs.characters[char.id] = sa.characters[char.id].image;
         generatedChars.push({name: char.name, appearance: char.appearance, outfit: char.outfit, distinctFeatures: char.distinctFeatures});
         log(`${char.name} — 공유 에셋에서 로드 ✓`, 'success');
         setReferences({...refs});
         continue;
+      }
+      if (hasEpisodeOutfit && sa.characters[char.id]?.image) {
+        log(`${char.name} — ${currentEpisode || ''}화 의상 변경 감지 → 레퍼런스 재생성`, 'info');
       }
       log(`캐릭터 레퍼런스 생성 (${i+1}/${data.characters.length}): ${char.name}`);
       try {
@@ -5274,7 +5278,15 @@ This is an ADULT webtoon production for mature audiences. You MUST:
           contrastSuffix = `\n\nIMPORTANT: This character must look COMPLETELY DIFFERENT from these other characters: ${otherDescs}. Ensure distinct hair color, hairstyle, face shape, and body type.`;
         }
         const distinctInfo = char.distinctFeatures ? `\nThis character's unique visual identity: ${char.distinctFeatures}.` : '';
-        const fullPrompt = char.refPrompt + distinctInfo + getCharSuffix() + contrastSuffix;
+        // Add episode outfit override
+        let episodeOutfitSuffix = '';
+        const epO = episodeOutfits?.[char.id];
+        if (epO?.outfit) {
+          episodeOutfitSuffix = `\n\n[EPISODE OUTFIT OVERRIDE] This character's outfit for this episode MUST be: ${epO.outfit}. Ignore any default outfit described above and draw ONLY this outfit.`;
+          if (epO.accessories) episodeOutfitSuffix += ` Accessories: ${epO.accessories}.`;
+          log(`${char.name} — ${currentEpisode || ''}화 의상 적용: ${epO.outfit}`, 'info');
+        }
+        const fullPrompt = char.refPrompt + distinctInfo + episodeOutfitSuffix + getCharSuffix() + contrastSuffix;
         const images = await callImage(fullPrompt);
         refs.characters[char.id] = images[0];
         generatedChars.push({name: char.name, appearance: char.appearance, outfit: char.outfit, distinctFeatures: char.distinctFeatures});
@@ -6049,6 +6061,14 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
     setRunning(true);
     try {
       const basePrompt = customPrompt || char.refPrompt;
+      // Add episode outfit override to prompt
+      let episodeOutfitSuffix = '';
+      const epO = episodeOutfits?.[charId];
+      if (epO?.outfit) {
+        episodeOutfitSuffix = `\n\n[EPISODE OUTFIT OVERRIDE] This character's outfit for this episode MUST be: ${epO.outfit}. Ignore any default outfit described above and draw ONLY this outfit.`;
+        if (epO.accessories) episodeOutfitSuffix += ` Accessories: ${epO.accessories}.`;
+        log(`${char.name} — ${currentEpisode || ''}화 의상 적용: ${epO.outfit}`, 'info');
+      }
       // Add differentiation context from other characters
       let contrastSuffix = '';
       if (!customPrompt) {
@@ -6062,7 +6082,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         const distinctInfo = char.distinctFeatures ? `\nThis character's unique visual identity: ${char.distinctFeatures}.` : '';
         contrastSuffix = distinctInfo + contrastSuffix;
       }
-      const finalPrompt = customPrompt ? customPrompt : (basePrompt + getCharSuffix() + contrastSuffix);
+      const finalPrompt = customPrompt ? customPrompt : (basePrompt + episodeOutfitSuffix + getCharSuffix() + contrastSuffix);
       log(`${char.name} 레퍼런스 재생성 중...`);
       const images = await callImage(finalPrompt);
       setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
