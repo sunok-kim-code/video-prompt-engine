@@ -5349,6 +5349,36 @@ This is an ADULT webtoon production for mature audiences. You MUST:
 - In character "appearance" fields, include detailed body descriptions: body proportions, physique details (muscular build, slender waist, broad shoulders, curves, etc.) relevant to the art style.
 - If the source text describes a character undressing, being nude, or in any state of undress, the plotBeat summary MUST include this detail explicitly.
 - Do NOT replace the author's explicit descriptions with vague phrases like "they became intimate" or "things escalated". Copy the level of detail from the source.
+
+MASTER PRODUCER — INTIMATE SCENE ENRICHMENT:
+When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summary fields require EXTRA detail:
+
+1. HANDS (손 위치) — The most critical element in intimate scenes:
+   - Specify EXACTLY where EACH character's hands are at EVERY moment: "char_1's left hand cupping char_2's jaw, right hand gripping char_2's waist", "char_2's fingers tangled in char_1's hair at the nape"
+   - Hands tell the emotional story: gentle caress vs. desperate grip vs. hesitant touch vs. possessive hold
+   - In the summary, describe hand MOVEMENT progression: "char_1's hand slides from char_2's shoulder down their arm to interlock fingers"
+   - If the source is vague ("그의 손이 움직였다"), YOU must fill in the specific trajectory and destination based on context
+
+2. GAZE & EYES (시선) — 80% of intimacy is in the eyes:
+   - gazeMap must capture the emotional progression: "looking into char_2's eyes with barely restrained desire" → "eyes fluttering closed as lips meet" → "half-lidded gaze looking up through lashes"
+   - Key intimate gaze patterns: locked eye contact during tension buildup, eyes closing at moment of contact, looking away in embarrassment then looking back, watching the other person's reaction, eyes squeezed shut in pleasure
+   - For each beat, specify: are eyes open/closed/half-lidded? WHERE are they looking? WHAT emotion do they convey?
+
+3. FACIAL EXPRESSIONS (표정) — Must be hyper-specific:
+   - NOT "표정이 변했다" → instead: "lips parted slightly, breath quickening, a deep blush spreading from cheeks to ear tips, eyebrows drawn together"
+   - Layer multiple micro-expressions: biting lip + furrowed brows + flushed cheeks = conflicted desire
+   - Track expression CHANGES beat to beat: surprise → resistance → yielding → desire → overwhelmed
+
+4. POSE PROGRESSION (포즈 전환) — Intimate scenes are sequential:
+   - In summary, describe the EXACT transition: "char_1 pushes char_2 gently against the wall, one hand beside their head, the other tilting their chin up"
+   - Each beat should show a clear physical progression from the previous one
+   - Weight distribution matters: who is leaning into whom, who is being supported, who is pulling whom closer
+   - Specify body angles: "char_2 arches back slightly", "char_1 leans down, forehead nearly touching char_2's"
+
+5. SPATIAL RELATIONSHIP (공간 관계):
+   - Distance between characters is critical: "faces inches apart, breath mingling", "pressed flush against each other from chest to hip", "char_1 hovering over char_2 with arms on either side"
+   - Describe what surfaces/furniture are involved: against a wall, on a bed, on a desk, in a chair
+   - Height difference dynamics: who looks up/down, who has to reach up/lean down
 --- END MATURE DIRECTIVE ---\n`;
       log(`${artStyle === 'tlWebtoon' ? 'TL' : 'BL'} 성인 모드: 성인 콘텐츠 묘사 보존`, 'info');
     }
@@ -5691,6 +5721,34 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
    - Specify what should be in the foreground vs background
 7. LIGHTING: "warm dim lighting", "soft lamplight on bare skin", "moonlight through curtains casting shadows on bodies", "harsh overhead light emphasizing sweat and muscle definition"
 8. If you omit, soften, or euphemize ANY physical detail that the source text explicitly describes, you have FAILED your task.
+
+CRITICAL — HANDS IN imagePrompt (손 묘사):
+- EVERY intimate panel's imagePrompt MUST specify BOTH characters' hand positions explicitly.
+- Template: "[CHAR_A]'s left hand [exact position], right hand [exact position]. [CHAR_B]'s left hand [exact position], right hand [exact position]."
+- Hand actions carry emotional weight — describe the ACTION, not just location:
+  * Gentle: "fingertips lightly tracing along jawline", "thumb softly stroking cheek"
+  * Passionate: "fingers gripping tightly into hair at the back of head", "hand pulling waist firmly closer"
+  * Hesitant: "fingers hovering near face, not quite touching", "hand trembling slightly against shoulder"
+  * Possessive: "hand pressed flat against chest, pushing down", "fingers wrapped around wrist, pinning it above head"
+- If hands are not visible in a close-up, specify that: "hands not visible in frame, implied gripping each other below frame edge"
+- Track hand position CONTINUITY: if char_1's hand was on char_2's face in the previous panel, it should still be there (or show it moving) in the next panel.
+
+CRITICAL — GAZE IN INTIMATE imagePrompt (시선 묘사):
+- Intimate scenes DEMAND precise gaze direction with emotional subtext in EVERY panel.
+- imagePrompt format: "[CHAR_A]: [gaze with emotional detail]" — e.g., "eyes half-closed, looking down at CHAR_B's lips with heated expression" NOT just "looking at CHAR_B."
+- Key intimate gaze progressions to capture across sequential panels:
+  * BUILDUP: intense locked eye contact → one character's gaze drops to the other's lips → eyes flutter closed
+  * DURING: eyes squeezed shut + brows furrowed in sensation → half-lidded looking up through lashes → eyes open in surprise at intensity
+  * AFTER: soft unfocused gaze → looking at other's face tenderly → eyes averted with flushed cheeks
+- If eyes are closed, SPECIFY the eyelid detail: "eyes gently closed, lashes casting shadows on flushed cheeks" vs "eyes squeezed tightly shut, brows drawn together"
+- gazeDirection field for intimate panels should be VERY specific: "looking down at CHAR_B's exposed collarbone with darkened eyes" not just "looking down."
+
+CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
+- Intimate scenes are SEQUENTIAL — each panel MUST logically follow from the previous one's pose.
+- In "pose" field, describe the FULL body configuration: "lying on back on bed, left knee bent, right arm above head, back slightly arched"
+- If the previous panel had char_1 standing and this panel has them on a bed, you MUST include a transition panel or describe the transition: "char_1 being pulled down onto bed by char_2, one knee on mattress, leaning over char_2"
+- Track who is above/below, who is facing which direction, which limbs are where.
+- Weight and pressure: "char_1's body weight pressing char_2 into the mattress" vs "char_1 hovering above char_2, supporting weight on forearms"
 === END MATURE DIRECTIVE ===`;
     }
     log(`스토리보드 모드: ${inputModeRef.current === 'scene' ? '씬 설명 기반' : '웹소설 기반'}`, 'info');
