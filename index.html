@@ -4148,9 +4148,10 @@ Rules:
         if (pc.pose) detailParts.push(`pose: ${pc.pose}`);
       }
       const fullDesc = detailParts.join(', ');
-      assetDescriptions.push(`[Character ${charInfo?.name || charId}]: ${fullDesc}`);
+      const charLabel = `[Character ${charInfo?.name || charId}]`;
+      assetDescriptions.push(`${charLabel}: ${fullDesc}`);
       if (charImg) {
-        refImages.push({image: charImg, description: fullDesc});
+        refImages.push({image: charImg, description: `character: ${charInfo?.name || charId} — ${fullDesc}`});
         console.log(`[buildPanelRefs] ✓ 캐릭터 "${charId}" 이미지 발견 (source: ${saCharImg ? 'sharedAssets' : 'episodeRefs'}, length: ${charImg.length})`);
       } else {
         console.warn(`[buildPanelRefs] ✗ 캐릭터 "${charId}" 이미지 없음 (sharedAssets keys: [${Object.keys(sa?.characters || {}).join(',')}])`);
