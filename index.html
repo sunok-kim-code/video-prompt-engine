@@ -1807,9 +1807,14 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "beat": 1,
       "summary": "Korean summary of this plot beat",
       "characters": ["char_1"],
+      "backgroundCharacters": ["char_2"],
       "location": "bg_1",
       "props": ["prop_1"],
       "mood": "calm|tense|action|emotional|comedic",
+      "cameraComposition": "Description of suggested camera framing and composition for this scene — e.g. 'wide shot showing both characters at a table, char_1 in foreground left, char_2 background right'",
+      "gazeMap": {"char_1": "looking right toward char_2 with longing expression", "char_2": "looking down at papers, unaware of char_1's gaze"},
+      "sceneTransitionNote": "How this scene connects to the PREVIOUS scene. e.g. 'Time skip — next morning. Cut from nighttime bedroom to bright kitchen.' or 'Continuous — camera follows char_1 as they walk from hallway into this room.' Leave empty for first beat.",
+      "environmentDetails": "Specific ambient details: time of day, lighting direction, weather, background sounds/activity, crowd presence — e.g. 'Late afternoon golden hour, warm sunlight streaming from left window, other students chatting in background'",
       "outfitOverrides": {"char_1": "only if story EXPLICITLY changes outfit in this beat, describe the new outfit in English"}
     }
   ]
@@ -1820,6 +1825,49 @@ Extract ALL characters mentioned (even minor ones). Create 3-6 backgrounds for d
 Break the story into 8-20 plot beats that capture the narrative arc. Each plot beat should represent a meaningful story moment.
 
 For outfitOverrides: ONLY include if the story text explicitly describes a costume/clothing change. Normal scenes without clothing mentions = no override = character wears default outfit.
+
+=== MASTER PRODUCER SCENE ENRICHMENT RULES ===
+You are not just an analyst — you are a MASTER PRODUCER who bridges the gap between the story writer and the illustration artist. The story writer may leave things implicit, but the artist needs EXPLICIT visual direction for every scene. You MUST fill in these gaps:
+
+1. BACKGROUND CHARACTERS (backgroundCharacters field):
+   - If a scene takes place in a PUBLIC SPACE (cafe, school, office, street), add background characters who would naturally be present — even if the story doesn't mention them.
+   - If characters from a PREVIOUS scene are still in the same location, they MUST appear as backgroundCharacters unless the story explicitly says they left.
+   - Example: If beat 3 has char_1 and char_2 talking in a cafe, and beat 4 is still in the same cafe but focuses on char_1 and char_3, then char_2 SHOULD appear in backgroundCharacters for beat 4 (they didn't leave!).
+
+2. GAZE MAP (gazeMap field):
+   - For EVERY character in the scene (including background characters), specify WHERE they are looking and their emotional subtext.
+   - Gaze direction conveys 80% of emotional storytelling. A character looking AWAY from someone during a confession scene, or looking DOWN during an apology, tells the reader everything.
+   - When two characters are in CONFLICT: they stare directly at each other or one avoids the other's gaze.
+   - When a character is being OBSERVED: the observer's gaze is fixed on them while the observed character is unaware (looking elsewhere).
+   - In GROUP scenes: not everyone looks at the speaker. Some look at the person being TALKED ABOUT, some look at their own reactions.
+   - Include emotional subtext: "looking at char_2 with barely concealed jealousy", "eyes darting between char_1 and the door nervously".
+
+3. CAMERA COMPOSITION (cameraComposition field):
+   - Suggest the ideal framing that tells the story visually.
+   - For TENSION scenes: suggest tight framing, characters close together or separated by objects.
+   - For REVELATION scenes: suggest a wide shot that reveals the whole context.
+   - For INTIMATE scenes: suggest close-ups, over-shoulder shots, eye-level angle.
+   - Always specify character POSITIONS relative to each other (left/right/center/foreground/background).
+   - Consider depth: who is in focus vs. blurred in background.
+
+4. SCENE TRANSITION NOTES (sceneTransitionNote field):
+   - Explain HOW this scene connects to the previous one for smooth narrative flow.
+   - Types: "Continuous action" (same moment), "Time skip" (later), "Flashback", "Cut to" (parallel action), "Reaction cut" (showing the other person's response).
+   - If the previous scene ended with a dramatic moment, this scene should acknowledge it: "Immediately after char_1 stormed out — we see char_2 standing alone in the empty room."
+   - Note any spatial continuity: if characters moved between locations, briefly describe the implied journey.
+
+5. ENVIRONMENT DETAILS (environmentDetails field):
+   - Fill in atmospheric details the story writer may have skipped: time of day, lighting conditions, weather, ambient sounds/activity.
+   - These details MUST be consistent within the same location and time block.
+   - If the story says "after school", specify: "late afternoon, warm orange sunlight, long shadows, students in background heading home."
+   - Crowd presence: "busy street with pedestrians" vs. "empty corridor, eerily quiet."
+
+6. ENRICHED SUMMARY:
+   - The summary field should include not just WHAT happens but HOW it looks.
+   - Add staging directions: "char_1 stands by the window, silhouetted against the light, while char_2 sits on the bed behind them."
+   - Add micro-actions that reveal character: "char_1 clenches their fist under the table where char_2 can't see it."
+   - If the writer wrote flat dialogue like "그래, 알겠어" — enrich with body language: "char_1 turns away, shoulders slumping slightly, and says '그래, 알겠어' in a voice barely above a whisper."
+=== END MASTER PRODUCER RULES ===
 
 CRITICAL — USE CHARACTER DESCRIPTIONS FROM THE STORY:
 - If the story text contains ANY physical description of a character (hair color, eye color, height, build, clothing, accessories, scars, tattoos, etc.), you MUST incorporate those descriptions EXACTLY into the character's "appearance" and "outfit" fields.
@@ -1839,9 +1887,17 @@ CRITICAL — CHARACTER VISUAL DIFFERENTIATION:
 - In 'distinctFeatures', list the traits that ONLY this character has.
 - In 'refPrompt', emphasize the features that distinguish this character from others.`,
 
-  CREATE_STORYBOARD: `You are a professional webtoon storyboard artist. Given the story analysis (characters, backgrounds, plot), create a panel-by-panel storyboard for a webtoon episode.
+  CREATE_STORYBOARD: `You are a professional webtoon storyboard artist AND master producer. Given the story analysis (characters, backgrounds, plot), create a panel-by-panel storyboard for a webtoon episode. Your job is not just to follow instructions — you must ENRICH sparse descriptions into vivid, filmable visual directions.
 
 IMPORTANT: This is a VERTICAL SCROLL webtoon.
+
+=== MASTER PRODUCER MINDSET ===
+Think like a film director who receives a screenplay and must decide EVERY visual detail:
+- WHERE is the camera? What angle best conveys the emotion?
+- WHO is visible? Not just the speaking characters — who else is in this space?
+- WHERE are characters looking? Gaze tells the emotional story.
+- What's in the BACKGROUND? Previous scene's characters? Crowd? Props?
+- How does this CONNECT to the previous panel? Smooth transition or dramatic cut?
 
 CRITICAL VISUAL CONSISTENCY RULES:
 1. Each character MUST wear their EXACT DEFAULT OUTFIT in every panel unless an outfitOverride is specified for that plot beat. Copy the outfit description VERBATIM from the character data.
@@ -1860,7 +1916,8 @@ Return ONLY a valid JSON array (no markdown):
     "type": "establishing|dialogue|action|emotion|transition|closeup",
     "shotSize": "extreme_wide|wide|medium_wide|medium|medium_close|close_up|extreme_close",
     "cameraAngle": "eye_level|low_angle|high_angle|birds_eye|dutch_angle|over_shoulder",
-    "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"left","gazeDirection":"looking right toward char_2","outfitOverride":"only if changed from default"}],
+    "characters": [{"id":"char_1","pose":"standing with arms at sides","expression":"smiling warmly with eyes crinkling","position":"left","gazeDirection":"looking right toward char_2 with fond expression","outfitOverride":"only if changed from default"}],
+    "backgroundCharacters": [{"id":"char_3","pose":"sitting at distant table","expression":"reading a book","position":"background-right","gazeDirection":"looking down at book"}],
     "background": "bg_1",
     "props": ["prop_1"],
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
@@ -1868,7 +1925,8 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action|anxious|romantic|determined|melancholic|excited|playful|desperate|fearful|embarrassed",
     "description": "Brief Korean description of what happens in this panel",
-    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER 1 NAME]: [COPY-PASTE exact hair from appearance], [COPY-PASTE exact outfit from outfit field], [pose], [expression], [GAZE DIRECTION — e.g. 'looking right toward CHARACTER 2' or 'looking down' or 'eyes facing the viewer']. [REPEAT for each character]. Background: [environment]. Lighting: [mood-appropriate]. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
+    "sceneTransition": "How this panel connects to the previous one: 'continuous shot', 'cut to reaction', 'time skip', 'new angle same scene'",
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER 1 NAME]: [COPY-PASTE exact hair from appearance], [COPY-PASTE exact outfit], [detailed pose with base posture], [vivid specific expression], [GAZE DIRECTION with emotional subtext]. [REPEAT for each character including background characters]. Background: [specific environment with time of day, lighting direction, ambient details]. [Background characters if any: brief descriptions with positions]. Lighting: [mood-appropriate with direction]. Atmosphere: [specific atmospheric details]. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
   }
 ]
 
@@ -1884,6 +1942,44 @@ Rules:
 - Each imagePrompt must be self-contained (include full character appearance details, EXACT outfit, not just names)
 - CRITICAL STYLE RULE: Do NOT include any art style keywords in imagePrompt (no "manhwa style", "webtoon style", "anime", "illustration", "digital painting", "photorealistic", "cinematic", "cartoon", "cel-shaded", "vibrant colors", etc.). The art style is controlled separately and will be prepended automatically. imagePrompt should ONLY describe: shot size, camera angle, character appearances, poses, expressions, outfits, background environment, lighting, and mood. Nothing about rendering style.
 - Include prop descriptions in imagePrompt when props appear in scene
+
+=== MASTER PRODUCER — SCENE ENRICHMENT IN STORYBOARD ===
+1. BACKGROUND CHARACTERS (backgroundCharacters field):
+   - If the plotBeat has a "backgroundCharacters" field, include those characters in the panel with blurred or secondary positions.
+   - Even if NOT specified: if the scene is in a public space OR other characters were present in the previous panel at the same location, add them as backgroundCharacters with appropriate poses/positions.
+   - In imagePrompt, describe background characters briefly: "In the background, a tall man with silver hair (char_3) sits at a distant table reading."
+   - Background characters should have less visual weight but MUST be visually consistent (same appearance/outfit).
+
+2. GAZE DIRECTION AS EMOTIONAL STORYTELLING:
+   - If the plotBeat has a "gazeMap" field, use it as primary direction for each character's gaze.
+   - Gaze is the #1 tool for conveying subtext. Characters DON'T always look at who's talking:
+     * During jealousy scenes: Character A watches Character B while B is oblivious, looking elsewhere.
+     * During lies: The liar averts gaze or looks slightly off-center while the listener stares intently.
+     * During tension: Characters may refuse to look at each other — both staring in different directions.
+     * During tenderness: Soft, unfocused gaze toward the other person; or watching them when they're not looking.
+   - Always describe the EMOTIONAL QUALITY of the gaze in imagePrompt: "looking at char_2 with barely concealed longing", "staring straight ahead, jaw clenched, refusing to look at char_1."
+
+3. SCENE-TO-SCENE VISUAL FLOW:
+   - If the plotBeat has a "sceneTransitionNote", use it to determine the visual relationship to the previous panel.
+   - CONTINUOUS scenes: Maintain same camera side, similar framing, show spatial relationship.
+   - CUT TO scenes: Allow dramatic angle/composition change, but acknowledge the emotional carryover.
+   - TIME SKIP: Show environment changes (lighting shift, different props on table).
+   - Use the "sceneTransition" field to record how this panel connects to the previous one.
+
+4. ENVIRONMENTAL STORYTELLING:
+   - If the plotBeat has "environmentDetails", weave them into the imagePrompt.
+   - Time of day MUST be reflected in lighting: morning = cool blue-white, afternoon = warm golden, evening = orange/amber, night = blue-purple shadows with warm artificial light.
+   - Weather details add depth: rain on windows, steam from breath in cold, wind in hair.
+   - Background activity grounds the scene: other students passing by, waitstaff in a restaurant, cars on a street.
+
+5. MICRO-ACTIONS & BODY LANGUAGE:
+   - Beyond the main action, add subtle body language that reveals character emotion:
+     * Nervous: fidgeting with fingers, shifting weight, touching neck
+     * Angry: clenched jaw, tight grip on object, rigid posture
+     * Sad: slumped shoulders, hands in lap, head tilted down
+     * Hiding emotion: forced smile with tense shoulders, hands gripping under table
+   - Include these in the "pose" field AND in imagePrompt for the artist.
+=== END MASTER PRODUCER ===
 
 CRITICAL — POSE & BODY STATE CONTINUITY (자세/포즈 연속성):
 - A character's BASE POSTURE (lying, sitting, standing, kneeling, crouching) MUST persist across consecutive panels unless the story EXPLICITLY describes them changing posture (e.g., "일어났다", "자리에서 벌떡 일어섰다", "침대에서 내려왔다").
@@ -1969,18 +2065,54 @@ Return ONLY a valid JSON object (no markdown, no explanation):
   "plotBeats": [
     {
       "beat": 1,
-      "summary": "FULL scene description preserved verbatim in Korean — include ALL dialogue, actions, expressions, sound effects",
+      "summary": "FULL scene description preserved verbatim in Korean — include ALL dialogue, actions, expressions, sound effects. PLUS Master Producer enrichment: add staging directions, body language, micro-actions that the story writer left implicit.",
       "characters": ["char_1"],
+      "backgroundCharacters": ["char_2"],
       "location": "bg_1",
       "props": ["prop_1"],
       "mood": "calm|tense|action|emotional|comedic",
       "dialogueCount": 2,
+      "cameraComposition": "Suggested framing: e.g. 'medium shot, char_1 foreground left facing right, char_2 background right facing left, table between them'",
+      "gazeMap": {"char_1": "looking right toward char_2, eyes narrowed with suspicion", "char_2": "looking down at hands, avoiding eye contact"},
+      "sceneTransitionNote": "Connection to previous scene: e.g. 'Continuous — same conversation, camera shifts to char_2 reaction' or 'Cut to — 30 minutes later, different location'",
+      "environmentDetails": "Ambient details: time of day, lighting, weather, crowd activity — e.g. 'Evening, warm indoor lighting, rain visible through window, quiet jazz in background'",
       "outfitOverrides": {}
     }
   ]
 }
 
 Extract ALL characters mentioned. Create backgrounds for each distinct location. Extract important props.
+
+=== MASTER PRODUCER SCENE ENRICHMENT RULES ===
+You are a MASTER PRODUCER who bridges the gap between the story writer and the illustration artist. Scene descriptions may be sparse — you MUST fill in the visual gaps the artist needs:
+
+1. BACKGROUND CHARACTERS (backgroundCharacters):
+   - Characters from previous scenes who are still in the same location MUST appear as backgroundCharacters unless they explicitly left.
+   - Public spaces (cafe, school, office) should have ambient people even if not mentioned.
+   - A character who was present 2 scenes ago in the same room is STILL THERE unless stated otherwise.
+
+2. GAZE MAP (gazeMap): For EVERY character, specify WHERE they look and the emotional subtext.
+   - Gaze conveys 80% of emotional storytelling. "Looking away during a confession" or "staring at char_2 while char_2 looks elsewhere" tells everything.
+   - In group scenes: not everyone looks at the speaker — some watch the person being talked ABOUT.
+   - Include emotional subtext: "glancing sideways at char_2 with barely hidden jealousy", "eyes fixed on the door, ready to flee."
+
+3. CAMERA COMPOSITION (cameraComposition): Suggest ideal framing.
+   - Specify character positions (left/right/foreground/background), depth focus, framing tightness.
+   - Tension → tight framing, characters close. Revelation → wide shot. Intimacy → close-up, over-shoulder.
+
+4. SCENE TRANSITION (sceneTransitionNote): How this connects to the previous scene.
+   - Types: Continuous, Time skip, Flashback, Cut to, Reaction cut.
+   - After a dramatic moment in the previous scene, acknowledge it: "Immediately after the slap — char_2 stands frozen, hand on cheek."
+
+5. ENVIRONMENT (environmentDetails): Fill atmospheric gaps.
+   - Time of day, lighting direction, weather, ambient activity, sound atmosphere.
+   - Must be consistent across same-location scenes within same time block.
+
+6. ENRICHED SUMMARY: Don't just record WHAT happens — describe HOW it looks.
+   - Add staging: "char_1 stands by the window, silhouetted against the light."
+   - Add micro-actions: "char_1 clenches fist under the table."
+   - Enrich flat dialogue with body language: "'알겠어' char_1 says, turning away with slumping shoulders."
+=== END MASTER PRODUCER RULES ===
 
 CRITICAL — USE CHARACTER DESCRIPTIONS FROM THE STORY:
 - If the scene descriptions contain ANY physical description of a character (hair color, eye color, height, build, clothing, accessories, scars, tattoos, etc.), you MUST incorporate those descriptions EXACTLY into the character's "appearance" and "outfit" fields.
@@ -1997,7 +2129,7 @@ CRITICAL — CHARACTER VISUAL DIFFERENTIATION:
 - Vary body types and outfit color schemes.
 - In 'distinctFeatures', list traits ONLY this character has.`,
 
-  CREATE_SCENE_STORYBOARD: `You are a professional webtoon storyboard artist. Given scene-based analysis data, create a panel-by-panel storyboard.
+  CREATE_SCENE_STORYBOARD: `You are a professional webtoon storyboard artist AND master producer. Given scene-based analysis data, create a panel-by-panel storyboard. Your role is to ENRICH sparse scene descriptions into vivid, filmable visual directions — filling in every gap the story writer left implicit.
 
 IMPORTANT: This is a VERTICAL SCROLL webtoon.
 
@@ -2029,7 +2161,8 @@ Return ONLY a valid JSON array (no markdown):
     "type": "establishing|dialogue|action|emotion|transition|closeup",
     "shotSize": "extreme_wide|wide|medium_wide|medium|medium_close|close_up|extreme_close",
     "cameraAngle": "eye_level|low_angle|high_angle|birds_eye|dutch_angle|over_shoulder",
-    "characters": [{"id":"char_1","pose":"standing","expression":"smiling","position":"left","gazeDirection":"looking right toward char_2","outfitOverride":"only if changed"}],
+    "characters": [{"id":"char_1","pose":"standing with arms at sides","expression":"smiling warmly with eyes crinkling","position":"left","gazeDirection":"looking right toward char_2 with fond expression","outfitOverride":"only if changed"}],
+    "backgroundCharacters": [{"id":"char_3","pose":"sitting at distant table","expression":"reading","position":"background-right","gazeDirection":"looking down at book"}],
     "background": "bg_1",
     "props": ["prop_1"],
     "dialogue": [{"speaker":"char_1","text":"대사 내용"}],
@@ -2037,7 +2170,8 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action|anxious|romantic|determined|melancholic|excited|playful|desperate|fearful|embarrassed",
     "description": "Brief Korean description of what happens",
-    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER NAME]: [COPY-PASTE exact hair from appearance], [COPY-PASTE exact outfit], [pose], [expression], [GAZE DIRECTION — e.g. 'looking right toward CHARACTER 2']. Background: [environment]. Lighting: [mood]. NEVER include any text, sound effects, or typography in the image."
+    "sceneTransition": "How this connects to previous panel: 'continuous', 'cut to reaction', 'time skip', 'new angle same scene'",
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. [CHARACTER NAME]: [COPY-PASTE exact hair], [COPY-PASTE exact outfit], [detailed pose with base posture], [vivid expression], [GAZE with emotional subtext]. [REPEAT for ALL characters]. Background: [environment with time of day, lighting, ambient details]. [Background characters with brief descriptions]. Lighting: [direction and mood]. NEVER include any text, sound effects, or typography."
   }
 ]
 
@@ -2055,6 +2189,37 @@ Rules:
 - ALL dialogue from original scenes must be present in panels
 - Extract ALL sound effects / onomatopoeia into the "soundEffects" array field. If no sound effects, use an empty array [].
 - CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects, or onomatopoeia.
+
+=== MASTER PRODUCER — SCENE ENRICHMENT ===
+1. BACKGROUND CHARACTERS:
+   - If the plotBeat has "backgroundCharacters", include them in the panel AND in imagePrompt.
+   - Even if NOT listed: if the scene is in a public space OR previous-panel characters are still at same location, ADD them.
+   - In imagePrompt: "In the background, [character brief description] sits at a distant table" — less detail than main characters but visually consistent.
+
+2. GAZE AS EMOTIONAL STORYTELLING:
+   - Use the plotBeat's "gazeMap" as primary direction for each character's gaze.
+   - Gaze is 80% of emotional subtext:
+     * Jealousy: watching someone who doesn't notice you looking.
+     * Lying: averting gaze or looking slightly off-center.
+     * Tension: both characters refuse to look at each other.
+     * Tenderness: watching someone when they're not looking back.
+   - ALWAYS describe emotional quality: "looking at char_2 with barely concealed longing", NOT just "looking right."
+
+3. SCENE-TO-SCENE FLOW:
+   - Use plotBeat's "sceneTransitionNote" to determine visual relationship to previous panel.
+   - CONTINUOUS: same camera side, similar framing. CUT TO: dramatic angle change. TIME SKIP: lighting/environment shift.
+   - Record in "sceneTransition" field.
+
+4. ENVIRONMENTAL STORYTELLING:
+   - Use plotBeat's "environmentDetails" in imagePrompt.
+   - Lighting MUST match time of day: morning=cool blue, afternoon=warm gold, evening=orange, night=blue-purple+warm artificial.
+   - Add weather, ambient activity, background sounds converted to visual cues.
+
+5. MICRO-ACTIONS & BODY LANGUAGE:
+   - Use plotBeat's "cameraComposition" as composition guide.
+   - Add character micro-actions: nervous fidgeting, clenched fists under table, forced smile with tense shoulders.
+   - These go in both "pose" field and imagePrompt.
+=== END MASTER PRODUCER ===
 
 CRITICAL — POSE & BODY STATE CONTINUITY (자세/포즈 연속성):
 - A character's BASE POSTURE (lying, sitting, standing, kneeling, crouching) MUST persist across consecutive panels unless the story EXPLICITLY describes them changing posture.
@@ -5461,8 +5626,13 @@ This is an ADULT webtoon production for mature audiences. You MUST:
     const propContext = (data.props||[]).map(p => `${p.id}: ${p.name} - ${p.description}`).join('\n');
     const plotContext = data.plotBeats.map(p => {
       let s = `Beat ${p.beat}: ${p.summary} [mood: ${p.mood}, chars: ${p.characters.join(',')}, loc: ${p.location}`;
+      if (p.backgroundCharacters?.length) s += `, bgChars: ${p.backgroundCharacters.join(',')}`;
       if (p.props?.length) s += `, props: ${p.props.join(',')}`;
       if (p.outfitOverrides && Object.keys(p.outfitOverrides).length > 0) s += `, OUTFIT CHANGES: ${JSON.stringify(p.outfitOverrides)}`;
+      if (p.gazeMap && Object.keys(p.gazeMap).length > 0) s += `, GAZE: ${JSON.stringify(p.gazeMap)}`;
+      if (p.cameraComposition) s += `, COMPOSITION: ${p.cameraComposition}`;
+      if (p.sceneTransitionNote) s += `, TRANSITION: ${p.sceneTransitionNote}`;
+      if (p.environmentDetails) s += `, ENVIRONMENT: ${p.environmentDetails}`;
       return s + ']';
     }).join('\n');
 
@@ -5537,8 +5707,13 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         const batchBeats = data.plotBeats.slice(i, i + BATCH_SIZE);
         const batchPlotContext = batchBeats.map(p => {
           let s = `Beat ${p.beat}: ${p.summary} [mood: ${p.mood}, chars: ${p.characters.join(',')}, loc: ${p.location}`;
+          if (p.backgroundCharacters?.length) s += `, bgChars: ${p.backgroundCharacters.join(',')}`;
           if (p.props?.length) s += `, props: ${p.props.join(',')}`;
           if (p.outfitOverrides && Object.keys(p.outfitOverrides).length > 0) s += `, OUTFIT CHANGES: ${JSON.stringify(p.outfitOverrides)}`;
+          if (p.gazeMap && Object.keys(p.gazeMap).length > 0) s += `, GAZE: ${JSON.stringify(p.gazeMap)}`;
+          if (p.cameraComposition) s += `, COMPOSITION: ${p.cameraComposition}`;
+          if (p.sceneTransitionNote) s += `, TRANSITION: ${p.sceneTransitionNote}`;
+          if (p.environmentDetails) s += `, ENVIRONMENT: ${p.environmentDetails}`;
           return s + ']';
         }).join('\n');
         const batchPrompt = `Story title: ${data.title}\nSynopsis: ${data.synopsis}\n\nCharacters:\n${charContext}\n\nBackgrounds:\n${bgContext}\n\nProps/Objects:\n${propContext || '(none)'}\n\nPlot beats (batch ${Math.floor(i/BATCH_SIZE)+1}, beats ${batchBeats[0].beat}-${batchBeats[batchBeats.length-1].beat}):\n${batchPlotContext}\n\nCreate EXACTLY ${batchBeats.length} panels — one panel per plotBeat listed above. Start panelNumber at ${panelNum}. Do NOT create more or fewer panels than plotBeats. Each panel captures one scene entirely.\nEach panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details. Include ALL dialogue in the dialogue array.`;
@@ -5734,6 +5909,27 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
             return `${name} (wearing: ${outfit.substring(0, 80)})`;
           });
           anchoredPrompt += `\n[CHARACTER CONTINUITY] These characters appear in both this and previous panel: ${sharedDetails.join('; ')}. Their outfit, hairstyle, accessories, face, and body proportions MUST be IDENTICAL. Only expression and pose may change.`;
+        }
+
+        // 5) Background characters — include ambient/secondary characters in scene
+        if (panel.backgroundCharacters?.length > 0) {
+          const bgCharDescs = panel.backgroundCharacters.map(bc => {
+            const cid = bc.id || bc;
+            const charInfo = analysis?.characters?.find(c => c.id === cid);
+            const cs = charStates[cid];
+            const name = charInfo?.name || cid;
+            const appearance = charInfo?.appearance?.substring(0, 100) || '';
+            const outfit = cs?.outfit || charInfo?.outfit || '';
+            const pose = bc.pose || 'standing in background';
+            const gaze = bc.gazeDirection || '';
+            return `${name}: ${appearance}, wearing ${outfit.substring(0, 60)}, ${pose}${gaze ? ', ' + gaze : ''}`;
+          });
+          anchoredPrompt += `\n[BACKGROUND CHARACTERS] Include these secondary characters in the background: ${bgCharDescs.join('; ')}. They should be less prominent but visually consistent with their established appearance.`;
+        }
+
+        // 6) Scene transition context from storyboard
+        if (panel.sceneTransition) {
+          anchoredPrompt += `\n[SCENE FLOW] ${panel.sceneTransition}`;
         }
 
       }
