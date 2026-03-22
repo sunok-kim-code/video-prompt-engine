@@ -1775,7 +1775,8 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "age": "approximate age",
       "gender": "male|female",
       "appearance": "EXTREMELY detailed physical description in English. MUST include ALL of: (1) HAIR: exact color (e.g. jet-black, platinum blonde, chestnut brown), exact length (e.g. chin-length, waist-length, buzz cut), exact style (e.g. straight, wavy, curly, braided), parting (center/side/none), bangs style (e.g. blunt bangs, side-swept fringe, curtain bangs, no bangs), any hair accessories (clips, ribbons, hairbands); (2) EYES: color, shape (e.g. almond, round, narrow, droopy), double/single eyelid; (3) SKIN: tone (e.g. fair porcelain, warm olive, deep brown); (4) BUILD: exact height (tall/average/short), body type (slender/athletic/muscular/curvy); (5) FACE: shape (oval/round/angular/heart), nose, lips, eyebrows, any marks (moles, scars, freckles, dimples); (6) UNIQUE TRAITS that make this character instantly recognizable",
-      "outfit": "EXTREMELY detailed default outfit in English. MUST specify ALL of: (1) TOP: exact garment type (e.g. fitted turtleneck, oversized hoodie, button-up shirt), exact color and material (e.g. cream cashmere, navy cotton); (2) BOTTOM: exact type, color, length (e.g. straight-leg black denim jeans, dark gray pleated midi skirt); (3) OUTER layer if any (jacket, cardigan, coat — type, color, length, open/closed); (4) FOOTWEAR: type and color (e.g. white leather sneakers, black ankle boots); (5) ACCESSORIES: glasses, watch, necklace, earrings, bag, belt — be specific about style and color; (6) OVERALL STYLE IMPRESSION (e.g. casual streetwear, formal business, preppy academic). This outfit MUST remain identical in every panel unless an outfitOverride is specified.",
+      "outfit": "EXTREMELY detailed default CLOTHING ONLY in English. MUST specify: (1) TOP: exact garment type, color and material (e.g. cream cashmere fitted turtleneck); (2) BOTTOM: type, color, length (e.g. straight-leg black denim jeans); (3) OUTER layer if any (jacket, cardigan, coat — type, color, length, open/closed); (4) FOOTWEAR: type and color (e.g. white leather sneakers). Do NOT include accessories here — put them in the accessories field.",
+      "accessories": "ALL accessories and props the character wears/carries, in English. Include: glasses (frame shape and color), watch, necklace, earrings, rings, bracelets, bag/purse (type and color), belt, hat, scarf, hair accessories, phone, etc. Be specific about style and color for each item. If none, write 'none'.",
       "personality": "brief personality in Korean",
       "distinctFeatures": "English list of 3-5 MOST distinctive visual traits that differentiate this character from every other character (e.g. 'only character with red hair, tallest character, always wears round glasses, has a visible scar on left cheek')",
       "refPrompt": "EXTREMELY detailed English prompt for generating a DISTINCTIVE character reference sheet. MUST follow this structure: 'Full body character reference sheet, front-facing T-pose, clean white background. [CHARACTER NAME] is a [age] [gender] [height/build]. Face: [face shape, specific jawline/cheekbones/chin, eyebrow shape and thickness, eye color+shape+eyelid type, nose shape, lip shape and fullness]. Hair: [exact color with shade, exact length in descriptive terms, exact style — straight/wavy/curly, parting direction, bangs type and length, any layers or volume details, any hair accessories]. Outfit: [complete top garment with color+material, bottom with color+length+style, outer layer if any, footwear with color+style, every accessory with color and style]. Unique traits: [features making this character visually distinct from all others]. This character must be INSTANTLY recognizable and look IDENTICAL across all panels. Maintain strong visual identity.'",
@@ -1938,7 +1939,8 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "age": "approximate age",
       "gender": "male|female",
       "appearance": "EXTREMELY detailed physical description in English. MUST include ALL of: (1) HAIR: exact color+shade, exact length, exact style (straight/wavy/curly), parting, bangs type, hair accessories; (2) EYES: color, shape, eyelid type; (3) SKIN: tone; (4) BUILD: height, body type; (5) FACE: shape, jawline, eyebrows, nose, lips, any marks/moles/scars; (6) UNIQUE TRAITS for instant recognition",
-      "outfit": "EXTREMELY detailed default outfit in English. MUST specify: TOP (garment type, color, material), BOTTOM (type, color, length), OUTER layer if any, FOOTWEAR (type, color), ACCESSORIES (glasses, watch, jewelry, bag — each with style and color), OVERALL STYLE. Must remain identical across all panels unless outfitOverride specified.",
+      "outfit": "EXTREMELY detailed default CLOTHING ONLY in English. MUST specify: TOP (garment type, color, material), BOTTOM (type, color, length), OUTER layer if any, FOOTWEAR (type, color). Do NOT include accessories — put them in accessories field.",
+      "accessories": "ALL accessories/props in English: glasses, watch, jewelry, bag, belt, hat, scarf, hair accessories — each with style and color. If none, write 'none'.",
       "personality": "brief personality in Korean",
       "distinctFeatures": "English list of 3-5 MOST distinctive visual traits",
       "refPrompt": "EXTREMELY detailed English prompt for character reference sheet. Structure: 'Full body character reference sheet, front-facing T-pose, clean white background. [NAME] is a [age] [gender] [height/build]. Face: [shape, jawline, eyebrows, eye color+shape+eyelid, nose, lips]. Hair: [exact color+shade, length, style, parting, bangs type, accessories]. Outfit: [top with color+material, bottom with color+style, outer layer, footwear with color, every accessory]. Unique traits: [...]. Must look IDENTICAL across all panels.'",
@@ -5015,10 +5017,9 @@ Rules:
             // If no episode outfits saved but analysis has outfit data, auto-fill
             if (outfitCount === 0 && s1?.analysis?.characters?.length > 0) {
               for (const c of s1.analysis.characters) {
-                if (c.outfit && !loaded[c.id]?.outfit) {
-                  if (!loaded[c.id]) loaded[c.id] = {};
-                  loaded[c.id].outfit = c.outfit;
-                }
+                if (!loaded[c.id]) loaded[c.id] = {};
+                if (c.outfit && !loaded[c.id].outfit) loaded[c.id].outfit = c.outfit;
+                if (c.accessories && c.accessories !== 'none' && !loaded[c.id].accessories) loaded[c.id].accessories = c.accessories;
               }
               const autoFilled = Object.values(loaded).filter(v => v.outfit).length;
               if (autoFilled > 0) log(`  에피소드 의상 ${autoFilled}명 자동 설정 (분석 결과에서)`, 'info');
@@ -5031,7 +5032,11 @@ Rules:
             const autoOutfits = {};
             if (s1?.analysis?.characters?.length > 0) {
               for (const c of s1.analysis.characters) {
-                if (c.outfit) autoOutfits[c.id] = { outfit: c.outfit };
+                if (c.outfit || c.accessories) {
+                  autoOutfits[c.id] = {};
+                  if (c.outfit) autoOutfits[c.id].outfit = c.outfit;
+                  if (c.accessories && c.accessories !== 'none') autoOutfits[c.id].accessories = c.accessories;
+                }
               }
               const autoCount = Object.keys(autoOutfits).length;
               if (autoCount > 0) log(`  에피소드 의상 ${autoCount}명 자동 설정 (분석 결과에서)`, 'info');
@@ -5259,6 +5264,9 @@ This is an ADULT webtoon production for mature audiences. You MUST:
             updated[c.id].outfit = c.outfit;
             filled++;
           }
+          if (!updated[c.id].accessories && c.accessories && c.accessories !== 'none') {
+            updated[c.id].accessories = c.accessories;
+          }
         }
         if (filled > 0) log(`${currentEpisode}화 의상 자동 설정: ${filled}명 (분석 결과에서 추출)`, 'info');
         return updated;
@@ -5324,7 +5332,7 @@ This is an ADULT webtoon production for mature audiences. You MUST:
         refs.characters[char.id] = images[0];
         generatedChars.push({name: char.name, appearance: char.appearance, outfit: char.outfit, distinctFeatures: char.distinctFeatures});
         // Save to shared assets
-        const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
+        const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
         sa.characters[char.id] = {...assetData, assetId: char.id, type: 'characters'};
         if (projectId) { await fbSaveAsset(projectId, 'characters', char.id, assetData); await new Promise(r=>setTimeout(r,500)); }
         log(`${char.name} 레퍼런스 생성 → 공유 에셋 저장 완료`, 'success');
@@ -6155,7 +6163,7 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       const images = await callImage(finalPrompt);
       setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
       const updatedRefPrompt = customPrompt || char.refPrompt;
-      const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, personality: char.personality, refPrompt: updatedRefPrompt, image: images[0]};
+      const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', personality: char.personality, refPrompt: updatedRefPrompt, image: images[0]};
       setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: {...assetData, assetId: charId, type: 'characters'}}}));
       if (projectId) await fbSaveAsset(projectId, 'characters', charId, assetData);
       log(`${char.name} 레퍼런스 재생성 → 공유 에셋 업데이트 완료`, 'success');
@@ -8052,6 +8060,12 @@ Return ONLY the detailed English prompt, nothing else.`,
                                 <textarea className="form-input" style={{width:'100%',minHeight:50,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
                                   value={c.outfit || ''} onChange={e => updateAnalysisChar(c.id, 'outfit', e.target.value)} />
                               </details>
+                              <details style={{marginTop:4}} open={!references.characters[c.id]}>
+                                <summary style={{fontSize:11,color:'#6c5ce7',cursor:'pointer',fontWeight:600}}>악세서리 (accessories) — 기본</summary>
+                                <textarea className="form-input" style={{width:'100%',minHeight:40,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
+                                  value={c.accessories || ''} placeholder="안경, 시계, 목걸이, 가방 등"
+                                  onChange={e => updateAnalysisChar(c.id, 'accessories', e.target.value)} />
+                              </details>
                               {/* Episode outfit inline */}
                               {currentEpisode && (
                                 <div style={{marginTop:4,padding:'6px 8px',background:'linear-gradient(135deg,#ffeaa7,#fdcb6e22)',borderRadius:6,border:'1px solid #f9ca24'}}>
@@ -8060,10 +8074,13 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     {c.outfit && (
                                       <button className="btn btn-xs" style={{fontSize:9,padding:'1px 5px',color:'#d35400',border:'1px solid #f9ca24',background:'transparent'}}
                                         onClick={() => {
-                                          const updated = {...episodeOutfits, [c.id]: {...(episodeOutfits[c.id]||{}), outfit: c.outfit}};
+                                          const epData = {...(episodeOutfits[c.id]||{})};
+                                          if (c.outfit) epData.outfit = c.outfit;
+                                          if (c.accessories && c.accessories !== 'none') epData.accessories = c.accessories;
+                                          const updated = {...episodeOutfits, [c.id]: epData};
                                           setEpisodeOutfits(updated);
                                           if (projectId && currentEpisode) saveEpisodeOutfits(updated);
-                                          log(`${c.name} 분석 의상 → ${currentEpisode}화 의상으로 동기화`, 'success');
+                                          log(`${c.name} 분석 의상+악세서리 → ${currentEpisode}화로 동기화`, 'success');
                                         }}>↓ 분석에서 가져오기</button>
                                     )}
                                   </div>
