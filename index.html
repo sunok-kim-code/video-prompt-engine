@@ -1012,7 +1012,7 @@ async function uploadImageToA2eR2(base64Data) {
 const NB_VERTEX_MODELS = {
   'gemini-2.5-flash': { name: 'Gemini 2.5 Flash (기본)', vertexModel: 'gemini-2-5-flash-image', maxRefs: 6 },
   'gemini-3.1-flash': { name: 'Gemini 3.1 Flash', vertexModel: 'gemini-3-1-flash-image', maxRefs: 10 },
-  'gemini-3-pro':     { name: 'Gemini 3 Pro (고품질)', vertexModel: 'gemini-3-pro-image-preview', maxRefs: 14 },
+  'gemini-3-pro':     { name: 'Gemini 3 Pro (고품질)', vertexModel: 'gemini-3.0-pro-image-generation', maxRefs: 14 },
 };
 
 async function callA2eNanoBanana(prompt, opts={}) {
