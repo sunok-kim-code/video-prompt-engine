@@ -2295,10 +2295,35 @@ Rules:
   };
 
   // Save character edits to Firebase (analysis + sharedAssets)
+  // Sync outfit/accessories edits into refPrompt text
+  const syncOutfitToRefPrompt = (char) => {
+    let rp = char.refPrompt || '';
+    // Replace Outfit section
+    const outfitRegex = /Outfit:\s*\[[^\]]*\]/i;
+    const outfitRegex2 = /Outfit:\s*[^.]*\./i;
+    const newOutfit = char.outfit || '';
+    const newAcc = (char.accessories && char.accessories !== 'none') ? char.accessories : '';
+    const outfitStr = `Outfit: [${newOutfit}${newAcc ? '. Accessories: ' + newAcc : ''}]`;
+
+    if (outfitRegex.test(rp)) {
+      rp = rp.replace(outfitRegex, outfitStr);
+    } else if (outfitRegex2.test(rp)) {
+      rp = rp.replace(outfitRegex2, outfitStr + '.');
+    }
+    return rp;
+  };
+
   const saveCharEdits = async (charId) => {
     const char = analysis?.characters?.find(c => c.id === charId);
     if (!char) return;
     try {
+      // Auto-sync outfit/accessories changes into refPrompt
+      const syncedRefPrompt = syncOutfitToRefPrompt(char);
+      if (syncedRefPrompt !== char.refPrompt) {
+        updateAnalysisChar(charId, 'refPrompt', syncedRefPrompt);
+        char.refPrompt = syncedRefPrompt;
+        log(`${char.name} refPrompt에 의상/악세서리 동기화됨`, 'info');
+      }
       // Save analysis to Firebase
       if (projectId && currentEpisode) {
         await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis});
@@ -2306,7 +2331,7 @@ Rules:
       // Save to shared assets
       const asset = sharedAssets.characters?.[charId];
       if (asset && projectId) {
-        const updated = {...asset, appearance: char.appearance, outfit: char.outfit, refPrompt: char.refPrompt};
+        const updated = {...asset, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', refPrompt: char.refPrompt};
         await fbSaveAsset(projectId, 'characters', charId, updated);
         setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: updated}}));
       }
