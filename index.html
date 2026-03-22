@@ -4432,10 +4432,16 @@ Rules:
     let stylePrefix = getStylePrefix();
     const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.naverWebtoon).name;
 
+    // Skip style prefix when using previous panel as reference — let the reference image define the style
+    if (opts.skipStyle) {
+      stylePrefix = '';
+      log('스타일 미적용 모드: 레퍼런스 이미지 스타일 따름', 'info');
+    }
+
     // For reference sheet generation (character/bg/prop), use a clean prefix
     // to avoid content filters rejecting T-pose reference images
     const isRefSheet = /character reference sheet|full body.*front view|clean.*background.*T-pose|reference sheet/i.test(prompt);
-    if (isRefSheet && artStyle === 'tlWebtoon') {
+    if (!opts.skipStyle && isRefSheet && artStyle === 'tlWebtoon') {
       // Use romance-style prefix for reference sheets — same art quality without mature keywords
       stylePrefix = 'Korean romance webtoon style, semi-realistic detailed art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition. ';
     }
@@ -6433,8 +6439,10 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
         }
       }
 
-      log(`패널 ${idx+1} 재생성 중... (ref ${refImages.length}개, asset ${assetDescriptions.length}개)`);
-      const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
+      // Skip style prefix when using previous panel reference — let the reference image define the visual style
+      const skipStyle = refMode !== 'default';
+      log(`패널 ${idx+1} 재생성 중... (ref ${refImages.length}개, asset ${assetDescriptions.length}개${skipStyle ? ', 스타일 미적용' : ''})`);
+      const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds, skipStyle});
       const newPanels = [...panels];
       newPanels[idx] = await urlToBase64(images[0]);
       setPanels(newPanels);
