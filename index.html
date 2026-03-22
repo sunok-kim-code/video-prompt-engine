@@ -5679,24 +5679,52 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       if (stateDirective) anchoredPrompt += stateDirective;
       if (styleAnchor) anchoredPrompt += ' Maintain consistent style: ' + styleAnchor;
 
-      // Add previous panel scene context for visual continuity
+      // ======== SCENE-TO-SCENE CONTINUITY ENGINE ========
       if (i > 0) {
         const prevPanel = sb[i - 1];
         const sameLocation = panel.background && prevPanel?.background && panel.background === prevPanel.background;
+        const prevDesc = prevPanel?.description || prevPanel?.imagePrompt || '';
+        const prevMood = prevPanel?.mood || prevPanel?.atmosphere || '';
+        const curMood = panel.mood || panel.atmosphere || '';
+
+        // 1) Same location — lighting/environment continuity
         if (sameLocation) {
-          const prevDesc = prevPanel?.description || prevPanel?.imagePrompt || '';
           if (prevDesc) {
-            anchoredPrompt += `\n[PREVIOUS SCENE — same location] ${prevDesc.substring(0, 200)}. Continue naturally — maintain consistent lighting, time of day, and environment.`;
+            anchoredPrompt += `\n[SAME LOCATION — CONTINUITY] This scene takes place in the SAME location as the previous panel. Previous: ${prevDesc.substring(0, 250)}. MUST maintain: identical lighting direction, identical time of day, identical background details, identical color temperature. Only camera angle and character positions may change.`;
+          }
+        } else {
+          // 2) Location change — transition context
+          const prevBgName = prevPanel?.background ? (analysis?.backgrounds?.find(b => b.id === prevPanel.background)?.name || '') : '';
+          const curBgName = panel.background ? (analysis?.backgrounds?.find(b => b.id === panel.background)?.name || '') : '';
+          if (prevBgName && curBgName) {
+            anchoredPrompt += `\n[SCENE TRANSITION] Moving from "${prevBgName}" to "${curBgName}".`;
           }
         }
-        // Cross-panel continuity for shared characters (even across locations)
+
+        // 3) Mood/atmosphere flow
+        if (prevMood && curMood) {
+          if (prevMood === curMood) {
+            anchoredPrompt += ` Maintain the "${curMood}" atmosphere from the previous scene.`;
+          } else {
+            anchoredPrompt += ` Atmosphere shifts from "${prevMood}" to "${curMood}" — reflect this transition in lighting and color tone.`;
+          }
+        }
+
+        // 4) Cross-panel character continuity
         const prevCharIds = (prevPanel?.characters || []).map(pc => pc.id || pc);
         const curCharIds = (panel.characters || []).map(pc => pc.id || pc);
         const sharedChars = curCharIds.filter(id => prevCharIds.includes(id));
         if (sharedChars.length > 0) {
-          const sharedNames = sharedChars.map(id => analysis?.characters?.find(c => c.id === id)?.name || id).join(', ');
-          anchoredPrompt += `\n[CONTINUITY] Characters ${sharedNames} appear in both this and previous panel. Their outfit, hairstyle, accessories, and body proportions MUST be pixel-identical to the previous panel. Only expression and pose may change.`;
+          const sharedDetails = sharedChars.map(id => {
+            const charInfo = analysis?.characters?.find(c => c.id === id);
+            const cs = charStates[id];
+            const name = charInfo?.name || id;
+            const outfit = cs?.outfit || charInfo?.outfit || '';
+            return `${name} (wearing: ${outfit.substring(0, 80)})`;
+          });
+          anchoredPrompt += `\n[CHARACTER CONTINUITY] These characters appear in both this and previous panel: ${sharedDetails.join('; ')}. Their outfit, hairstyle, accessories, face, and body proportions MUST be IDENTICAL. Only expression and pose may change.`;
         }
+
       }
 
       // Determine aspect ratio from panel imageSize (user-editable) or auto from shotSize
@@ -5710,6 +5738,13 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize}, ${sizeLabel})`);
 
       const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, charStates);
+      // Add previous panel image as style/continuity reference
+      if (i > 0 && newPanels[i - 1] && typeof newPanels[i - 1] === 'string' && (newPanels[i - 1].startsWith('data:') || newPanels[i - 1].startsWith('http'))) {
+        if (!refImages.includes(newPanels[i - 1])) {
+          refImages.push(newPanels[i - 1]);
+          assetDescriptions.push('[Previous panel image — use ONLY for visual style consistency, lighting reference, and character appearance matching. Do NOT copy the composition or camera angle.]');
+        }
+      }
       log(`패널 ${i+1}: 레퍼런스 ${refImages.length}개, 에셋 ${assetDescriptions.length}개, 캐릭터 ${panelCharIds.length}명`);
 
       try {
