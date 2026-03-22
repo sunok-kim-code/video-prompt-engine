@@ -4567,14 +4567,17 @@ Rules:
     // ========== NinjaChat (다중 모델) ==========
     if (imageProvider === 'ninjaChat') {
       if (!hasNinjaChatKey()) { log('NinjaChat API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
-      // Background ref priority — NinjaChat supports 1 reference, always prefer background
+      // NinjaChat supports 1 reference — priority: previous panel > background
+      const prevPanelRefs = refs.filter(r => r.description?.toLowerCase().includes('previous panel'));
       const bgRefs = refs.filter(r => r.description?.toLowerCase().includes('background'));
-      const njcRefs = bgRefs.length > 0 ? bgRefs.slice(0, 1) : [];
+      const njcRefs = prevPanelRefs.length > 0 ? prevPanelRefs.slice(0, 1) : (bgRefs.length > 0 ? bgRefs.slice(0, 1) : []);
       const refCount = njcRefs.length;
       const modelName = ninjaChatModel.split('-').slice(0, 2).join('-');
       console.log(`[NinjaChat] ref 선택: 전체 ${refs.length}개 중 배경 ${bgRefs.length}개 발견, 선택: ${refCount}개`, njcRefs.map(r => ({desc: r.description?.substring(0,50), len: r.image?.length})));
 
-      if (refCount > 0) {
+      if (prevPanelRefs.length > 0) {
+        log(`NinjaChat ${modelName} 사용 (이전 패널 레퍼런스)`, 'info');
+      } else if (refCount > 0) {
         log(`NinjaChat ${modelName} 사용 (배경 레퍼런스)`, 'info');
       } else {
         log(`NinjaChat ${modelName} 사용 (텍스트→이미지)`, 'info');
@@ -6129,7 +6132,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
   };
 
   // ======== Regenerate single panel ========
-  const regeneratePanel = async (idx, customPrompt) => {
+  // refMode: 'default' (background), 'prevPanel' (use previous panel image), 'both' (background + prev panel)
+  const regeneratePanel = async (idx, customPrompt, refMode = 'default') => {
     if (!storyboard[idx]) return;
     setRunning(true);
     try {
@@ -6144,7 +6148,30 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
       // Build character states accumulated up to this panel
       const charStates = buildCharacterStates(storyboard, analysis, idx);
       const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, references, charStates);
-      log(`패널 ${idx+1} 재생성 중... (asset ${assetDescriptions.length}개 참조)`);
+
+      // Add previous panel image as reference based on refMode
+      if (refMode !== 'default' && idx > 0) {
+        const prevImg = panels[idx - 1];
+        if (prevImg && typeof prevImg === 'string' && (prevImg.startsWith('data:') || prevImg.startsWith('http'))) {
+          if (refMode === 'prevPanel') {
+            // Replace all refs with just the previous panel
+            refImages.length = 0;
+            assetDescriptions.length = 0;
+            refImages.push(prevImg);
+            assetDescriptions.push('[Previous panel image — use as PRIMARY reference for visual style, lighting, character appearance, and scene continuity. Maintain identical art style and character details. Only change composition and action as described in the prompt.]');
+            log(`패널 ${idx+1}: 이전 패널 이미지를 단독 레퍼런스로 사용`, 'info');
+          } else if (refMode === 'both') {
+            // Add prev panel on top of existing refs
+            refImages.push(prevImg);
+            assetDescriptions.push('[Previous panel image — use for visual style consistency, lighting reference, and character appearance matching. Do NOT copy the composition.]');
+            log(`패널 ${idx+1}: 기본 레퍼런스 + 이전 패널 이미지 병합`, 'info');
+          }
+        } else {
+          log(`패널 ${idx+1}: 이전 패널 이미지 없음 — 기본 레퍼런스 사용`, 'warn');
+        }
+      }
+
+      log(`패널 ${idx+1} 재생성 중... (ref ${refImages.length}개, asset ${assetDescriptions.length}개)`);
       const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
       const newPanels = [...panels];
       newPanels[idx] = await urlToBase64(images[0]);
@@ -8526,9 +8553,19 @@ Return ONLY the detailed English prompt, nothing else.`,
                                 ) : (
                                   <div className="sb-img-placeholder">{running ? '대기...' : '미생성'}</div>
                                 )}
-                                <div className="sb-img-actions">
+                                <div className="sb-img-actions" style={{flexWrap:'wrap'}}>
                                   {panels[i] ? (<>
                                     <button className="btn btn-outline btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>재생성</button>
+                                    {i > 0 && panels[i-1] && (
+                                      <button className="btn btn-outline btn-xs" style={{color:'#6c5ce7',borderColor:'#6c5ce7'}}
+                                        onClick={()=>regeneratePanel(i, null, 'prevPanel')} disabled={running}
+                                        title="이전 패널 이미지를 레퍼런스로 사용하여 재생성">🔗 이전장면 기반</button>
+                                    )}
+                                    {i > 0 && panels[i-1] && (
+                                      <button className="btn btn-outline btn-xs" style={{color:'#00b894',borderColor:'#00b894'}}
+                                        onClick={()=>regeneratePanel(i, null, 'both')} disabled={running}
+                                        title="배경 레퍼런스 + 이전 패널 이미지 모두 사용">🔗+ 병합</button>
+                                    )}
                                     <button className="btn btn-success btn-xs" onClick={()=>saveSinglePanelToFirebase(i)} disabled={running}>💾</button>
                                     <button className="btn btn-outline btn-xs" onClick={()=>savePanelImage(panels[i], `panel_${i+1}.png`)}>⬇</button>
                                     <button className="btn btn-outline btn-xs" onClick={() => {
@@ -8549,6 +8586,10 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     }}>📂 교체</button>
                                   </>) : (<>
                                     <button className="btn btn-primary btn-xs" onClick={()=>regeneratePanel(i)} disabled={running}>생성</button>
+                                    {i > 0 && panels[i-1] && (
+                                      <button className="btn btn-outline btn-xs" style={{color:'#6c5ce7',borderColor:'#6c5ce7'}}
+                                        onClick={()=>regeneratePanel(i, null, 'prevPanel')} disabled={running}>🔗 이전장면 기반</button>
+                                    )}
                                     <button className="btn btn-outline btn-xs" onClick={() => {
                                       const input = document.createElement('input');
                                       input.type = 'file';
