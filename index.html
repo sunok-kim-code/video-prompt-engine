@@ -4699,9 +4699,9 @@ Rules:
     // ========== NinjaChat (다중 모델) ==========
     if (imageProvider === 'ninjaChat') {
       if (!hasNinjaChatKey()) { log('NinjaChat API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
-      // Character refs only (like A2E)
-      const charRefs = refs.filter(r => !r.description?.startsWith('background') && !r.description?.includes('prop'));
-      const njcRefs = charRefs.slice(0, 1); // NinjaChat supports 1 reference image
+      // Background ref priority — NinjaChat supports 1 reference, use background for scene consistency
+      const bgRefs = refs.filter(r => r.description?.startsWith('background'));
+      const njcRefs = bgRefs.length > 0 ? bgRefs.slice(0, 1) : refs.slice(0, 1); // fallback to any ref if no background
       const refCount = njcRefs.length;
       const modelName = ninjaChatModel.split('-').slice(0, 2).join('-');
 
