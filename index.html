@@ -1246,9 +1246,13 @@ async function callNinjaChat(prompt, opts={}) {
     for (const ref of refs) {
       const imgData = ref.image || ref;
       console.log(`[NinjaChat] Ref candidate: type=${typeof imgData}, len=${(imgData||'').length}, starts=${(imgData||'').substring(0,30)}`);
-      // Skip invalid/short data (broken refs)
-      if (!imgData || typeof imgData !== 'string' || imgData.length < 100) {
-        console.warn('[NinjaChat] Skipping invalid ref (too short or empty)');
+      // Skip invalid refs — but allow short URLs (http...) which are naturally short
+      if (!imgData || typeof imgData !== 'string') {
+        console.warn('[NinjaChat] Skipping invalid ref (null or non-string)');
+        continue;
+      }
+      if (imgData.length < 100 && !imgData.startsWith('http')) {
+        console.warn('[NinjaChat] Skipping invalid ref (too short and not a URL)');
         continue;
       }
       if (imgData.startsWith('data:')) {
