@@ -7699,10 +7699,36 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                                   value={c.appearance || ''} onChange={e => updateAnalysisChar(c.id, 'appearance', e.target.value)} />
                               </details>
                               <details style={{marginTop:4}} open={!references.characters[c.id]}>
-                                <summary style={{fontSize:11,color:'var(--accent)',cursor:'pointer',fontWeight:600}}>의상 (outfit)</summary>
+                                <summary style={{fontSize:11,color:'var(--accent)',cursor:'pointer',fontWeight:600}}>의상 (outfit) — 기본</summary>
                                 <textarea className="form-input" style={{width:'100%',minHeight:50,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
                                   value={c.outfit || ''} onChange={e => updateAnalysisChar(c.id, 'outfit', e.target.value)} />
                               </details>
+                              {/* Episode outfit inline */}
+                              {currentEpisode && (
+                                <div style={{marginTop:4,padding:'6px 8px',background:'linear-gradient(135deg,#ffeaa7,#fdcb6e22)',borderRadius:6,border:'1px solid #f9ca24'}}>
+                                  <div style={{fontSize:11,fontWeight:600,color:'#d35400',marginBottom:4}}>👔 {currentEpisode}화 의상</div>
+                                  <input
+                                    style={{width:'100%',fontSize:11,padding:'3px 6px',borderRadius:4,border:'1px solid var(--border)',background:'var(--bg)',marginBottom:3}}
+                                    value={episodeOutfits[c.id]?.outfit || ''}
+                                    placeholder="이번 화 의상 (비우면 기본 의상 적용)"
+                                    onChange={e => {
+                                      const updated = {...episodeOutfits, [c.id]: {...(episodeOutfits[c.id]||{}), outfit: e.target.value}};
+                                      setEpisodeOutfits(updated);
+                                    }}
+                                    onBlur={() => { if (projectId && currentEpisode) saveEpisodeOutfits(); }}
+                                  />
+                                  <input
+                                    style={{width:'100%',fontSize:11,padding:'3px 6px',borderRadius:4,border:'1px solid var(--border)',background:'var(--bg)'}}
+                                    value={episodeOutfits[c.id]?.accessories || ''}
+                                    placeholder="악세서리/소품 (예: 안경, 가방, 머플러)"
+                                    onChange={e => {
+                                      const updated = {...episodeOutfits, [c.id]: {...(episodeOutfits[c.id]||{}), accessories: e.target.value}};
+                                      setEpisodeOutfits(updated);
+                                    }}
+                                    onBlur={() => { if (projectId && currentEpisode) saveEpisodeOutfits(); }}
+                                  />
+                                </div>
+                              )}
                               <details style={{marginTop:4}}>
                                 <summary style={{fontSize:11,color:'#e17055',cursor:'pointer',fontWeight:600}}>레퍼런스 프롬프트 (refPrompt)</summary>
                                 <textarea className="form-input" style={{width:'100%',minHeight:70,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
@@ -7811,65 +7837,6 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
                     </>}
                     {running && <span className="status-badge running">생성 중...</span>}
                   </div>
-
-                  {/* Episode Outfits Panel */}
-                  {analysis?.characters?.length > 0 && (
-                    <details style={{background:'var(--surface2)',borderRadius:8,padding:'8px 12px',border:'1px solid var(--border)'}}>
-                      <summary style={{cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--accent)',userSelect:'none'}}>
-                        👔 에피소드 의상 설정 ({currentEpisode}화)
-                        {Object.values(episodeOutfits).filter(v => v.outfit).length > 0 && (
-                          <span style={{fontSize:11,color:'var(--success)',marginLeft:8}}>
-                            {Object.values(episodeOutfits).filter(v => v.outfit).length}명 설정됨
-                          </span>
-                        )}
-                      </summary>
-                      <div style={{marginTop:8,fontSize:12,color:'var(--text2)',marginBottom:8}}>
-                        이번 화에서 각 캐릭터가 입는 의상을 설정하세요. 비워두면 프로젝트 기본 의상이 적용됩니다.
-                      </div>
-                      <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                        {analysis.characters.map(c => {
-                          const epO = episodeOutfits[c.id] || {};
-                          return (
-                            <div key={c.id} style={{display:'flex',gap:8,alignItems:'flex-start',padding:'6px 8px',background:'var(--surface)',borderRadius:6,border:'1px solid var(--border)'}}>
-                              <div style={{minWidth:80,fontWeight:600,fontSize:12,paddingTop:4}}>
-                                {c.name}
-                                <div style={{fontSize:10,color:'var(--text2)',fontWeight:400,marginTop:2}}>기본: {(c.outfit || '없음').substring(0, 40)}{(c.outfit||'').length > 40 ? '...' : ''}</div>
-                              </div>
-                              <div style={{flex:1,display:'flex',flexDirection:'column',gap:4}}>
-                                <input
-                                  style={{width:'100%',fontSize:12,padding:'4px 8px',borderRadius:4,border:'1px solid var(--border)',background:'var(--bg)'}}
-                                  value={epO.outfit || ''}
-                                  placeholder={`${currentEpisode}화 의상 (예: 검은색 가죽 재킷, 흰색 티셔츠, 청바지)`}
-                                  onChange={e => {
-                                    const updated = {...episodeOutfits, [c.id]: {...epO, outfit: e.target.value}};
-                                    setEpisodeOutfits(updated);
-                                  }}
-                                />
-                                <input
-                                  style={{width:'100%',fontSize:11,padding:'3px 8px',borderRadius:4,border:'1px solid var(--border)',background:'var(--bg)'}}
-                                  value={epO.accessories || ''}
-                                  placeholder="악세서리/소품 (예: 빨간 머플러, 안경, 가방)"
-                                  onChange={e => {
-                                    const updated = {...episodeOutfits, [c.id]: {...epO, accessories: e.target.value}};
-                                    setEpisodeOutfits(updated);
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div style={{display:'flex',gap:6,marginTop:8}}>
-                        <button className="btn btn-primary btn-xs" onClick={() => saveEpisodeOutfits()} disabled={!projectId}>💾 의상 저장</button>
-                        <button className="btn btn-outline btn-xs" onClick={() => {
-                          if (confirm('에피소드 의상을 모두 초기화하시겠습니까?')) {
-                            setEpisodeOutfits({});
-                            if (projectId && currentEpisode) saveEpisodeOutfits({});
-                          }
-                        }}>초기화</button>
-                      </div>
-                    </details>
-                  )}
 
                   {storyboard.length === 0 && <div className="placeholder">스토리보드를 생성하면 패널별 구성이 표시됩니다</div>}
 
