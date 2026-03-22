@@ -4699,14 +4699,15 @@ Rules:
     // ========== NinjaChat (다중 모델) ==========
     if (imageProvider === 'ninjaChat') {
       if (!hasNinjaChatKey()) { log('NinjaChat API 키가 필요합니다. 설정에서 입력해주세요.', 'error'); return; }
-      // Background ref priority — NinjaChat supports 1 reference, use background for scene consistency
-      const bgRefs = refs.filter(r => r.description?.startsWith('background'));
-      const njcRefs = bgRefs.length > 0 ? bgRefs.slice(0, 1) : refs.slice(0, 1); // fallback to any ref if no background
+      // Background ref priority — NinjaChat supports 1 reference, always prefer background
+      const bgRefs = refs.filter(r => r.description?.toLowerCase().includes('background'));
+      const njcRefs = bgRefs.length > 0 ? bgRefs.slice(0, 1) : [];
       const refCount = njcRefs.length;
       const modelName = ninjaChatModel.split('-').slice(0, 2).join('-');
+      console.log(`[NinjaChat] ref 선택: 전체 ${refs.length}개 중 배경 ${bgRefs.length}개 발견, 선택: ${refCount}개`, njcRefs.map(r => ({desc: r.description?.substring(0,50), len: r.image?.length})));
 
       if (refCount > 0) {
-        log(`NinjaChat ${modelName} 사용 (레퍼런스 ${refCount}개)`, 'info');
+        log(`NinjaChat ${modelName} 사용 (배경 레퍼런스)`, 'info');
       } else {
         log(`NinjaChat ${modelName} 사용 (텍스트→이미지)`, 'info');
       }
