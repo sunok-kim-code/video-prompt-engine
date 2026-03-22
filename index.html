@@ -5278,15 +5278,10 @@ This is an ADULT webtoon production for mature audiences. You MUST:
           contrastSuffix = `\n\nIMPORTANT: This character must look COMPLETELY DIFFERENT from these other characters: ${otherDescs}. Ensure distinct hair color, hairstyle, face shape, and body type.`;
         }
         const distinctInfo = char.distinctFeatures ? `\nThis character's unique visual identity: ${char.distinctFeatures}.` : '';
-        // Add episode outfit override
-        let episodeOutfitSuffix = '';
-        const epO = episodeOutfits?.[char.id];
-        if (epO?.outfit) {
-          episodeOutfitSuffix = `\n\n[EPISODE OUTFIT OVERRIDE] This character's outfit for this episode MUST be: ${epO.outfit}. Ignore any default outfit described above and draw ONLY this outfit.`;
-          if (epO.accessories) episodeOutfitSuffix += ` Accessories: ${epO.accessories}.`;
-          log(`${char.name} — ${currentEpisode || ''}화 의상 적용: ${epO.outfit}`, 'info');
-        }
-        const fullPrompt = char.refPrompt + distinctInfo + episodeOutfitSuffix + getCharSuffix() + contrastSuffix;
+        // Apply episode outfit override (replace outfit in prompt + append strong suffix)
+        const { prompt: outfitPrompt, applied: outfitApplied } = applyEpisodeOutfitToPrompt(char.refPrompt, char.id);
+        if (outfitApplied) console.log(`[runStep2] ${char.name} 에피소드 의상 프롬프트 적용됨`);
+        const fullPrompt = outfitPrompt + distinctInfo + getCharSuffix() + contrastSuffix;
         const images = await callImage(fullPrompt);
         refs.characters[char.id] = images[0];
         generatedChars.push({name: char.name, appearance: char.appearance, outfit: char.outfit, distinctFeatures: char.distinctFeatures});
@@ -6054,20 +6049,54 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
   };
 
   // ======== Regenerate single character reference (updates shared asset) ========
+  // Helper: replace outfit section in refPrompt with episode outfit
+  const applyEpisodeOutfitToPrompt = (refPrompt, charId) => {
+    const epO = episodeOutfits?.[charId];
+    if (!epO?.outfit) {
+      console.log(`[EpisodeOutfit] ${charId}: 에피소드 의상 없음, 기본 프롬프트 사용`);
+      return { prompt: refPrompt, applied: false };
+    }
+    console.log(`[EpisodeOutfit] ${charId}: 에피소드 의상 감지 → "${epO.outfit}" / accessories: "${epO.accessories || '없음'}"`);
+
+    let modified = refPrompt;
+    // Try to replace Outfit section in the refPrompt directly
+    const outfitRegex = /Outfit:\s*\[?[^\].\n]*\]?\.?/i;
+    const outfitRegex2 = /Outfit:\s*[^.]*\./i;
+    const newOutfitDesc = `Outfit: ${epO.outfit}${epO.accessories ? '. Accessories: ' + epO.accessories : ''}.`;
+
+    if (outfitRegex.test(modified)) {
+      modified = modified.replace(outfitRegex, newOutfitDesc);
+      console.log(`[EpisodeOutfit] refPrompt 내 Outfit 섹션 직접 교체 완료`);
+    } else if (outfitRegex2.test(modified)) {
+      modified = modified.replace(outfitRegex2, newOutfitDesc);
+      console.log(`[EpisodeOutfit] refPrompt 내 Outfit 문장 교체 완료`);
+    } else {
+      console.log(`[EpisodeOutfit] refPrompt 내 Outfit 패턴 없음 → suffix 추가`);
+    }
+
+    // Always append strong override at the end regardless
+    modified += `\n\n[CRITICAL OUTFIT OVERRIDE] IGNORE any previously mentioned clothing. This character MUST wear EXACTLY: ${epO.outfit}.`;
+    if (epO.accessories) modified += ` Accessories MUST include: ${epO.accessories}.`;
+    modified += ` DO NOT draw any other outfit. This is the ONLY correct outfit for this character.`;
+
+    log(`${charId} — ${currentEpisode || ''}화 의상 적용: ${epO.outfit}`, 'info');
+    return { prompt: modified, applied: true };
+  };
+
   const regenerateCharRef = async (charId, customPrompt) => {
     if (!analysis) return;
     const char = analysis.characters.find(c => c.id === charId);
     if (!char) return;
     setRunning(true);
     try {
-      const basePrompt = customPrompt || char.refPrompt;
-      // Add episode outfit override to prompt
-      let episodeOutfitSuffix = '';
-      const epO = episodeOutfits?.[charId];
-      if (epO?.outfit) {
-        episodeOutfitSuffix = `\n\n[EPISODE OUTFIT OVERRIDE] This character's outfit for this episode MUST be: ${epO.outfit}. Ignore any default outfit described above and draw ONLY this outfit.`;
-        if (epO.accessories) episodeOutfitSuffix += ` Accessories: ${epO.accessories}.`;
-        log(`${char.name} — ${currentEpisode || ''}화 의상 적용: ${epO.outfit}`, 'info');
+      console.log(`[regenerateCharRef] ${char.name} (${charId}), episodeOutfits:`, JSON.stringify(episodeOutfits?.[charId] || 'none'));
+
+      let basePrompt = customPrompt || char.refPrompt;
+      // Apply episode outfit override (replace + suffix)
+      if (!customPrompt) {
+        const { prompt: outfitPrompt, applied } = applyEpisodeOutfitToPrompt(basePrompt, charId);
+        basePrompt = outfitPrompt;
+        if (applied) console.log(`[regenerateCharRef] 에피소드 의상 프롬프트 적용됨`);
       }
       // Add differentiation context from other characters
       let contrastSuffix = '';
@@ -6082,7 +6111,8 @@ ABSOLUTE RULES FOR INTIMATE/SEXUAL SCENES:
         const distinctInfo = char.distinctFeatures ? `\nThis character's unique visual identity: ${char.distinctFeatures}.` : '';
         contrastSuffix = distinctInfo + contrastSuffix;
       }
-      const finalPrompt = customPrompt ? customPrompt : (basePrompt + episodeOutfitSuffix + getCharSuffix() + contrastSuffix);
+      const finalPrompt = customPrompt ? customPrompt : (basePrompt + getCharSuffix() + contrastSuffix);
+      console.log(`[regenerateCharRef] 최종 프롬프트 (첫 300자):`, finalPrompt.substring(0, 300));
       log(`${char.name} 레퍼런스 재생성 중...`);
       const images = await callImage(finalPrompt);
       setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
@@ -7999,13 +8029,20 @@ Format: Return ONLY the detailed English prompt, nothing else. No markdown, no f
                                 <textarea className="form-input" style={{width:'100%',minHeight:70,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
                                   value={c.refPrompt || ''} onChange={e => updateAnalysisChar(c.id, 'refPrompt', e.target.value)} />
                               </details>
-                              <div className="action-bar" style={{marginTop:6}}>
+                              <div className="action-bar" style={{marginTop:6,flexWrap:'wrap'}}>
                                 <button className="btn btn-primary btn-xs"
                                   onClick={() => saveCharEdits(c.id)}>💾 저장</button>
                                 <button className="btn btn-outline btn-xs"
                                   onClick={() => openPromptEditor('charRef', c.id, c.refPrompt + getCharSuffix(), c.name, (p) => regenerateCharRef(c.id, p))} disabled={running}>프롬프트 편집 후 생성</button>
                                 <button className="btn btn-outline btn-xs"
-                                  onClick={()=>regenerateCharRef(c.id)} disabled={running}>재생성</button>
+                                  onClick={()=>regenerateCharRef(c.id)} disabled={running}>
+                                  {episodeOutfits[c.id]?.outfit ? `👔 ${currentEpisode}화 의상 재생성` : '재생성'}
+                                </button>
+                                {episodeOutfits[c.id]?.outfit && (
+                                  <span style={{fontSize:10,color:'#e17055',fontWeight:600,display:'block',width:'100%',marginTop:2}}>
+                                    ⚡ 에피소드 의상 적용됨: {episodeOutfits[c.id].outfit.substring(0, 30)}{episodeOutfits[c.id].outfit.length > 30 ? '...' : ''}
+                                  </span>
+                                )}
                               </div>
                               {/* LoRA Training Button */}
                               {imageProvider === 'falAI' && references.characters[c.id] && !loraModels[c.id]?.status?.match(/ready|training|preparing/) && (
