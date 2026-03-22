@@ -6444,9 +6444,20 @@ Return ONLY the detailed English prompt, nothing else.`,
   };
 
   const cgRenderWithTitle = async (imageUrl, titleText, titleFont, titleEffect, titleColor, titleSize) => {
+    // Convert external URL to blob URL to avoid CORS issues with canvas
+    let localUrl = imageUrl;
+    if (imageUrl && imageUrl.startsWith('http')) {
+      try {
+        const resp = await fetch(imageUrl);
+        const blob = await resp.blob();
+        localUrl = URL.createObjectURL(blob);
+      } catch (e) {
+        console.warn('[cgRenderWithTitle] fetch→blob 변환 실패, data URL로 시도:', e.message);
+        // If it's already a data URL or fetch fails, use as-is
+      }
+    }
     return new Promise((resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
       img.onload = () => {
         const canvas = document.createElement('canvas');
         canvas.width = 720;
@@ -6464,13 +6475,16 @@ Return ONLY the detailed English prompt, nothing else.`,
           cgApplyTitleEffect(canvas, ctx, titleText, titleFont, titleEffect, titleColor, titleSize);
         }
 
+        // Clean up blob URL if we created one
+        if (localUrl !== imageUrl && localUrl.startsWith('blob:')) URL.revokeObjectURL(localUrl);
         resolve(canvas.toDataURL('image/jpeg', 0.95));
       };
       img.onerror = () => {
         log('이미지 로드 실패', 'error');
+        if (localUrl !== imageUrl && localUrl.startsWith('blob:')) URL.revokeObjectURL(localUrl);
         resolve(null);
       };
-      img.src = imageUrl;
+      img.src = localUrl;
     });
   };
 
@@ -6489,6 +6503,10 @@ Return ONLY the detailed English prompt, nothing else.`,
         cgTitleColor,
         cgTitleSize
       );
+      if (!previewData) {
+        log('미리보기 렌더링 실패 — 이미지를 불러올 수 없습니다', 'error');
+        return;
+      }
       setCgPreviewUrl(previewData);
       log('미리보기 렌더링 완료', 'success');
     } catch (e) {
