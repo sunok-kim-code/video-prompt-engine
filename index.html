@@ -679,7 +679,7 @@ async function callNanoBanana(prompt, opts={}) {
 // ============================================================
 async function callGrokImage(prompt, opts={}) {
   const apiKey = getXaiKey();
-  const model = opts.model || 'grok-imagine-image';
+  const model = opts.model || 'grok-imagine-image-pro';
   const url = 'https://api.x.ai/v1/images/generations';
   const body = {
     model: model,
@@ -725,7 +725,7 @@ async function callGrokImage(prompt, opts={}) {
 // Accepts reference images (up to 3) for style/character/background consistency
 async function callGrokEdit(prompt, refImages, opts={}) {
   const apiKey = getXaiKey();
-  const model = opts.model || 'grok-imagine-image';
+  const model = opts.model || 'grok-imagine-image-pro';
   const url = 'https://api.x.ai/v1/images/edits';
   const body = {
     model: model,
@@ -2383,6 +2383,7 @@ function App() {
   const [nbVertexModel, setNbVertexModel] = useState('gemini-2.5-flash'); // Vertex AI NanoBanana model key
   const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | zimage | seedream
   const [ninjaChatModel, setNinjaChatModel] = useState('ninja-vision-1'); // NinjaChat model selection
+  const [grokImageModel, setGrokImageModel] = useState('grok-imagine-image-pro'); // Grok Image model selection
   const [textModel] = useState('gemini-3.1-pro-preview'); // Text generation model — fixed to Gemini 3.1 Pro
 
   // Shared assets (project-level)
@@ -4674,7 +4675,7 @@ Rules:
         const editPrompt = stylePrefix + cleanedPrompt + refContext + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
         log(`Grok Edit 사용 (레퍼런스 ${grokRefImages.length}개 + ${curStyleName}${charCount > 0 ? ' + 캐릭터 '+charCount+'명' : ''})`, 'info');
         try {
-          return await callGrokEdit(editPrompt, grokRefImages, {aspectRatio: opts.aspectRatio || '3:4'});
+          return await callGrokEdit(editPrompt, grokRefImages, {aspectRatio: opts.aspectRatio || '3:4', model: grokImageModel});
         } catch (editErr) {
           const editErrMsg = editErr.message || '';
           if (editErrMsg.includes('content moderation') || editErrMsg.includes('rejected')) {
@@ -4692,7 +4693,7 @@ Rules:
         log(`Grok Image 사용 (${curStyleName} 스타일 적용)`, 'info');
       }
       try {
-        return await callGrokImage(grokPrompt, {aspectRatio: opts.aspectRatio || '3:4'});
+        return await callGrokImage(grokPrompt, {aspectRatio: opts.aspectRatio || '3:4', model: grokImageModel});
       } catch (grokErr) {
         const errMsg = grokErr.message || '';
         if (errMsg.includes('content moderation') || errMsg.includes('rejected')) {
@@ -4897,7 +4898,7 @@ Rules:
       }
       return await callImagen(imagen4Prompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
-  }, [imageProvider, artStyle, customStylePrompt, getStylePrefix, log, loraModels, nbVertexModel]);
+  }, [imageProvider, artStyle, customStylePrompt, getStylePrefix, log, loraModels, nbVertexModel, grokImageModel]);
 
   // LoRA Training: train a character LoRA from reference images
   const trainCharacterLora = async (charId, charName, images) => {
@@ -7282,6 +7283,12 @@ Return ONLY the detailed English prompt, nothing else.`,
           <option value="flux2Pro">Flux 2 Pro (fal.ai 레퍼런스)</option>
           <option value="ninjaChat">NinjaChat (다중 모델)</option>
         </select>
+        {imageProvider === 'grokImage' && (
+          <select className="form-select" style={{width:170,marginLeft:4,background:'linear-gradient(135deg,#e3f2fd,#bbdefb)',borderColor:'#42a5f5'}} value={grokImageModel} onChange={e=>setGrokImageModel(e.target.value)}>
+            <option value="grok-imagine-image-pro">Imagine Pro ($0.07)</option>
+            <option value="grok-imagine-image">Imagine 기본 ($0.02)</option>
+          </select>
+        )}
         {imageProvider === 'a2eImage' && (
           <select className="form-select" style={{width:140,marginLeft:4,background:'linear-gradient(135deg,#fff3e0,#ffe0b2)',borderColor:'#ffb74d'}} value={a2eModelType} onChange={e=>setA2eModelType(e.target.value)}>
             <option value="a2e">A2E (기본)</option>
