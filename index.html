@@ -4544,11 +4544,11 @@ Rules:
       let sortedRefs = refs;
       if (refs.length > 0) {
         const prevPanelRefs = refs.filter(r => (r.description || '').toLowerCase().includes('previous panel'));
-        const bgRefs = refs.filter(r => (r.description || '').toLowerCase().includes('background'));
-        const charRefs = refs.filter(r => (r.description || '').toLowerCase().includes('character'));
+        const bgRefs = refs.filter(r => (r.description || '').toLowerCase().startsWith('background:'));
+        const charRefs = refs.filter(r => (r.description || '').toLowerCase().startsWith('character:'));
         const otherRefs = refs.filter(r => {
           const d = (r.description || '').toLowerCase();
-          return !d.includes('background') && !d.includes('character') && !d.includes('previous panel');
+          return !d.startsWith('background:') && !d.startsWith('character:') && !d.includes('previous panel');
         });
         sortedRefs = [...prevPanelRefs, ...bgRefs.slice(0, 1), ...charRefs, ...otherRefs].slice(0, GEMINI_MAX_REFS);
         console.log(`[NanoBanana] 레퍼런스 우선순위 정렬: 이전패널 ${prevPanelRefs.length}개, 배경 ${Math.min(bgRefs.length,1)}/${bgRefs.length}개, 캐릭터 ${charRefs.length}개, 기타 ${otherRefs.length}개 → ${sortedRefs.length}개`);
@@ -4689,11 +4689,11 @@ Rules:
       const grokRefImages = [];
       if (opts.referenceImages?.length > 0) {
         const prevPanelRefs = opts.referenceImages.filter(r => r.description?.toLowerCase().includes('previous panel'));
-        const bgRefs = opts.referenceImages.filter(r => r.description?.toLowerCase().includes('background'));
-        const charRefs = opts.referenceImages.filter(r => r.description?.toLowerCase().includes('character'));
+        const bgRefs = opts.referenceImages.filter(r => r.description?.toLowerCase().startsWith('background:'));
+        const charRefs = opts.referenceImages.filter(r => r.description?.toLowerCase().startsWith('character:'));
         const otherRefs = opts.referenceImages.filter(r => {
           const d = (r.description || '').toLowerCase();
-          return !d.includes('background') && !d.includes('character') && !d.includes('previous panel');
+          return !d.startsWith('background:') && !d.startsWith('character:') && !d.includes('previous panel');
         });
         // 1) 이전 패널 최우선, 2) 배경 최대 1개, 3) 캐릭터 전부, 4) 소품/기타
         const prioritized = [...prevPanelRefs, ...bgRefs.slice(0, 1), ...charRefs, ...otherRefs];
