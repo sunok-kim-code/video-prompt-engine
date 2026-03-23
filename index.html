@@ -1867,7 +1867,7 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "gazeMap": {"char_1": "looking right toward char_2 with longing expression", "char_2": "looking down at papers, unaware of char_1's gaze"},
       "sceneTransitionNote": "How this scene connects to the PREVIOUS scene. e.g. 'Time skip — next morning. Cut from nighttime bedroom to bright kitchen.' or 'Continuous — camera follows char_1 as they walk from hallway into this room.' Leave empty for first beat.",
       "environmentDetails": "Specific ambient details: time of day, lighting direction, weather, background sounds/activity, crowd presence — e.g. 'Late afternoon golden hour, warm sunlight streaming from left window, other students chatting in background'",
-      "outfitOverrides": {"char_1": "only if story EXPLICITLY changes outfit in this beat, describe the new outfit in English"}
+      "outfitOverrides": {"char_1": "Describe the outfit this character is wearing IN THIS SCENE in detailed English. Include if the story mentions ANY clothing, accessories, or appearance details for this beat — even casual mentions like '교복을 입은' or '드레스 차림의'. For EXISTING characters: include if their outfit in this episode differs from their default shared-asset outfit."}
     }
   ]
 }
@@ -1876,7 +1876,13 @@ Extract ALL characters mentioned (even minor ones). Create 3-6 backgrounds for d
 
 Break the story into 8-20 plot beats that capture the narrative arc. Each plot beat should represent a meaningful story moment.
 
-For outfitOverrides: ONLY include if the story text explicitly describes a costume/clothing change. Normal scenes without clothing mentions = no override = character wears default outfit.
+OUTFIT EXTRACTION RULES:
+- outfitOverrides: Include for ANY beat where the story describes, mentions, or implies what a character is wearing — not just explicit "costume changes."
+- For EXISTING characters (from shared assets): if this episode's story describes them in a DIFFERENT outfit than their default, include outfitOverrides in the FIRST beat they appear in.
+- For NEW characters: their outfit field covers the default; only add outfitOverrides if they change clothes mid-episode.
+- Even brief mentions count: "그녀는 빨간 원피스를 입고", "교복 차림의 민수", "캐주얼한 옷차림" — ALL should be captured.
+- Describe outfits in detailed English: garment type, color, material, style.
+- Once an outfitOverride is set, it PERSISTS for all subsequent beats until another override changes it — so only set it at the FIRST beat where the outfit appears.
 
 === MASTER PRODUCER SCENE ENRICHMENT RULES ===
 You are not just an analyst — you are a MASTER PRODUCER who bridges the gap between the story writer and the illustration artist. The story writer may leave things implicit, but the artist needs EXPLICIT visual direction for every scene. You MUST fill in these gaps:
@@ -2128,12 +2134,19 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "gazeMap": {"char_1": "looking right toward char_2, eyes narrowed with suspicion", "char_2": "looking down at hands, avoiding eye contact"},
       "sceneTransitionNote": "Connection to previous scene: e.g. 'Continuous — same conversation, camera shifts to char_2 reaction' or 'Cut to — 30 minutes later, different location'",
       "environmentDetails": "Ambient details: time of day, lighting, weather, crowd activity — e.g. 'Evening, warm indoor lighting, rain visible through window, quiet jazz in background'",
-      "outfitOverrides": {}
+      "outfitOverrides": {"char_1": "Describe outfit worn in THIS scene if mentioned/implied in story text"}
     }
   ]
 }
 
 Extract ALL characters mentioned. Create backgrounds for each distinct location. Extract important props.
+
+OUTFIT EXTRACTION RULES:
+- outfitOverrides: Include for ANY beat where the story describes, mentions, or implies what a character is wearing — not just explicit "costume changes."
+- For EXISTING characters (from shared assets): if this episode's story describes them in a DIFFERENT outfit than their default, include outfitOverrides in the FIRST beat they appear in.
+- Even brief mentions count: "그녀는 빨간 원피스를 입고", "교복 차림의 민수", "속옷 차림" — ALL should be captured.
+- Describe outfits in detailed English: garment type, color, material, style, state (unbuttoned, rolled sleeves, etc.).
+- Once set, outfit PERSISTS for subsequent beats until another override changes it.
 
 === MASTER PRODUCER SCENE ENRICHMENT RULES ===
 You are a MASTER PRODUCER who bridges the gap between the story writer and the illustration artist. Scene descriptions may be sparse — you MUST fill in the visual gaps the artist needs:
@@ -5602,11 +5615,12 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
     const newCharCount = (parsed.characters?.length || 0) - existingCharCount;
     log(`분석 완료: 캐릭터 ${parsed.characters?.length || 0}명 (기존 ${existingCharCount}, 신규 ${newCharCount}), 배경 ${parsed.backgrounds?.length || 0}개, 소품 ${parsed.props?.length || 0}개, 플롯 ${parsed.plotBeats?.length || 0}개`, 'success');
     setAnalysis(parsed);
-    // Auto-populate episode outfits from analysis (only fill empty fields)
+    // Auto-populate episode outfits from analysis + plotBeat outfitOverrides
     if (currentEpisode && parsed.characters?.length > 0) {
       setEpisodeOutfits(prev => {
         const updated = {...prev};
         let filled = 0;
+        // 1) 캐릭터 기본 의상에서 추출
         for (const c of parsed.characters) {
           if (!updated[c.id]) updated[c.id] = {};
           if (!updated[c.id].outfit && c.outfit) {
@@ -5616,6 +5630,28 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
           if (!updated[c.id].accessories && c.accessories && c.accessories !== 'none') {
             updated[c.id].accessories = c.accessories;
           }
+        }
+        // 2) plotBeat outfitOverrides에서 추출 — 씬 설명의 의상 변경을 episodeOutfits에 반영
+        // 기존 캐릭터(sharedAssets에 있는)의 경우, 첫 outfitOverride가 이 화의 의상
+        if (parsed.plotBeats?.length > 0) {
+          const saChars = sharedAssets?.characters || {};
+          let overrideCount = 0;
+          for (const pb of parsed.plotBeats) {
+            if (!pb.outfitOverrides || typeof pb.outfitOverrides !== 'object') continue;
+            for (const [charId, outfitDesc] of Object.entries(pb.outfitOverrides)) {
+              if (!outfitDesc || typeof outfitDesc !== 'string' || outfitDesc.length < 3) continue;
+              // 이미 이 화의 의상이 설정됐으면 첫 등장만 사용 (이후 변경은 패널에서 처리)
+              if (!updated[charId]) updated[charId] = {};
+              if (!updated[charId].outfit || (saChars[charId] && updated[charId].outfit === saChars[charId]?.outfit)) {
+                // 기본 의상과 같거나 아직 미설정 → 씬 의상으로 덮어쓰기
+                const prevOutfit = updated[charId].outfit || '(없음)';
+                updated[charId].outfit = outfitDesc;
+                overrideCount++;
+                console.log(`[episodeOutfit] ${charId}: plotBeat ${pb.beat}의 outfitOverride 반영 — "${prevOutfit}" → "${outfitDesc}"`);
+              }
+            }
+          }
+          if (overrideCount > 0) log(`${currentEpisode}화 씬 의상 반영: ${overrideCount}명 (plotBeat outfitOverrides에서)`, 'info');
         }
         if (filled > 0) log(`${currentEpisode}화 의상 자동 설정: ${filled}명 (분석 결과에서 추출)`, 'info');
         return updated;
