@@ -4089,18 +4089,21 @@ Rules:
   // Unified state tracker: accumulates outfit, pose, location, expression, props per character across panels
   // Each character has a "current state" that persists and only changes when explicitly overridden
   const buildCharacterStates = useCallback((storyboardData, analysisData, upToIndex) => {
-    // Initialize with default state from analysis
+    // Initialize with episode outfit (if set) or default from analysis
     const states = {}; // {charId: {outfit, pose, expression, location, props, lastChangedAt, changeLog}}
     if (analysisData?.characters) {
       for (const c of analysisData.characters) {
+        // 에피소드 의상이 설정되었으면 그것을 초기값으로 사용
+        const epOutfit = episodeOutfits?.[c.id]?.outfit;
+        const initOutfit = epOutfit || c.outfit || '';
         states[c.id] = {
-          outfit: c.outfit || '',
+          outfit: initOutfit,
           pose: 'standing',
           expression: 'neutral',
           location: '',
           props: [],
           lastChangedAt: 0,
-          changeLog: [{panel: 0, field: 'init', from: '', to: c.outfit || '', desc: '기본 상태'}],
+          changeLog: [{panel: 0, field: 'init', from: '', to: initOutfit, desc: epOutfit ? `${currentEpisode || ''}화 의상` : '기본 상태'}],
         };
       }
     }
@@ -4141,7 +4144,7 @@ Rules:
       }
     }
     return states;
-  }, []);
+  }, [episodeOutfits, currentEpisode]);
 
   // Generate a compact state summary string for a character (used in image prompts)
   const formatCharacterState = (charId, charState, panelCharData) => {
@@ -4193,10 +4196,11 @@ Rules:
       const charInfo = analysisData.characters?.find(c => c.id === charId);
       const saCharData = sa?.characters?.[charId];
       const charState = charStates?.[charId];
-      // Outfit priority: panel-level override > accumulated state > episode outfit > default outfit
+      // Outfit priority: panel-level override > episode outfit > accumulated state > default
+      // (episode outfit은 buildCharacterStates에서 이미 초기값으로 반영되므로 charState.outfit에 포함)
       const epOutfitData = episodeOutfits?.[charId] || {};
       const epOutfit = epOutfitData.outfit;
-      const outfitDesc = pc.outfitOverride || charState?.outfit || epOutfit || charInfo?.outfit || '';
+      const outfitDesc = pc.outfitOverride || epOutfit || charState?.outfit || charInfo?.outfit || '';
       const appearanceDesc = charInfo?.appearance || charId;
       // Build detailed Visual ID Card: combine all available description fields
       const detailParts = [appearanceDesc];
