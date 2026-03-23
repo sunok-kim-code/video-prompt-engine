@@ -723,9 +723,10 @@ async function callGrokImage(prompt, opts={}) {
 
 // Grok Image Edit — /v1/images/edits endpoint
 // Accepts reference images (up to 3) for style/character/background consistency
+// NOTE: /v1/images/edits only supports grok-imagine-image (NOT pro)
 async function callGrokEdit(prompt, refImages, opts={}) {
   const apiKey = getXaiKey();
-  const model = opts.model || 'grok-imagine-image-pro';
+  const model = 'grok-imagine-image'; // edits endpoint only supports base model
   const url = 'https://api.x.ai/v1/images/edits';
   const body = {
     model: model,
@@ -4673,7 +4674,7 @@ Rules:
           ? `\nReference images provided: ${refLabels.join('; ')}. You MUST faithfully reproduce the visual details from ALL reference images — backgrounds, characters, art style, color palette.`
           : '';
         const editPrompt = stylePrefix + cleanedPrompt + refContext + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
-        log(`Grok Edit 사용 (레퍼런스 ${grokRefImages.length}개 + ${curStyleName}${charCount > 0 ? ' + 캐릭터 '+charCount+'명' : ''})`, 'info');
+        log(`Grok Edit (imagine 기본) 사용 — 레퍼런스 ${grokRefImages.length}개 + ${curStyleName}${charCount > 0 ? ' + 캐릭터 '+charCount+'명' : ''}`, 'info');
         try {
           return await callGrokEdit(editPrompt, grokRefImages, {aspectRatio: opts.aspectRatio || '3:4', model: grokImageModel});
         } catch (editErr) {
@@ -4688,9 +4689,9 @@ Rules:
       }
 
       if (charCount > 0) {
-        log(`Grok Image 사용 (${curStyleName} + 에셋 ID카드: 캐릭터 ${charCount}명)`, 'info');
+        log(`Grok ${grokImageModel === 'grok-imagine-image-pro' ? 'Pro' : 'Image'} 사용 (${curStyleName} + 에셋 ID카드: 캐릭터 ${charCount}명)`, 'info');
       } else {
-        log(`Grok Image 사용 (${curStyleName} 스타일 적용)`, 'info');
+        log(`Grok ${grokImageModel === 'grok-imagine-image-pro' ? 'Pro' : 'Image'} 사용 (${curStyleName} 스타일 적용)`, 'info');
       }
       try {
         return await callGrokImage(grokPrompt, {aspectRatio: opts.aspectRatio || '3:4', model: grokImageModel});
