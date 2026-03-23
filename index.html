@@ -4508,7 +4508,21 @@ Rules:
     if (imageProvider === 'nanoBanana') {
       console.log(`[NanoBanana] 선택된 모델 키: "${nbVertexModel}", vertexModel: "${NB_VERTEX_MODELS[nbVertexModel]?.vertexModel || 'NOT FOUND'}"`)
       const nbInfo = NB_VERTEX_MODELS[nbVertexModel] || NB_VERTEX_MODELS['gemini-2.5-flash'];
-      const geminiOpts = {...opts, model: nbInfo.vertexModel};
+      // 레퍼런스 우선순위 정렬: 이전패널 → 배경(1개) → 캐릭터 → 소품/기타 (max 6)
+      const GEMINI_MAX_REFS = 6;
+      let sortedRefs = refs;
+      if (refs.length > 0) {
+        const prevPanelRefs = refs.filter(r => (r.description || '').toLowerCase().includes('previous panel'));
+        const bgRefs = refs.filter(r => (r.description || '').toLowerCase().includes('background'));
+        const charRefs = refs.filter(r => (r.description || '').toLowerCase().includes('character'));
+        const otherRefs = refs.filter(r => {
+          const d = (r.description || '').toLowerCase();
+          return !d.includes('background') && !d.includes('character') && !d.includes('previous panel');
+        });
+        sortedRefs = [...prevPanelRefs, ...bgRefs.slice(0, 1), ...charRefs, ...otherRefs].slice(0, GEMINI_MAX_REFS);
+        console.log(`[NanoBanana] 레퍼런스 우선순위 정렬: 이전패널 ${prevPanelRefs.length}개, 배경 ${Math.min(bgRefs.length,1)}/${bgRefs.length}개, 캐릭터 ${charRefs.length}개, 기타 ${otherRefs.length}개 → ${sortedRefs.length}개`);
+      }
+      const geminiOpts = {...opts, model: nbInfo.vertexModel, referenceImages: sortedRefs};
       const refInstruction = refs.length > 0
         ? '\n\nCRITICAL: Reference images are provided. You MUST draw the characters and backgrounds EXACTLY as they appear in the reference images. Maintain identical facial features, hairstyle, hair color, eye color, outfit, and body proportions. Do NOT change or reimagine any visual details.'
         : '';
