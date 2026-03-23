@@ -4158,7 +4158,10 @@ Rules:
     const saPropCount = Object.keys(sa?.props || {}).length;
     const epCharCount = Object.keys(episodeRefs?.characters || {}).length;
     const epBgCount = Object.keys(episodeRefs?.backgrounds || {}).length;
+    const mainCharIds = (panel.characters || []).map(pc => pc.id || pc);
+    const bgCharIds = (panel.backgroundCharacters || []).map(bc => bc.id || bc);
     console.log(`[buildPanelRefs] 에셋 현황: sharedAssets(캐릭터:${saCharCount}, 배경:${saBgCount}, 소품:${saPropCount}), episodeRefs(캐릭터:${epCharCount}, 배경:${epBgCount})`);
+    console.log(`[buildPanelRefs] 패널 캐릭터: main=[${mainCharIds.join(',')}], background=[${bgCharIds.join(',')}] → 총 ${mainCharIds.length + bgCharIds.length}명`);
 
     const charIds = [];
     for (const pc of panel.characters) {
@@ -4202,6 +4205,34 @@ Rules:
         console.log(`[buildPanelRefs] ✓ 캐릭터 "${charId}" 이미지 발견 (source: ${saCharImg ? 'sharedAssets' : 'episodeRefs'}, length: ${charImg.length})`);
       } else {
         console.warn(`[buildPanelRefs] ✗ 캐릭터 "${charId}" 이미지 없음 (sharedAssets keys: [${Object.keys(sa?.characters || {}).join(',')}])`);
+      }
+    }
+
+    // backgroundCharacters — 배경 캐릭터도 레퍼런스 이미지 수집 (시각적 일관성)
+    if (panel.backgroundCharacters?.length > 0) {
+      for (const bc of panel.backgroundCharacters) {
+        const bcId = bc.id || bc;
+        // main characters에 이미 포함됐으면 스킵
+        if (charIds.includes(bcId)) continue;
+        const saCharImg = sa?.characters?.[bcId]?.image;
+        const epCharImg = episodeRefs?.characters?.[bcId];
+        const bcImg = saCharImg || epCharImg;
+        const charInfo = analysisData.characters?.find(c => c.id === bcId);
+        const saCharData = sa?.characters?.[bcId];
+        const bcPose = bc.pose || 'in background';
+        const bcGaze = bc.gazeDirection || '';
+        const bcExpr = bc.expression || '';
+        const appearanceDesc = charInfo?.appearance || bcId;
+        const outfitDesc = charInfo?.outfit || '';
+        const fullDesc = [appearanceDesc, outfitDesc ? `outfit: ${outfitDesc}` : '', `pose: ${bcPose}`, bcExpr ? `expression: ${bcExpr}` : '', bcGaze ? `gaze: ${bcGaze}` : ''].filter(Boolean).join(', ');
+        const charLabel = `[BG Character ${charInfo?.name || bcId}]`;
+        assetDescriptions.push(`${charLabel}: ${fullDesc}`);
+        if (bcImg) {
+          refImages.push({image: bcImg, description: `character: ${charInfo?.name || bcId} (background) — ${fullDesc}`});
+          console.log(`[buildPanelRefs] ✓ 배경캐릭터 "${bcId}" 이미지 발견 (source: ${saCharImg ? 'sharedAssets' : 'episodeRefs'})`);
+        } else {
+          console.warn(`[buildPanelRefs] ✗ 배경캐릭터 "${bcId}" 이미지 없음`);
+        }
       }
     }
 
