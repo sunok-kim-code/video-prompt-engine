@@ -4175,7 +4175,8 @@ Rules:
       charIds.push(charId);
       const saCharImg = sa?.characters?.[charId]?.image;
       const epCharImg = episodeRefs?.characters?.[charId];
-      const charImg = saCharImg || epCharImg;
+      // 에피소드 레퍼런스 우선 (에피소드 의상이 반영된 이미지), 없으면 기본 sharedAssets
+      const charImg = epCharImg || saCharImg;
       const charInfo = analysisData.characters?.find(c => c.id === charId);
       const saCharData = sa?.characters?.[charId];
       const charState = charStates?.[charId];
@@ -4208,7 +4209,7 @@ Rules:
       assetDescriptions.push(`${charLabel}: ${fullDesc}`);
       if (charImg) {
         refImages.push({image: charImg, description: `character: ${charInfo?.name || charId} — ${fullDesc}`});
-        console.log(`[buildPanelRefs] ✓ 캐릭터 "${charId}" 이미지 발견 (source: ${saCharImg ? 'sharedAssets' : 'episodeRefs'}, length: ${charImg.length})`);
+        console.log(`[buildPanelRefs] ✓ 캐릭터 "${charId}" 이미지 발견 (source: ${epCharImg ? 'episodeRefs(의상변경)' : 'sharedAssets(기본)'}, length: ${charImg.length})`);
       } else {
         console.warn(`[buildPanelRefs] ✗ 캐릭터 "${charId}" 이미지 없음 (sharedAssets keys: [${Object.keys(sa?.characters || {}).join(',')}])`);
       }
@@ -5214,6 +5215,14 @@ Rules:
           const curAssets = sharedAssets || {characters:{}, backgrounds:{}};
           (s2.characterIds||[]).forEach(id => { if(curAssets.characters[id]?.image) loadedRefs.characters[id] = curAssets.characters[id].image; });
           (s2.backgroundIds||[]).forEach(id => { if(curAssets.backgrounds[id]?.image) loadedRefs.backgrounds[id] = curAssets.backgrounds[id].image; });
+          // 에피소드 의상 이미지 복원 (sharedAssets에 없으므로 별도 저장된 이미지 사용)
+          if (s2.episodeOutfitImages) {
+            const epImgCount = Object.keys(s2.episodeOutfitImages).length;
+            for (const [cid, img] of Object.entries(s2.episodeOutfitImages)) {
+              loadedRefs.characters[cid] = img; // 에피소드 의상 이미지로 덮어씀
+            }
+            if (epImgCount > 0) log(`  에피소드 의상 이미지 ${epImgCount}명 복원됨`, 'info');
+          }
         }
         if (Object.keys(loadedRefs.characters || {}).length > 0 || Object.keys(loadedRefs.backgrounds || {}).length > 0) {
           setReferences(loadedRefs);
@@ -5651,7 +5660,7 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
         continue;
       }
       if (hasEpisodeOutfit && sa.characters[char.id]?.image) {
-        log(`${char.name} — ${currentEpisode || ''}화 의상 변경 감지 → 레퍼런스 재생성`, 'info');
+        log(`${char.name} — ${currentEpisode || ''}화 의상 변경 감지 → 에피소드 전용 레퍼런스 재생성 (기본 에셋 보존)`, 'info');
       }
       log(`캐릭터 레퍼런스 생성 (${i+1}/${data.characters.length}): ${char.name}`);
       try {
@@ -5671,11 +5680,18 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
         const images = await callImage(fullPrompt);
         refs.characters[char.id] = images[0];
         generatedChars.push({name: char.name, appearance: char.appearance, outfit: char.outfit, distinctFeatures: char.distinctFeatures});
-        // Save to shared assets
-        const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
-        sa.characters[char.id] = {...assetData, assetId: char.id, type: 'characters'};
-        if (projectId) { await fbSaveAsset(projectId, 'characters', char.id, assetData); await new Promise(r=>setTimeout(r,500)); }
-        log(`${char.name} 레퍼런스 생성 → 공유 에셋 저장 완료`, 'success');
+
+        if (hasEpisodeOutfit && sa.characters[char.id]?.image) {
+          // 에피소드 의상 → episodeRefs에만 저장, sharedAssets(기본 캐릭터) 보존
+          log(`${char.name} — ${currentEpisode || ''}화 의상 레퍼런스 저장 (기본 에셋 유지)`, 'success');
+          console.log(`[runStep2] ${char.name}: 에피소드 의상 → episodeRefs에만 저장, sharedAssets 기본 이미지 보존`);
+        } else {
+          // 기본 의상 또는 최초 생성 → sharedAssets에 저장
+          const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
+          sa.characters[char.id] = {...assetData, assetId: char.id, type: 'characters'};
+          if (projectId) { await fbSaveAsset(projectId, 'characters', char.id, assetData); await new Promise(r=>setTimeout(r,500)); }
+          log(`${char.name} 레퍼런스 생성 → 공유 에셋 저장 완료`, 'success');
+        }
       } catch(e) {
         log(`${char.name} 레퍼런스 실패: ${e.message}`, 'error');
       }
@@ -5735,11 +5751,23 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
     if (projectId && currentEpisode) {
       try {
         const cs = [...new Set([...completedSteps, 0, 1])];
-        await fbSavePhase(projectId, currentEpisode, 'step2_references', {
+        // 에피소드 의상이 적용된 캐릭터는 이미지도 함께 저장 (sharedAssets에 없으므로)
+        const epOutfitCharImages = {};
+        for (const [cid, img] of Object.entries(refs.characters)) {
+          if (episodeOutfits?.[cid]?.outfit && sharedAssets?.characters?.[cid]?.image && img !== sharedAssets.characters[cid].image) {
+            epOutfitCharImages[cid] = img;
+          }
+        }
+        const step2Data = {
           characterIds: Object.keys(refs.characters),
           backgroundIds: Object.keys(refs.backgrounds),
           hasImages: true
-        }, true);
+        };
+        if (Object.keys(epOutfitCharImages).length > 0) {
+          step2Data.episodeOutfitImages = epOutfitCharImages;
+          console.log(`[runStep2] 에피소드 의상 이미지 ${Object.keys(epOutfitCharImages).length}명 별도 저장`);
+        }
+        await fbSavePhase(projectId, currentEpisode, 'step2_references', step2Data, true);
         await fbSaveEpisode(projectId, currentEpisode, {step: 2, completedSteps: cs});
         updateEpisodeState(2, cs);
         log('Step 2 자동 저장 완료', 'info');
@@ -6657,11 +6685,32 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       log(`${char.name} 레퍼런스 재생성 중...`);
       const images = await callImage(finalPrompt);
       setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
-      const updatedRefPrompt = customPrompt || char.refPrompt;
-      const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', personality: char.personality, refPrompt: updatedRefPrompt, image: images[0]};
-      setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: {...assetData, assetId: charId, type: 'characters'}}}));
-      if (projectId) await fbSaveAsset(projectId, 'characters', charId, assetData);
-      log(`${char.name} 레퍼런스 재생성 → 공유 에셋 업데이트 완료`, 'success');
+
+      const hasEpOutfit = !!(episodeOutfits?.[charId]?.outfit);
+      const hasBaseImage = !!(sharedAssets?.characters?.[charId]?.image);
+
+      if (hasEpOutfit && hasBaseImage && !customPrompt) {
+        // 에피소드 의상 재생성 → episodeRefs에만 저장, sharedAssets 기본 이미지 보존
+        console.log(`[regenerateCharRef] ${char.name}: 에피소드 의상 → episodeRefs에만 저장, sharedAssets 보존`);
+        // Firestore에도 에피소드 의상 이미지 저장
+        if (projectId && currentEpisode) {
+          try {
+            const s2 = await fbLoadPhase(projectId, currentEpisode, 'step2_references') || {};
+            const epImages = s2.episodeOutfitImages || {};
+            epImages[charId] = images[0];
+            await fbSavePhase(projectId, currentEpisode, 'step2_references', {...s2, episodeOutfitImages: epImages}, true);
+            console.log(`[regenerateCharRef] 에피소드 의상 이미지 Firestore 저장 완료`);
+          } catch(e) { console.warn('[regenerateCharRef] 에피소드 의상 이미지 저장 실패:', e.message); }
+        }
+        log(`${char.name} — ${currentEpisode || ''}화 의상 레퍼런스 재생성 완료 (기본 에셋 유지)`, 'success');
+      } else {
+        // 기본 의상 또는 커스텀 프롬프트 → sharedAssets에 저장
+        const updatedRefPrompt = customPrompt || char.refPrompt;
+        const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', personality: char.personality, refPrompt: updatedRefPrompt, image: images[0]};
+        setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: {...assetData, assetId: charId, type: 'characters'}}}));
+        if (projectId) await fbSaveAsset(projectId, 'characters', charId, assetData);
+        log(`${char.name} 레퍼런스 재생성 → 공유 에셋 업데이트 완료`, 'success');
+      }
     } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
     finally { setRunning(false); }
   };
