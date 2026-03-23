@@ -664,12 +664,12 @@ async function callNanoBanana(prompt, opts={}) {
   if (geminiAR) genConfig.imageConfig = {aspectRatio: geminiAR};
   console.log(`[NanoBanana] 비율: ${opts.aspectRatio} → Gemini: ${geminiAR}`);
   const body={contents:[{role:'user',parts}],generationConfig:genConfig};
-  const maxRetries = 3;
+  const maxRetries = 6;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+accessToken},body:JSON.stringify(body)});
-    if (res.status === 429) {
-      const wait = Math.min(15000 * Math.pow(2, attempt), 60000);
-      console.warn('NanoBanana 429 rate limit, waiting '+wait/1000+'s (attempt '+(attempt+1)+'/'+maxRetries+')...');
+    if (res.status === 429 || res.status === 503) {
+      const wait = Math.min(10000 * Math.pow(2, attempt), 120000);
+      console.warn(`NanoBanana ${res.status} rate limit, waiting ${wait/1000}s (attempt ${attempt+1}/${maxRetries})...`);
       await new Promise(r => setTimeout(r, wait));
       continue;
     }
