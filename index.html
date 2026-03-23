@@ -4638,24 +4638,28 @@ Rules:
       const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
 
-      // Collect ALL reference images for Grok Edit — background + characters + prev panel (max 4)
+      // Collect ALL reference images for Grok Edit (max 5 per xAI API)
+      // Priority: 이전패널(최우선) → 배경(1개) → 캐릭터 → 소품/기타
+      const GROK_MAX_REFS = 5;
       const grokRefImages = [];
       if (opts.referenceImages?.length > 0) {
-        // Priority: background first (scene setting), then characters, then others (prev panel etc.)
+        const prevPanelRefs = opts.referenceImages.filter(r => r.description?.toLowerCase().includes('previous panel'));
         const bgRefs = opts.referenceImages.filter(r => r.description?.toLowerCase().includes('background'));
         const charRefs = opts.referenceImages.filter(r => r.description?.toLowerCase().includes('character'));
         const otherRefs = opts.referenceImages.filter(r => {
           const d = (r.description || '').toLowerCase();
-          return !d.includes('background') && !d.includes('character');
+          return !d.includes('background') && !d.includes('character') && !d.includes('previous panel');
         });
-        for (const ref of [...bgRefs, ...charRefs, ...otherRefs]) {
-          if (grokRefImages.length >= 4) break;
+        // 1) 이전 패널 최우선, 2) 배경 최대 1개, 3) 캐릭터 전부, 4) 소품/기타
+        const prioritized = [...prevPanelRefs, ...bgRefs.slice(0, 1), ...charRefs, ...otherRefs];
+        for (const ref of prioritized) {
+          if (grokRefImages.length >= GROK_MAX_REFS) break;
           const img = ref.image || ref;
           if (typeof img === 'string' && (img.startsWith('data:') || img.startsWith('http'))) {
             grokRefImages.push(img);
           }
         }
-        console.log(`[Grok] 레퍼런스 수집: 배경 ${bgRefs.length}개, 캐릭터 ${charRefs.length}개, 기타 ${otherRefs.length}개 → 총 ${grokRefImages.length}개 사용`);
+        console.log(`[Grok] 레퍼런스 수집: 이전패널 ${prevPanelRefs.length}개, 배경 ${Math.min(bgRefs.length,1)}/${bgRefs.length}개, 캐릭터 ${charRefs.length}개, 기타 ${otherRefs.length}개 → 총 ${grokRefImages.length}개 사용 (max ${GROK_MAX_REFS})`);
       }
 
       if (grokRefImages.length > 0) {
