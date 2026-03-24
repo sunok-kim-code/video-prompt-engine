@@ -649,7 +649,8 @@ async function callNanoBanana(prompt, opts={}) {
                 parts.push({inlineData:{mimeType:mime,data:proxyB64}});
                 if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+']'});
                 refCount++;
-                console.log(`[NanoBanana] 프록시 경유 변환 성공: ${imgSrc.substring(0,60)}...`);
+                if(isCharRef) charRefCount++;
+                console.log(`[NanoBanana] 프록시 경유 변환 성공 (${isCharRef?'캐릭터':'기타'}): ${imgSrc.substring(0,60)}...`);
                 continue;
               }
             }
@@ -663,7 +664,8 @@ async function callNanoBanana(prompt, opts={}) {
           parts.push({inlineData:{mimeType:mime,data:b64}});
           if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+']'});
           refCount++;
-          console.log(`[NanoBanana] URL 레퍼런스 → base64 변환 성공: ${imgSrc.substring(0,80)}...`);
+          if(isCharRef) charRefCount++;
+          console.log(`[NanoBanana] URL 레퍼런스 → base64 변환 성공 (${isCharRef?'캐릭터':'기타'}): ${imgSrc.substring(0,80)}...`);
         }catch(e){
           console.warn(`[NanoBanana] URL 레퍼런스 변환 실패: ${imgSrc.substring(0,80)}`, e.message);
         }
