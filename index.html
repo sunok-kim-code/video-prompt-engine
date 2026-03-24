@@ -6473,20 +6473,7 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
         }
       } catch(e) {
         log(`패널 ${i+1} 실패: ${e.message}`, 'error');
-        if (e.message.includes('429')) await new Promise(r => setTimeout(r, 10000));
-        try {
-          // Retry without reference images but keep asset descriptions + style anchor
-          const images = await callImage(anchoredPrompt, {assetDescriptions, aspectRatio: '3:4', characterIds: panelCharIds});
-          const retryImg = images?.[0];
-          if (!retryImg || retryImg === 'undefined' || retryImg.endsWith(',undefined')) {
-            log(`패널 ${i+1} 유효하지 않은 이미지 — 건너뜀`, 'warn');
-          } else {
-            newPanels[i] = await urlToBase64(retryImg);
-            log(`패널 ${i+1} 레퍼런스 없이 재생성 완료`, 'success');
-          }
-        } catch(e2) {
-          log(`패널 ${i+1} 최종 실패: ${e2.message}`, 'error');
-        }
+        // 재시도 없이 즉시 실패 처리
       }
       setPanels([...newPanels]);
       // Delay between panels to avoid API rate limits
