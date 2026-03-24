@@ -1974,7 +1974,7 @@ Return ONLY a valid JSON array (no markdown):
     "type": "establishing|dialogue|action|emotion|transition|closeup",
     "shotSize": "extreme_wide|wide|medium_wide|medium|medium_close|close_up|extreme_close",
     "cameraAngle": "eye_level|low_angle|high_angle|birds_eye|dutch_angle|over_shoulder",
-    "characters": [{"id":"char_1","pose":"standing with arms at sides","expression":"smiling warmly with eyes crinkling","position":"left","gazeDirection":"looking right toward char_2 with fond expression","outfitOverride":"only if changed from default"}],
+    "characters": [{"id":"char_1","pose":"standing with arms at sides","expression":"smiling warmly with eyes crinkling","position":"left","gazeDirection":"looking right toward char_2 with fond expression","outfitOverride":"only if changed from default","accessoriesOverride":"only if accessories change in this scene (e.g. removes necklace, puts on glasses)"}],
     "backgroundCharacters": [{"id":"char_3","pose":"sitting at distant table","expression":"reading a book","position":"background-right","gazeDirection":"looking down at book"}],
     "background": "bg_1",
     "props": ["prop_1"],
@@ -2226,7 +2226,7 @@ Return ONLY a valid JSON array (no markdown):
     "type": "establishing|dialogue|action|emotion|transition|closeup",
     "shotSize": "extreme_wide|wide|medium_wide|medium|medium_close|close_up|extreme_close",
     "cameraAngle": "eye_level|low_angle|high_angle|birds_eye|dutch_angle|over_shoulder",
-    "characters": [{"id":"char_1","pose":"standing with arms at sides","expression":"smiling warmly with eyes crinkling","position":"left","gazeDirection":"looking right toward char_2 with fond expression","outfitOverride":"only if changed"}],
+    "characters": [{"id":"char_1","pose":"standing with arms at sides","expression":"smiling warmly with eyes crinkling","position":"left","gazeDirection":"looking right toward char_2 with fond expression","outfitOverride":"only if changed","accessoriesOverride":"only if accessories change (e.g. removes necklace, adds hat)"}],
     "backgroundCharacters": [{"id":"char_3","pose":"sitting at distant table","expression":"reading","position":"background-right","gazeDirection":"looking down at book"}],
     "background": "bg_1",
     "props": ["prop_1"],
@@ -4093,17 +4093,19 @@ Rules:
     const states = {}; // {charId: {outfit, pose, expression, location, props, lastChangedAt, changeLog}}
     if (analysisData?.characters) {
       for (const c of analysisData.characters) {
-        // 에피소드 의상이 설정되었으면 그것을 초기값으로 사용
-        const epOutfit = episodeOutfits?.[c.id]?.outfit;
-        const initOutfit = epOutfit || c.outfit || '';
+        // 에피소드 의상/악세서리가 설정되었으면 그것을 초기값으로 사용
+        const epData = episodeOutfits?.[c.id] || {};
+        const initOutfit = epData.outfit || c.outfit || '';
+        const initAccessories = epData.accessories || c.accessories || '';
         states[c.id] = {
           outfit: initOutfit,
+          accessories: initAccessories,
           pose: 'standing',
           expression: 'neutral',
           location: '',
           props: [],
           lastChangedAt: 0,
-          changeLog: [{panel: 0, field: 'init', from: '', to: initOutfit, desc: epOutfit ? `${currentEpisode || ''}화 의상` : '기본 상태'}],
+          changeLog: [{panel: 0, field: 'init', from: '', to: initOutfit, desc: epData.outfit ? `${currentEpisode || ''}화 의상` : '기본 상태'}],
         };
       }
     }
@@ -4122,6 +4124,12 @@ Rules:
         if (pc.outfitOverride) {
           s.changeLog.push({panel: i+1, field: 'outfit', from: s.outfit, to: pc.outfitOverride, desc: `패널${i+1}에서 의상 변경`});
           s.outfit = pc.outfitOverride;
+          s.lastChangedAt = i;
+        }
+        // Accessories: changes on explicit accessoriesOverride
+        if (pc.accessoriesOverride) {
+          s.changeLog.push({panel: i+1, field: 'accessories', from: s.accessories, to: pc.accessoriesOverride, desc: `패널${i+1}에서 악세서리 변경`});
+          s.accessories = pc.accessoriesOverride;
           s.lastChangedAt = i;
         }
         // Pose: always updates (tracks latest base posture)
@@ -4201,6 +4209,8 @@ Rules:
       const epOutfitData = episodeOutfits?.[charId] || {};
       const epOutfit = epOutfitData.outfit;
       const outfitDesc = pc.outfitOverride || epOutfit || charState?.outfit || charInfo?.outfit || '';
+      // Accessories priority: panel override > accumulated state > episode > default
+      const accessoriesDesc = pc.accessoriesOverride || charState?.accessories || epOutfitData.accessories || charInfo?.accessories || '';
       const appearanceDesc = charInfo?.appearance || charId;
       // Build detailed Visual ID Card: combine all available description fields
       const detailParts = [appearanceDesc];
@@ -4211,7 +4221,7 @@ Rules:
       if (charInfo?.height) detailParts.push(`height/build: ${charInfo.height}`);
       if (charInfo?.features) detailParts.push(`distinctive features: ${charInfo.features}`);
       if (outfitDesc) detailParts.push(`outfit: ${outfitDesc}`);
-      if (epOutfitData.accessories) detailParts.push(`accessories: ${epOutfitData.accessories}`);
+      if (accessoriesDesc && accessoriesDesc !== 'none') detailParts.push(`accessories: ${accessoriesDesc}`);
       if (saCharData?.description && saCharData.description !== appearanceDesc) detailParts.push(saCharData.description);
       // Add state-based context (pose continuity, expression, transitions)
       if (charState) {
@@ -6239,6 +6249,40 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
         return '1:1';
       })();
       log(`패널 ${i+1}/${sb.length} 생성 중... (${panel.type}, ${panel.shotSize}, ${panel.cameraAngle || ''}, 비율:${panelAR})`);
+
+      // 의상/악세서리 변경 감지 → 해당 캐릭터 레퍼런스 자동 재생성
+      if (panel.characters) {
+        for (const pc of panel.characters) {
+          const cid = pc.id || pc;
+          if (!pc.outfitOverride && !pc.accessoriesOverride) continue;
+          const prevState = charStates[cid];
+          const curOutfit = pc.outfitOverride || prevState?.outfit || '';
+          const prevOutfit = prevState?.outfit || '';
+          // 의상이 실제로 변경된 경우에만 재생성
+          if (pc.outfitOverride && curOutfit !== prevOutfit) {
+            const charInfo = analysis?.characters?.find(c => c.id === cid);
+            if (charInfo && refs.characters[cid]) {
+              const charName = charInfo.name || cid;
+              log(`패널 ${i+1}: ${charName} 의상 변경 감지 → 레퍼런스 자동 재생성 ("${curOutfit.substring(0, 40)}...")`, 'info');
+              try {
+                const accDesc = pc.accessoriesOverride || prevState?.accessories || '';
+                const outfitRefPrompt = `Full body character reference sheet, front-facing, clean white background. ${charInfo.appearance || ''}. Outfit: ${curOutfit}.${accDesc ? ' Accessories: ' + accDesc + '.' : ''} Same face, same hair, same body as the character reference — ONLY the outfit changes.`;
+                const { prompt: appliedPrompt } = applyEpisodeOutfitToPrompt ?
+                  {prompt: getStylePrefix() + outfitRefPrompt + getCharSuffix(), applied: true} :
+                  {prompt: getStylePrefix() + outfitRefPrompt + getCharSuffix(), applied: false};
+                const outfitImages = await callImage(appliedPrompt);
+                if (outfitImages?.[0]) {
+                  refs.characters[cid] = outfitImages[0];
+                  setReferences(prev => ({...prev, characters: {...prev.characters, [cid]: outfitImages[0]}}));
+                  log(`${charName} 의상 변경 레퍼런스 생성 완료 ✓`, 'success');
+                }
+              } catch(e) {
+                log(`${charName} 의상 변경 레퍼런스 생성 실패: ${e.message}`, 'warn');
+              }
+            }
+          }
+        }
+      }
 
       const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, charStates);
       // Add previous panel image as style/continuity reference
