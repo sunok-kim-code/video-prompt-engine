@@ -251,7 +251,7 @@ div:hover > .panel-ctrl{opacity:1 !important;}
 .be-bubble{position:absolute;cursor:move;user-select:none;}
 .be-bubble.selected{outline:2px solid #4fc3f7;outline-offset:2px;z-index:20;}
 .be-bubble-svg{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));}
-.be-bubble-text{position:absolute;top:4px;left:6px;background:transparent;border:none;outline:none;resize:none;text-align:center;line-height:1.3;overflow:hidden;}
+.be-bubble-text{position:absolute;background:transparent;border:none;outline:none;resize:none;text-align:center;line-height:1.3;overflow:hidden;padding:0;box-sizing:border-box;}
 .be-resize{position:absolute;right:-6px;bottom:-6px;width:18px;height:18px;background:#4fc3f7;border:2px solid #fff;border-radius:3px;cursor:nwse-resize;z-index:30;box-shadow:0 1px 4px rgba(0,0,0,0.4);}
 .be-delete{position:absolute;top:-10px;right:-10px;width:22px;height:22px;border-radius:50%;background:#e74c3c;color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:30;}
 .be-crop-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:25;cursor:crosshair;}
@@ -2964,8 +2964,8 @@ Rules:
         zIndex: 1, panelIndex: i
       });
 
-      // Auto-add speech bubbles for dialogue lines
-      let bubbleY = yPos + panelH * 0.55;
+      // Auto-add speech bubbles for dialogue lines (패널 상단부터 배치)
+      let bubbleY = yPos + 20;
       const bubbleSpacing = 85;
       dialogues.forEach((d, di) => {
         const speakerText = d.speaker ? `${d.speaker}: ${d.text}` : d.text;
@@ -3386,11 +3386,19 @@ Rules:
 
   // Get position near currently selected object (for adding new items nearby)
   const getInsertPosition = () => {
-    if (!selectedObjectId || editorPages.length === 0) return {x: 100, y: 200};
     const page = editorPages[currentPageIdx];
-    const sel = page?.objects.find(o => o.id === selectedObjectId);
-    if (!sel) return {x: 100, y: 200};
-    return {x: Math.min(sel.x + 20, PAGE_W - 200), y: sel.y + (sel.h || 80) + 15};
+    if (!page?.objects) return {x: 100, y: 30};
+    // 선택된 패널 이미지의 상단에 배치
+    const sel = selectedObjectId && page.objects.find(o => o.id === selectedObjectId);
+    if (sel && (sel.type === 'panel' || sel.type === 'image')) {
+      return {x: sel.x + sel.w / 2 - 100, y: sel.y + 20};
+    }
+    // 선택된 객체가 패널이 아니면, 현재 페이지의 첫 번째 패널 상단
+    const firstPanel = page.objects.find(o => o.type === 'panel' || o.type === 'image');
+    if (firstPanel) {
+      return {x: firstPanel.x + firstPanel.w / 2 - 100, y: firstPanel.y + 20};
+    }
+    return {x: 100, y: 30};
   };
 
   const handleImageFileInsert = (e) => {
@@ -8060,20 +8068,35 @@ Return ONLY the detailed English prompt, nothing else.`,
                               {(() => {
                                 const sb = bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon];
                                 const ta = sb?.textArea;
-                                const txStyle = ta ? {
-                                  position:'absolute',
-                                  top: ta.top, left: ta.left, width: ta.width, height: ta.height,
-                                  fontWeight:obj.fontWeight||bt.fontWeight, fontSize:(obj.fontSize||25)*scale,
-                                  color:obj.customColor||bt.color||'#111',
-                                  fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
-                                  transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
-                                } : {
-                                  width:obj.w*scale-12, height:obj.h*scale-8,
-                                  fontWeight:obj.fontWeight||bt.fontWeight, fontSize:(obj.fontSize||25)*scale,
-                                  color:obj.customColor||bt.color||'#111',
-                                  fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
-                                  transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
-                                };
+                                const fs = (obj.fontSize||25)*scale;
+                                const lineH = fs * 1.3;
+                                const lines = (obj.text || '').split('\n').length || 1;
+                                const textTotalH = lines * lineH;
+                                const txStyle = ta ? (() => {
+                                  const areaH = (parseFloat(ta.height) / 100) * obj.h * scale;
+                                  const padTop = Math.max(0, (areaH - textTotalH) / 2);
+                                  return {
+                                    position:'absolute',
+                                    top: ta.top, left: ta.left, width: ta.width, height: ta.height,
+                                    fontWeight:obj.fontWeight||bt.fontWeight, fontSize:fs,
+                                    color:obj.customColor||bt.color||'#111',
+                                    fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
+                                    paddingTop: padTop,
+                                    transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
+                                  };
+                                })() : (() => {
+                                  const areaH = obj.h * scale - 8;
+                                  const padTop = Math.max(0, (areaH - textTotalH) / 2);
+                                  return {
+                                    position:'absolute', top:4, left:6,
+                                    width:obj.w*scale-12, height:areaH,
+                                    fontWeight:obj.fontWeight||bt.fontWeight, fontSize:fs,
+                                    color:obj.customColor||bt.color||'#111',
+                                    fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
+                                    paddingTop: padTop,
+                                    transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
+                                  };
+                                })();
                                 return <textarea className="be-bubble-text" value={obj.text}
                                   onChange={(e) => updatePageObject(pageIdx, obj.id, {text: e.target.value})}
                                   placeholder={bt.name+'...'} onClick={() => { setCurrentPageIdx(pageIdx); setSelectedObjectId(obj.id); }}
