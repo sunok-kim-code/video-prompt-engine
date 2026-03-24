@@ -5618,6 +5618,23 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
     const existingCharCount = parsed.characters?.filter(c=>c.isExisting).length || 0;
     const newCharCount = (parsed.characters?.length || 0) - existingCharCount;
     log(`분석 완료: 캐릭터 ${parsed.characters?.length || 0}명 (기존 ${existingCharCount}, 신규 ${newCharCount}), 배경 ${parsed.backgrounds?.length || 0}개, 소품 ${parsed.props?.length || 0}개, 플롯 ${parsed.plotBeats?.length || 0}개`, 'success');
+    // 의상 추출 디버그 로깅
+    if (parsed.plotBeats?.length > 0) {
+      const beatsWithOutfits = parsed.plotBeats.filter(pb => pb.outfitOverrides && Object.keys(pb.outfitOverrides).length > 0);
+      if (beatsWithOutfits.length > 0) {
+        log(`의상 변경 감지: ${beatsWithOutfits.length}개 씬에서 outfitOverrides 발견`, 'info');
+        beatsWithOutfits.forEach(pb => {
+          const entries = Object.entries(pb.outfitOverrides).filter(([,v]) => v && typeof v === 'string' && v.length >= 2);
+          if (entries.length > 0) console.log(`[분석] Beat ${pb.beat} outfitOverrides:`, Object.fromEntries(entries));
+        });
+      } else {
+        console.log('[분석] plotBeats에서 outfitOverrides 없음 — 기본 의상 사용');
+      }
+    }
+    // 캐릭터 기본 의상 로깅
+    if (parsed.characters?.length > 0) {
+      parsed.characters.forEach(c => console.log(`[분석] ${c.name}(${c.id}) 기본 의상: "${(c.outfit || '없음').substring(0, 80)}"`));
+    }
     setAnalysis(parsed);
     // Auto-populate episode outfits from analysis + plotBeat outfitOverrides
     if (currentEpisode && parsed.characters?.length > 0) {
@@ -5635,24 +5652,28 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
             updated[c.id].accessories = c.accessories;
           }
         }
-        // 2) plotBeat outfitOverrides에서 추출 — 씬 설명의 의상 변경을 episodeOutfits에 반영
-        // 기존 캐릭터(sharedAssets에 있는)의 경우, 첫 outfitOverride가 이 화의 의상
+        // 2) plotBeat outfitOverrides에서 추출 — 씬 설명의 의상을 episodeOutfits에 반영
+        // 각 캐릭터의 첫 outfitOverride를 이 화의 의상으로 사용
         if (parsed.plotBeats?.length > 0) {
-          const saChars = sharedAssets?.characters || {};
           let overrideCount = 0;
+          const alreadyOverridden = new Set(); // 이미 override된 캐릭터 추적 (첫 등장만)
           for (const pb of parsed.plotBeats) {
             if (!pb.outfitOverrides || typeof pb.outfitOverrides !== 'object') continue;
             for (const [charId, outfitDesc] of Object.entries(pb.outfitOverrides)) {
-              if (!outfitDesc || typeof outfitDesc !== 'string' || outfitDesc.length < 3) continue;
-              // 이미 이 화의 의상이 설정됐으면 첫 등장만 사용 (이후 변경은 패널에서 처리)
-              if (!updated[charId]) updated[charId] = {};
-              if (!updated[charId].outfit || (saChars[charId] && updated[charId].outfit === saChars[charId]?.outfit)) {
-                // 기본 의상과 같거나 아직 미설정 → 씬 의상으로 덮어쓰기
-                const prevOutfit = updated[charId].outfit || '(없음)';
-                updated[charId].outfit = outfitDesc;
-                overrideCount++;
-                console.log(`[episodeOutfit] ${charId}: plotBeat ${pb.beat}의 outfitOverride 반영 — "${prevOutfit}" → "${outfitDesc}"`);
+              if (!outfitDesc || typeof outfitDesc !== 'string' || outfitDesc.length < 2) {
+                console.log(`[episodeOutfit] ${charId}: plotBeat ${pb.beat} outfitOverride 스킵 (값: ${JSON.stringify(outfitDesc)})`);
+                continue;
               }
+              if (alreadyOverridden.has(charId)) {
+                console.log(`[episodeOutfit] ${charId}: plotBeat ${pb.beat} 건너뜀 (이미 첫 의상 설정됨)`);
+                continue;
+              }
+              if (!updated[charId]) updated[charId] = {};
+              const prevOutfit = updated[charId].outfit || '(없음)';
+              updated[charId].outfit = outfitDesc;
+              alreadyOverridden.add(charId);
+              overrideCount++;
+              console.log(`[episodeOutfit] ${charId}: plotBeat ${pb.beat}의 outfitOverride 반영 — "${prevOutfit}" → "${outfitDesc}"`);
             }
           }
           if (overrideCount > 0) log(`${currentEpisode}화 씬 의상 반영: ${overrideCount}명 (plotBeat outfitOverrides에서)`, 'info');
@@ -5663,14 +5684,37 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
     }
     setCompletedSteps(prev => new Set([...prev, 0]));
     setStep(1);
-    // Auto-save step 1 + episode outfits
+    // Auto-save step 1 + episode outfits (episodeOutfits도 함께 저장!)
     if (projectId && currentEpisode) {
       try {
         const cs = [...new Set([...completedSteps, 0])];
         await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis: parsed, sourceText: sourceTextRef.current, inputMode: inputModeRef.current});
-        await fbSaveEpisode(projectId, currentEpisode, {step: 1, completedSteps: cs});
+        // episodeOutfits는 setEpisodeOutfits가 비동기이므로, 직접 계산해서 저장
+        const outfitsToSave = {...(episodeOutfits || {})};
+        if (parsed.characters?.length > 0) {
+          for (const c of parsed.characters) {
+            if (!outfitsToSave[c.id]) outfitsToSave[c.id] = {};
+            if (!outfitsToSave[c.id].outfit && c.outfit) outfitsToSave[c.id].outfit = c.outfit;
+            if (!outfitsToSave[c.id].accessories && c.accessories && c.accessories !== 'none') outfitsToSave[c.id].accessories = c.accessories;
+          }
+        }
+        if (parsed.plotBeats?.length > 0) {
+          const saChars = sharedAssets?.characters || {};
+          for (const pb of parsed.plotBeats) {
+            if (!pb.outfitOverrides || typeof pb.outfitOverrides !== 'object') continue;
+            for (const [charId, outfitDesc] of Object.entries(pb.outfitOverrides)) {
+              if (!outfitDesc || typeof outfitDesc !== 'string' || outfitDesc.length < 3) continue;
+              if (!outfitsToSave[charId]) outfitsToSave[charId] = {};
+              if (!outfitsToSave[charId].outfit || (saChars[charId] && outfitsToSave[charId].outfit === saChars[charId]?.outfit)) {
+                outfitsToSave[charId].outfit = outfitDesc;
+              }
+            }
+          }
+        }
+        await fbSaveEpisode(projectId, currentEpisode, {step: 1, completedSteps: cs, episodeOutfits: outfitsToSave});
         updateEpisodeState(1, cs);
-        log('Step 1 자동 저장 완료', 'info');
+        const savedCount = Object.values(outfitsToSave).filter(v => v.outfit).length;
+        log(`Step 1 자동 저장 완료 (에피소드 의상 ${savedCount}명 포함)`, 'info');
       } catch(e) { log('Step 1 자동 저장 실패: ' + e.message, 'error'); }
     }
     return parsed;
