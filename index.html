@@ -99,7 +99,8 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .tag-loc{background:#d5f5e3;color:#1e8449;}
 /* Episode Bar */
 .episode-bar{display:flex;align-items:center;gap:8px;padding:12px 0;overflow-x:auto;white-space:nowrap;}
-.episode-pill{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;transition:all .2s;display:inline-flex;align-items:center;gap:4px;position:relative;}
+.episode-pill{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;transition:all .2s;display:inline-flex;align-items:center;gap:4px;position:relative;min-width:0;}
+.episode-rename-input{background:transparent;border:none;border-bottom:1.5px solid #fff;color:inherit;font:inherit;font-size:12px;width:60px;outline:none;padding:0 2px;text-align:center;}
 .episode-pill:hover{border-color:var(--accent);color:var(--accent);}
 .episode-pill.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent;}
 .episode-pill.complete{border-color:var(--success);color:var(--success);}
@@ -109,6 +110,8 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .project-title-bar{font-weight:700;font-size:14px;color:var(--text);margin-right:12px;display:flex;align-items:center;gap:8px;}
 .episode-delete{position:absolute;top:-4px;right:-4px;width:16px;height:16px;border-radius:50%;background:var(--err);color:#fff;border:none;font-size:10px;cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1;}
 .episode-pill:hover .episode-delete{display:flex;}
+.episode-rename-btn{opacity:0!important;transition:opacity .2s;}
+.episode-pill:hover .episode-rename-btn{opacity:0.7!important;}
 /* Unified Storyboard + Panel */
 .sb-unified-list{display:flex;flex-direction:column;gap:0;}
 .sb-unified-card{display:flex;gap:12px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:12px;transition:all .2s;position:relative;}
@@ -251,6 +254,14 @@ div:hover > .panel-ctrl{opacity:1 !important;}
 .be-bubble-text{position:absolute;top:4px;left:6px;background:transparent;border:none;outline:none;resize:none;text-align:center;line-height:1.3;overflow:hidden;}
 .be-resize{position:absolute;right:-6px;bottom:-6px;width:18px;height:18px;background:#4fc3f7;border:2px solid #fff;border-radius:3px;cursor:nwse-resize;z-index:30;box-shadow:0 1px 4px rgba(0,0,0,0.4);}
 .be-delete{position:absolute;top:-10px;right:-10px;width:22px;height:22px;border-radius:50%;background:#e74c3c;color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:30;}
+.be-crop-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:25;cursor:crosshair;}
+.be-crop-region{position:absolute;border:2px dashed #4fc3f7;background:transparent;z-index:26;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,0.5);}
+.be-crop-handle{position:absolute;width:12px;height:12px;background:#4fc3f7;border:2px solid #fff;border-radius:2px;z-index:27;pointer-events:auto;}
+.be-crop-handle.tl{top:-6px;left:-6px;cursor:nw-resize;}.be-crop-handle.tr{top:-6px;right:-6px;cursor:ne-resize;}
+.be-crop-handle.bl{bottom:-6px;left:-6px;cursor:sw-resize;}.be-crop-handle.br{bottom:-6px;right:-6px;cursor:se-resize;}
+.be-crop-btn{padding:3px 10px;border-radius:4px;border:1px solid #4fc3f7;background:rgba(79,195,247,0.15);color:#4fc3f7;font-size:11px;cursor:pointer;font-weight:600;}
+.be-crop-btn:hover{background:rgba(79,195,247,0.3);}
+.be-crop-btn.danger{border-color:#e74c3c;color:#e74c3c;background:rgba(231,76,60,0.15);}.be-crop-btn.danger:hover{background:rgba(231,76,60,0.3);}
 /* Sidebar */
 .be-sidebar{width:300px;background:#1e1e30;border-left:1px solid #333;padding:16px;overflow-y:auto;flex-shrink:0;}
 .be-sidebar-title{font-weight:700;font-size:14px;color:#fff;margin-bottom:12px;}
@@ -600,18 +611,25 @@ async function callNanoBanana(prompt, opts={}) {
   const host = isGlobal ? 'aiplatform.googleapis.com' : `${location}-aiplatform.googleapis.com`;
   const url=`https://${host}/v1/projects/${projectId}/locations/${loc}/publishers/google/models/${model}:generateContent`;
   const parts=[];
+  const maxRefImages = opts.maxRefs || 6;
   if(opts.referenceImages?.length>0){
-    parts.push({text:'REFERENCE IMAGES — You MUST replicate these characters, backgrounds, and props EXACTLY as shown. Copy every visual detail with pixel-level accuracy: facial features, hairstyle, hair color, eye color, eye shape, skin tone, outfit design, outfit colors, body proportions, accessories. Do NOT change, reimagine, or stylize any element differently from these references:'});
+    parts.push({text:'REFERENCE IMAGES — Draw characters and backgrounds exactly as shown below:'});
     let refCount = 0;
-    for(const ref of opts.referenceImages.slice(0,6)){
+    let charRefCount = 0;
+    console.log(`[NanoBanana] 레퍼런스 전달 시작: 총 ${opts.referenceImages.length}개, maxRefs=${maxRefImages}`);
+    for(const ref of opts.referenceImages.slice(0, maxRefImages)){
       const imgSrc = ref.image || ref;
       const desc = ref.description || '';
+      const isCharRef = desc.toLowerCase().startsWith('character:');
+      console.log(`[NanoBanana] 레퍼런스 처리: "${desc.substring(0,60)}" (type=${typeof imgSrc}, length=${imgSrc?.length||0}, isDataUri=${imgSrc?.startsWith?.('data:')}, isHttp=${imgSrc?.startsWith?.('http')})`);
       // 1) Try extracting base64 from data URI
       const b=extractBase64(imgSrc);
       if(b){
         parts.push({inlineData:{mimeType:'image/png',data:b}});
-        if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+'] — COPY THIS EXACTLY'});
+        if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+']'});
         refCount++;
+        if(isCharRef) charRefCount++;
+        console.log(`[NanoBanana] ✓ base64 추출 성공 (${isCharRef?'캐릭터':'기타'}, b64 length=${b.length})`);
       } else if(typeof imgSrc === 'string' && imgSrc.startsWith('http')){
         // 2) HTTP URL — try direct fetch first, fallback to server proxy for CORS-blocked URLs
         try{
@@ -629,7 +647,7 @@ async function callNanoBanana(prompt, opts={}) {
               if (proxyB64) {
                 const mime = proxyData.dataUri.match(/^data:([^;]+);/)?.[1] || 'image/png';
                 parts.push({inlineData:{mimeType:mime,data:proxyB64}});
-                if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+'] — COPY THIS EXACTLY'});
+                if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+']'});
                 refCount++;
                 console.log(`[NanoBanana] 프록시 경유 변환 성공: ${imgSrc.substring(0,60)}...`);
                 continue;
@@ -643,7 +661,7 @@ async function callNanoBanana(prompt, opts={}) {
           const b64=btoa(binary);
           const mime=blob.type||'image/png';
           parts.push({inlineData:{mimeType:mime,data:b64}});
-          if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+'] — COPY THIS EXACTLY'});
+          if(desc)parts.push({text:'[Asset: '+desc.substring(0,400)+']'});
           refCount++;
           console.log(`[NanoBanana] URL 레퍼런스 → base64 변환 성공: ${imgSrc.substring(0,80)}...`);
         }catch(e){
@@ -654,7 +672,10 @@ async function callNanoBanana(prompt, opts={}) {
       }
     }
     if(refCount > 0) parts.push({text:'END OF REFERENCES. Now generate the following scene using EXACTLY these character/prop designs:'});
-    console.log(`[NanoBanana] 레퍼런스 ${opts.referenceImages.length}개 중 ${refCount}개 성공적으로 전달`);
+    console.log(`[NanoBanana] 레퍼런스 전달 완료: ${opts.referenceImages.length}개 중 ${refCount}개 성공 (캐릭터: ${charRefCount}개)`);
+    if(charRefCount === 0 && opts.referenceImages.some(r => (r.description||'').toLowerCase().startsWith('character:'))) {
+      console.error(`[NanoBanana] ⚠️ 캐릭터 레퍼런스가 있지만 전달 실패! 이미지 형식을 확인하세요.`);
+    }
   }
   parts.push({text:prompt});
   // Gemini 지원 비율: 1:1, 3:2, 2:3, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9
@@ -2597,6 +2618,11 @@ Rules:
   const dragRef = React.useRef(null); // {type:'move'|'resize', pageIdx, objId, startX, startY, origX, origY, origW, origH}
   const [dropTargetPageIdx, setDropTargetPageIdx] = useState(null); // highlight page during cross-page drag
 
+  // Crop mode state
+  const [cropMode, setCropMode] = useState(null); // {pageIdx, objId} or null
+  const [cropRect, setCropRect] = useState(null); // {x, y, w, h} in % of image (0-100)
+  const cropDragRef = React.useRef(null);
+
   // Unified drag handler using ref to avoid stale closures
   const autoScrollTimerRef = React.useRef(null);
   useEffect(() => {
@@ -2626,6 +2652,47 @@ Rules:
     };
 
     const onMouseMove = (e) => {
+      // Crop drag handler (global)
+      const cd = cropDragRef.current;
+      if (cd) {
+        e.preventDefault();
+        // Find the crop overlay container
+        const overlay = document.querySelector('[data-crop-overlay]');
+        if (!overlay) { cropDragRef.current = null; return; }
+        const rect = overlay.getBoundingClientRect();
+        const mx = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+        const my = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+        if (cd.type === 'draw') {
+          setCropRect({
+            x: Math.min(cd.startX, mx), y: Math.min(cd.startY, my),
+            w: Math.abs(mx - cd.startX), h: Math.abs(my - cd.startY)
+          });
+        } else if (cd.type === 'move_region') {
+          setCropRect(prev => {
+            if (!prev) return prev;
+            const dx = mx - cd.lastX, dy = my - cd.lastY;
+            cd.lastX = mx; cd.lastY = my;
+            return {
+              ...prev,
+              x: Math.max(0, Math.min(100 - prev.w, prev.x + dx)),
+              y: Math.max(0, Math.min(100 - prev.h, prev.y + dy)),
+            };
+          });
+        } else if (cd.type === 'resize_crop') {
+          setCropRect(prev => {
+            if (!prev) return prev;
+            let nr = {...prev};
+            const o = cd.origRect;
+            if (cd.corner.includes('l')) { nr.x = Math.min(mx, o.x + o.w - 5); nr.w = o.x + o.w - nr.x; }
+            if (cd.corner.includes('r')) { nr.w = Math.max(5, mx - prev.x); }
+            if (cd.corner.includes('t')) { nr.y = Math.min(my, o.y + o.h - 5); nr.h = o.y + o.h - nr.y; }
+            if (cd.corner.includes('b')) { nr.h = Math.max(5, my - prev.y); }
+            return nr;
+          });
+        }
+        return;
+      }
+
       const d = dragRef.current;
       if (!d) return;
       const scale = editorPanelScale / 100;
@@ -2675,6 +2742,8 @@ Rules:
       }
     };
     const onMouseUp = () => {
+      // Clear crop drag
+      if (cropDragRef.current) { cropDragRef.current = null; return; }
       // Stop auto-scroll
       if (autoScrollTimerRef.current) {
         cancelAnimationFrame(autoScrollTimerRef.current);
@@ -2700,13 +2769,62 @@ Rules:
     };
   }, [editorPanelScale]);
 
+  // SVG path-based balloon shape builder
+  // Each svgBalloon returns {pathD, viewBox, textArea:{top,left,width,height} in %}
+  const SVG_BALLOONS = {
+    // 기본 타원 — 좌하단 곡선 꼬리
+    speech: {
+      viewBox: '0 0 200 200', baseW:200, baseH:200,
+      textArea: {top:'8%', left:'12%', width:'76%', height:'62%'},
+      path: (sw,sc,fc,flip) => {
+        if (flip) return `M 100,10 C 45,10 15,40 15,80 C 15,120 45,150 100,150 C 120,150 135,147 145,142 C 150,148 158,162 170,178 C 166,162 164,150 162,140 C 180,130 185,115 185,80 C 185,40 155,10 100,10 Z`;
+        return `M 100,10 C 155,10 185,40 185,80 C 185,120 155,150 100,150 C 80,150 65,147 55,142 C 50,148 42,162 30,178 C 34,162 36,150 38,140 C 20,130 15,115 15,80 C 15,40 45,10 100,10 Z`;
+      }
+    },
+    // 넓은 타원 — 우하단 뾰족한 꼬리
+    speechWide: {
+      viewBox: '0 0 240 160', baseW:240, baseH:160,
+      textArea: {top:'6%', left:'8%', width:'80%', height:'70%'},
+      path: (sw,sc,fc,flip) => {
+        if (flip) return `M 120,8 C 40,8 8,35 8,68 C 8,95 30,118 65,126 C 60,135 45,148 22,155 C 50,150 68,140 78,132 C 90,135 104,136 120,136 C 200,136 232,105 232,68 C 232,35 200,8 120,8 Z`;
+        return `M 120,8 C 200,8 232,35 232,68 C 232,95 210,118 175,126 C 180,135 195,148 218,155 C 190,150 172,140 162,132 C 150,135 136,136 120,136 C 40,136 8,105 8,68 C 8,35 40,8 120,8 Z`;
+      }
+    },
+    // 원형 — 우측 중간 뾰족 꼬리
+    speechFlat: {
+      viewBox: '0 0 180 180', baseW:180, baseH:180,
+      textArea: {top:'8%', left:'6%', width:'78%', height:'70%'},
+      path: (sw,sc,fc,flip) => {
+        if (flip) return `M 95,8 C 45,8 12,30 12,75 C 12,90 18,102 28,112 C 22,116 12,122 2,125 C 14,124 25,122 32,118 C 45,132 68,142 95,142 C 150,142 176,112 176,75 C 176,38 150,8 95,8 Z`;
+        return `M 85,8 C 135,8 168,30 168,75 C 168,90 162,102 152,112 C 158,116 168,122 178,125 C 166,124 155,122 148,118 C 135,132 112,142 85,142 C 30,142 4,112 4,75 C 4,38 30,8 85,8 Z`;
+      }
+    },
+    // 원형 — 우측하단 곡선 꼬리
+    speechRound: {
+      viewBox: '0 0 180 180', baseW:180, baseH:180,
+      textArea: {top:'8%', left:'5%', width:'78%', height:'70%'},
+      path: (sw,sc,fc,flip) => {
+        if (flip) return `M 98,8 C 48,8 18,32 18,75 C 18,95 28,110 40,120 C 32,125 18,132 5,135 C 22,132 34,128 42,124 C 55,136 74,142 98,142 C 152,142 178,110 178,75 C 178,32 148,8 98,8 Z`;
+        return `M 82,8 C 132,8 162,32 162,75 C 162,95 152,110 140,120 C 148,125 162,132 175,135 C 158,132 146,128 138,124 C 125,136 106,142 82,142 C 28,142 2,110 2,75 C 2,32 32,8 82,8 Z`;
+      }
+    },
+    // 폭발형 — 날카로운 스파이크
+    shout: {
+      viewBox: '0 0 200 130', baseW:200, baseH:130,
+      textArea: {top:'22%', left:'18%', width:'64%', height:'50%'},
+      path: () => `M100,2 L118,28 L148,5 L142,35 L175,22 L158,50 L198,48 L170,68 L195,90 L160,82 L165,115 L130,95 L110,128 L95,95 L60,118 L68,85 L25,98 L48,70 L5,60 L40,48 L15,25 L55,38 L50,8 L80,30 Z`
+    },
+  };
+
   const BUBBLE_TYPES = {
-    speech: {name:'말풍선', tail:true, bg:'#fff', border:'#222', borderWidth:2, ellipse:true, fontWeight:500, shadow:true, defaultTailStyle:'straight'},
+    speech: {name:'기본 타원', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speech'},
+    speechWide: {name:'넓은 타원', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechWide'},
+    speechFlat: {name:'원형 (우측)', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechFlat'},
+    speechRound: {name:'원형 (우측하단)', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechRound'},
+    shout: {name:'폭발형', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:700, shadow:true, svgBalloon:'shout'},
     thought: {name:'생각', tail:true, bg:'#fff', border:'#999', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, shadow:true},
-    shout: {name:'외침', tail:true, bg:'#fff', border:'#d32f2f', borderWidth:3, spiky:true, spikeCount:16, fontWeight:700, shadow:true, color:'#d32f2f'},
     cloud: {name:'구름', tail:true, bg:'#fff', border:'#888', borderWidth:2, cloudShape:true, fontWeight:400, shadow:true},
     box: {name:'사각형', tail:true, bg:'#fff', border:'#222', borderWidth:3, boxShape:true, radius:10, fontWeight:500, shadow:true},
-    boxRound: {name:'원형', tail:true, bg:'#fff', border:'#222', borderWidth:2, ellipse:true, fontWeight:500, shadow:true, defaultTailStyle:'straight'},
     wave: {name:'물결', tail:true, bg:'#fff', border:'#5555cc', borderWidth:2, waveShape:true, fontWeight:400, shadow:true, color:'#333'},
     narration:{name:'나레이션', tail:false, bg:'transparent', border:'none', borderWidth:0, radius:0, fontWeight:500, color:'#000', shadow:false},
     whisper:{name:'속삭임', tail:true, bg:'#f0f0f0', border:'#aaa', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, color:'#555', shadow:true},
@@ -2896,22 +3014,28 @@ Rules:
         });
       });
 
-      // Auto-add narration box
+      yPos += panelH;
+
+      // Auto-add narration box BETWEEN panels (in the gap area)
       if (narrationText) {
-        const nw = Math.min(400, panelW * 0.8);
-        const nh = 40;
+        const nw = Math.min(500, panelW * 0.85);
+        const lineCount = Math.ceil(narrationText.length / 20);
+        const nh = Math.max(50, lineCount * 36 + 20);
         const nx = (panelW - nw) / 2;
+        const narrationGap = nh + 40; // total space: narration height + padding
+        const actualGap = Math.max(PANEL_GAP, narrationGap);
         pageObj.objects.push({
           id: 'n_'+i+'_'+ts, type: 'bubble', bubbleStyle: 'narration',
-          text: narrationText, x: nx, y: yPos + 10,
-          w: nw, h: nh, fontSize: 30,
+          text: narrationText, x: nx, y: yPos + Math.round((actualGap - nh) / 2),
+          w: nw, h: nh, fontSize: 28,
           fontFamily: "'Noto Sans KR',sans-serif",
           tailPos: 0.3, tailSize: 1.0,
           zIndex: 10 + dialogues.length
         });
+        yPos += actualGap;
+      } else {
+        yPos += PANEL_GAP;
       }
-
-      yPos += panelH + PANEL_GAP;
     }
     // Set actual page height to fit all content
     pageObj.height = yPos > 0 ? yPos : PAGE_H_MAX;
@@ -3096,23 +3220,33 @@ Rules:
   };
 
   const addBubbleToPage = (bubbleStyle) => {
-    if (editorPages.length === 0) return;
+    console.log('[addBubble] bubbleStyle:', bubbleStyle, 'editorPages:', editorPages.length, 'currentPageIdx:', currentPageIdx);
+    if (editorPages.length === 0) { console.warn('[addBubble] editorPages is empty!'); return; }
     const pageIdx = Math.min(currentPageIdx, editorPages.length - 1);
     const bt = BUBBLE_TYPES[bubbleStyle] || BUBBLE_TYPES.speech;
+    console.log('[addBubble] bt:', bt.name, 'svgBalloon:', bt.svgBalloon, 'hasSVG:', !!(bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon]));
     const page = editorPages[pageIdx];
     if (!page || !page.objects) return;
     const pos = getInsertPosition();
+    // Set default size from svgBalloon or fallback
+    const sb = bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon];
+    const defW = sb ? sb.baseW : (bubbleStyle === 'narration' ? 400 : 180);
+    const defH = sb ? sb.baseH : (bubbleStyle === 'narration' ? 50 : 80);
     const newBubble = {
       id: 'b_' + Date.now(), type: 'bubble', bubbleStyle, text: '',
       x: pos.x, y: pos.y,
-      w: bubbleStyle === 'narration' ? 400 : bubbleStyle === 'boxRound' ? 130 : 180,
-      h: bubbleStyle === 'narration' ? 50 : bubbleStyle === 'boxRound' ? 110 : 80,
+      w: defW, h: defH,
       fontSize: bubbleStyle === 'narration' ? 30 : 25,
+      fontWeight: bt.fontWeight || 500,
       fontFamily: "'Noto Sans KR',sans-serif",
+      strokeWidth: bt.borderWidth || 2.5,
+      strokeColor: bt.border || '#333',
+      fillColor: bt.bg || '#fff',
       tailPos: 0.3,
       tailSize: 1.0,
       tailStyle: bt.defaultTailStyle || 'normal',
       textOffsetX: 0, textOffsetY: 0,
+      flipBalloon: false,
       zIndex: Math.max(...page.objects.map(o => o.zIndex || 1), 10) + 1
     };
     setEditorPages(prev => {
@@ -3187,6 +3321,38 @@ Rules:
     });
     setCurrentPageIdx(toPageIdx);
     log(`객체를 페이지 ${fromPageIdx+1} → ${toPageIdx+1}로 이동`, 'info');
+  };
+
+  // ---- Crop functions ----
+  const startCrop = (pageIdx, objId) => {
+    const page = editorPages[pageIdx];
+    const obj = page?.objects?.find(o => o.id === objId);
+    if (!obj) return;
+    // Initialize crop rect from existing crop or full image
+    const existing = obj.crop; // {x, y, w, h} in percent 0-100
+    setCropMode({pageIdx, objId});
+    setCropRect(existing || {x: 10, y: 10, w: 80, h: 80});
+  };
+
+  const applyCrop = () => {
+    if (!cropMode || !cropRect) return;
+    const {pageIdx, objId} = cropMode;
+    updatePageObject(pageIdx, objId, {crop: {...cropRect}});
+    setCropMode(null);
+    setCropRect(null);
+    log('이미지 잘라내기 적용됨', 'success');
+  };
+
+  const cancelCrop = () => {
+    setCropMode(null);
+    setCropRect(null);
+  };
+
+  const resetCrop = (pageIdx, objId) => {
+    updatePageObject(pageIdx, objId, {crop: null});
+    setCropMode(null);
+    setCropRect(null);
+    log('잘라내기 초기화됨', 'info');
   };
 
   // Detect which page the mouse is over for cross-page drop
@@ -3568,6 +3734,31 @@ Rules:
       ctx.beginPath();
       ctx.ellipse(bx + bw / 2, by + bh / 2, bw / 2, bh / 2, 0, 0, Math.PI * 2);
       ctx.fillStyle = effBg; ctx.fill();
+    } else if (bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon]) {
+      // SVG path-based balloons — use per-bubble properties
+      const sb = SVG_BALLOONS[bt.svgBalloon];
+      const isFlipped = b.flipBalloon || false;
+      const bStrokeW = b.strokeWidth ?? bt.borderWidth ?? 2.5;
+      const bStrokeC = b.strokeColor || bt.border || '#333';
+      const bFillC = b.fillColor || bt.bg || '#fff';
+      const pathD = sb.path(bStrokeW, bStrokeC, bFillC, isFlipped);
+      const vbParts = sb.viewBox.split(' ').map(Number);
+      const vbW = vbParts[2], vbH = vbParts[3];
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.scale(bw / vbW, bh / vbH);
+      const p2d = new Path2D(pathD);
+      ctx.fillStyle = bFillC;
+      ctx.fill(p2d);
+      ctx.shadowColor = 'transparent';
+      if (bStrokeC !== 'none') {
+        ctx.lineWidth = bStrokeW / Math.min(bw / vbW, bh / vbH);
+        ctx.strokeStyle = bStrokeC;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.stroke(p2d);
+      }
+      ctx.restore();
     } else if (bt.spiky || bt.cloudShape || bt.boxShape || bt.waveShape) {
       // Path-based shapes: spiky, cloud, box, wave
       let pathStr;
@@ -3658,15 +3849,30 @@ Rules:
     if (b.text) {
       const fs = Math.max(12, (b.fontSize || 25)) * scale;
       const ff = b.fontFamily || "'Noto Sans KR',sans-serif";
-      ctx.font = `${bt.fontWeight} ${fs}px ${ff}`;
+      ctx.font = `${b.fontWeight || bt.fontWeight} ${fs}px ${ff}`;
       ctx.fillStyle = b.customColor || bt.color || '#111';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const lines = b.text.split('\n');
       const lh = fs * 1.3;
       const txOff = (b.textOffsetX || 0) * scale;
       const tyOff = (b.textOffsetY || 0) * scale;
-      const sy = by + bh / 2 - (lines.length - 1) * lh / 2 + tyOff;
-      lines.forEach((l, li) => ctx.fillText(l, bx + bw / 2 + txOff, sy + li * lh, bw - 16 * scale));
+      // Use textArea from svgBalloon if available
+      const sb = bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon];
+      const ta = sb?.textArea;
+      let textCenterX = bx + bw / 2 + txOff;
+      let textCenterY = by + bh / 2 + tyOff;
+      let maxTextW = bw - 16 * scale;
+      if (ta) {
+        const taLeft = parseFloat(ta.left) / 100;
+        const taTop = parseFloat(ta.top) / 100;
+        const taW = parseFloat(ta.width) / 100;
+        const taH = parseFloat(ta.height) / 100;
+        textCenterX = bx + (taLeft + taW / 2) * bw + txOff;
+        textCenterY = by + (taTop + taH / 2) * bh + tyOff;
+        maxTextW = taW * bw;
+      }
+      const sy = textCenterY - (lines.length - 1) * lh / 2;
+      lines.forEach((l, li) => ctx.fillText(l, textCenterX, sy + li * lh, maxTextW));
     }
     ctx.restore();
   };
@@ -3827,7 +4033,16 @@ Rules:
         if (obj.type === 'panel' || obj.type === 'image') {
           const img = imgCache[obj.src];
           if (img) {
-            ctx.drawImage(img, obj.x, drawY, obj.w, obj.h);
+            if (obj.crop && obj.crop.w > 0 && obj.crop.h > 0) {
+              // Draw cropped region: source rect from original image
+              const sx = img.naturalWidth * obj.crop.x / 100;
+              const sy = img.naturalHeight * obj.crop.y / 100;
+              const sw = img.naturalWidth * obj.crop.w / 100;
+              const sh = img.naturalHeight * obj.crop.h / 100;
+              ctx.drawImage(img, sx, sy, sw, sh, obj.x, drawY, obj.w, obj.h);
+            } else {
+              ctx.drawImage(img, obj.x, drawY, obj.w, obj.h);
+            }
           }
         } else if (obj.type === 'bubble') {
           drawBubbleOnCanvas(ctx, obj, obj.x, drawY, obj.w, obj.h, 1);
@@ -3898,7 +4113,15 @@ Rules:
           layerCanvas.width = Math.round(obj.w);
           layerCanvas.height = Math.round(obj.h);
           const lCtx = layerCanvas.getContext('2d');
-          lCtx.drawImage(img, 0, 0, obj.w, obj.h);
+          if (obj.crop && obj.crop.w > 0 && obj.crop.h > 0) {
+            const sx = img.naturalWidth * obj.crop.x / 100;
+            const sy = img.naturalHeight * obj.crop.y / 100;
+            const sw = img.naturalWidth * obj.crop.w / 100;
+            const sh = img.naturalHeight * obj.crop.h / 100;
+            lCtx.drawImage(img, sx, sy, sw, sh, 0, 0, obj.w, obj.h);
+          } else {
+            lCtx.drawImage(img, 0, 0, obj.w, obj.h);
+          }
           children.push({
             name: `Panel ${obj.panelIndex !== undefined ? obj.panelIndex + 1 : idx + 1}`,
             left: Math.round(obj.x),
@@ -4562,19 +4785,20 @@ Rules:
     // Strip Korean onomatopoeia / sound effects + conflicting style keywords from prompt
     const cleanPrompt = stripStyleKeywords(sanitizeImagePrompt(prompt));
 
-    // Build asset-enriched prompt: always append asset descriptions to ensure consistency
-    const assetSuffix = opts.assetDescriptions?.length > 0
-      ? '\n\nVISUAL CONSISTENCY — ABSOLUTE RULES:\n- Every character must look EXACTLY like their description below. NO variations allowed.\n- Outfit details (color, material, fit, accessories) must be IDENTICAL to the description. Do NOT add, remove, or modify any clothing item.\n- Face proportions, eye shape, hair color/style must be IDENTICAL across all panels.\n' + opts.assetDescriptions.join('\n')
+    // Build asset-enriched prompt: append asset descriptions only when NO reference images
+    // (when refs exist, images speak louder than text — avoid prompt overload)
+    const refs = opts.referenceImages || [];
+    const assetSuffix = (opts.assetDescriptions?.length > 0 && refs.length === 0)
+      ? '\n\nCharacter/asset details:\n' + opts.assetDescriptions.join('\n')
       : '';
     const basePrompt = stylePrefix + cleanPrompt + assetSuffix;
-    const refs = opts.referenceImages || [];
 
     // ========== Gemini (Vertex AI NanoBanana — supports multiple models) ==========
     if (imageProvider === 'nanoBanana') {
       console.log(`[NanoBanana] 선택된 모델 키: "${nbVertexModel}", vertexModel: "${NB_VERTEX_MODELS[nbVertexModel]?.vertexModel || 'NOT FOUND'}"`)
       const nbInfo = NB_VERTEX_MODELS[nbVertexModel] || NB_VERTEX_MODELS['gemini-2.5-flash'];
-      // 레퍼런스 우선순위 정렬: 이전패널 → 배경(1개) → 캐릭터 → 소품/기타 (max 6)
-      const GEMINI_MAX_REFS = 6;
+      // 레퍼런스 우선순위 정렬: 캐릭터 우선 → 이전패널 → 배경(1개) → 소품/기타 (모델별 maxRefs 적용)
+      const GEMINI_MAX_REFS = nbInfo.maxRefs || 6;
       let sortedRefs = refs;
       if (refs.length > 0) {
         const prevPanelRefs = refs.filter(r => (r.description || '').toLowerCase().includes('previous panel'));
@@ -4584,20 +4808,19 @@ Rules:
           const d = (r.description || '').toLowerCase();
           return !d.startsWith('background:') && !d.startsWith('character:') && !d.includes('previous panel');
         });
-        sortedRefs = [...prevPanelRefs, ...bgRefs.slice(0, 1), ...charRefs, ...otherRefs].slice(0, GEMINI_MAX_REFS);
-        console.log(`[NanoBanana] 레퍼런스 우선순위 정렬: 이전패널 ${prevPanelRefs.length}개, 배경 ${Math.min(bgRefs.length,1)}/${bgRefs.length}개, 캐릭터 ${charRefs.length}개, 기타 ${otherRefs.length}개 → ${sortedRefs.length}개`);
+        // 캐릭터를 최우선으로 배치 (캐릭터 일관성이 가장 중요)
+        sortedRefs = [...charRefs, ...prevPanelRefs, ...bgRefs.slice(0, 1), ...otherRefs].slice(0, GEMINI_MAX_REFS);
+        console.log(`[NanoBanana] 레퍼런스 우선순위 정렬 (maxRefs=${GEMINI_MAX_REFS}): 캐릭터 ${charRefs.length}개, 이전패널 ${prevPanelRefs.length}개, 배경 ${Math.min(bgRefs.length,1)}/${bgRefs.length}개, 기타 ${otherRefs.length}개 → ${sortedRefs.length}개`);
       }
-      const geminiOpts = {...opts, model: nbInfo.vertexModel, referenceImages: sortedRefs};
-      const refInstruction = refs.length > 0
-        ? '\n\nCRITICAL: Reference images are provided. You MUST draw the characters and backgrounds EXACTLY as they appear in the reference images. Maintain identical facial features, hairstyle, hair color, eye color, outfit, and body proportions. Do NOT change or reimagine any visual details.'
-        : '';
+      const geminiOpts = {...opts, model: nbInfo.vertexModel, referenceImages: sortedRefs, maxRefs: GEMINI_MAX_REFS};
+      // refInstruction은 callNanoBanana 내부에서 이미 처리하므로 중복 제거
       if (refs.length > 0) {
         log(`${nbInfo.name} 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개 직접 전달)`, 'info');
       } else {
         log(`${nbInfo.name} 사용 (${curStyleName} 스타일 적용)`, 'info');
       }
       try {
-        return await callNanoBanana(basePrompt + refInstruction, geminiOpts);
+        return await callNanoBanana(basePrompt, geminiOpts);
       } catch (gemErr) {
         const errMsg = gemErr.message || '';
         if (errMsg.includes('policy') || errMsg.includes('filtered') || errMsg.includes('Prohibited') || errMsg.includes('SAFETY')) {
@@ -5179,9 +5402,10 @@ Rules:
   }, [episodes, log]);
 
   // Load episode
-  const loadEpisode = useCallback(async (episodeNum, overridePid) => {
+  const loadEpisode = useCallback(async (episodeNum, overridePid, overrideAssets) => {
     try {
       const pid = overridePid || projectId;
+      const effectiveAssets = overrideAssets || sharedAssets || {characters:{}, backgrounds:{}, props:{}};
       if (!pid) { console.warn('[loadEpisode] no projectId'); return; }
 
       // Reset editor state when switching episodes
@@ -5239,9 +5463,10 @@ Rules:
         let loadedRefs = s2;
         if (s2.characterIds || s2.backgroundIds) {
           loadedRefs = {characters:{}, backgrounds:{}};
-          const curAssets = sharedAssets || {characters:{}, backgrounds:{}};
-          (s2.characterIds||[]).forEach(id => { if(curAssets.characters[id]?.image) loadedRefs.characters[id] = curAssets.characters[id].image; });
-          (s2.backgroundIds||[]).forEach(id => { if(curAssets.backgrounds[id]?.image) loadedRefs.backgrounds[id] = curAssets.backgrounds[id].image; });
+          const curAssets = effectiveAssets;
+          console.log(`[loadEpisode] references 복원: effectiveAssets 캐릭터=${Object.keys(curAssets.characters||{}).length}개, 배경=${Object.keys(curAssets.backgrounds||{}).length}개`);
+          (s2.characterIds||[]).forEach(id => { if(curAssets.characters[id]?.image) loadedRefs.characters[id] = curAssets.characters[id].image; else console.warn(`[loadEpisode] 캐릭터 "${id}" 이미지 없음 in effectiveAssets`); });
+          (s2.backgroundIds||[]).forEach(id => { if(curAssets.backgrounds[id]?.image) loadedRefs.backgrounds[id] = curAssets.backgrounds[id].image; else console.warn(`[loadEpisode] 배경 "${id}" 이미지 없음 in effectiveAssets`); });
           // 에피소드 의상 이미지 복원 (sharedAssets에 없으므로 별도 저장된 이미지 사용)
           if (s2.episodeOutfitImages) {
             const epImgCount = Object.keys(s2.episodeOutfitImages).length;
@@ -5407,7 +5632,8 @@ Rules:
   // Delete episode
   const deleteEpisode = useCallback(async (episodeNum) => {
     if (!projectId) return;
-    if (!confirm(`${episodeNum}화를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+    const epTitle = episodes.find(e => e.number === episodeNum)?.title || `${episodeNum}화`;
+    if (!confirm(`"${epTitle}"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
     try {
       log(`${episodeNum}화 삭제 중...`);
       await fbDeleteEpisode(projectId, episodeNum);
@@ -5430,6 +5656,45 @@ Rules:
       log(`${episodeNum}화 삭제 완료`, 'success');
     } catch(e) { log(`삭제 실패: ${e.message}`, 'error'); }
   }, [projectId, episodes, currentEpisode, loadEpisode, log]);
+
+  // Rename episode
+  const renameEpisode = useCallback(async (episodeNum, newTitle) => {
+    const trimmed = (newTitle || '').trim();
+    if (!trimmed) return;
+    setEpisodes(prev => prev.map(e =>
+      e.number === episodeNum ? {...e, title: trimmed} : e
+    ));
+    if (projectId) {
+      try {
+        await fbSaveEpisode(projectId, episodeNum, {title: trimmed});
+      } catch(e) { console.warn('[renameEpisode] save error:', e.message); }
+    }
+    log(`${episodeNum}화 → "${trimmed}" 이름 변경됨`, 'success');
+  }, [projectId, log]);
+
+  // State for inline episode rename
+  const [renamingEpisode, setRenamingEpisode] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = React.useRef(null);
+
+  const startEpisodeRename = useCallback((ep, e) => {
+    e.stopPropagation();
+    setRenamingEpisode(ep.number);
+    setRenameValue(ep.title || `${ep.number}화`);
+    setTimeout(() => renameInputRef.current?.select(), 50);
+  }, []);
+
+  const handleEpisodeClick = useCallback((ep) => {
+    if (renamingEpisode === ep.number) return;
+    loadEpisode(ep.number);
+  }, [renamingEpisode, loadEpisode]);
+
+  const commitRename = useCallback((episodeNum) => {
+    if (renameValue.trim()) {
+      renameEpisode(episodeNum, renameValue.trim());
+    }
+    setRenamingEpisode(null);
+  }, [renameValue, renameEpisode]);
 
   // Helper: update local episode state after auto-save
   const updateEpisodeState = (stepNum, newCompletedSteps) => {
@@ -6097,10 +6362,6 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
 
     const newPanels = [...(panels.length === sb.length ? panels : new Array(sb.length).fill(null))];
 
-    // Style anchor: capture the first successful panel's style description
-    // and prepend it to subsequent panels for tone consistency
-    let styleAnchor = '';
-
     for (let i = 0; i < sb.length; i++) {
       if (abortRef.current) throw new Error('중단됨');
 
@@ -6108,120 +6369,13 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       const charStates = buildCharacterStates(sb, analysis, i);
 
       if (newPanels[i]) {
-        // If first panel already exists, extract its style as anchor
-        if (!styleAnchor && sb[i]?.imagePrompt) {
-          const ip = sb[i].imagePrompt;
-          // Extract style-related tail (usually after "Background:" or at end)
-          const styleMatch = ip.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
-          if (styleMatch) styleAnchor = styleMatch[0];
-        }
         log(`패널 ${i+1} 이미 생성됨, 건너뜀`); continue;
       }
 
       const panel = sb[i];
 
-      // Build state change directive: tells the image model what changed vs what's maintained
-      let stateDirective = '';
-      if (panel.characters && i > 0) {
-        const changes = [];
-        const maintained = [];
-        for (const pc of panel.characters) {
-          const cid = pc.id || pc;
-          const cs = charStates[cid];
-          const charName = analysis?.characters?.find(c => c.id === cid)?.name || cid;
-          if (!cs) continue;
-          // Detect what changed in THIS panel vs accumulated state
-          if (pc.outfitOverride && pc.outfitOverride !== cs.outfit) {
-            changes.push(`${charName}: outfit changes to "${pc.outfitOverride}"`);
-          } else if (cs.outfit) {
-            maintained.push(`${charName}: still wearing "${cs.outfit}"`);
-          }
-          if (pc.pose && pc.pose !== cs.pose) {
-            changes.push(`${charName}: pose changes from "${cs.pose}" to "${pc.pose}"`);
-          } else if (cs.pose) {
-            maintained.push(`${charName}: maintains ${cs.pose} posture`);
-          }
-        }
-        if (changes.length > 0 || maintained.length > 0) {
-          stateDirective = '\n[STATE] ';
-          if (maintained.length > 0) stateDirective += 'KEEP: ' + maintained.join('; ') + '. ';
-          if (changes.length > 0) stateDirective += 'CHANGED: ' + changes.join('; ') + '.';
-        }
-      }
-
-      // Enrich prompt with expression/mood/camera keywords for more dynamic panels
-      let anchoredPrompt = enhancePanelExpression(panel.imagePrompt, panel, i, sb);
-      if (stateDirective) anchoredPrompt += stateDirective;
-      if (styleAnchor) anchoredPrompt += ' Maintain consistent style: ' + styleAnchor;
-
-      // ======== SCENE-TO-SCENE CONTINUITY ENGINE ========
-      if (i > 0) {
-        const prevPanel = sb[i - 1];
-        const sameLocation = panel.background && prevPanel?.background && panel.background === prevPanel.background;
-        const prevDesc = prevPanel?.description || prevPanel?.imagePrompt || '';
-        const prevMood = prevPanel?.mood || prevPanel?.atmosphere || '';
-        const curMood = panel.mood || panel.atmosphere || '';
-
-        // 1) Same location — lighting/environment continuity
-        if (sameLocation) {
-          if (prevDesc) {
-            anchoredPrompt += `\n[SAME LOCATION — CONTINUITY] This scene takes place in the SAME location as the previous panel. Previous: ${prevDesc.substring(0, 250)}. MUST maintain: identical lighting direction, identical time of day, identical background details, identical color temperature. Only camera angle and character positions may change.`;
-          }
-        } else {
-          // 2) Location change — transition context
-          const prevBgName = prevPanel?.background ? (analysis?.backgrounds?.find(b => b.id === prevPanel.background)?.name || '') : '';
-          const curBgName = panel.background ? (analysis?.backgrounds?.find(b => b.id === panel.background)?.name || '') : '';
-          if (prevBgName && curBgName) {
-            anchoredPrompt += `\n[SCENE TRANSITION] Moving from "${prevBgName}" to "${curBgName}".`;
-          }
-        }
-
-        // 3) Mood/atmosphere flow
-        if (prevMood && curMood) {
-          if (prevMood === curMood) {
-            anchoredPrompt += ` Maintain the "${curMood}" atmosphere from the previous scene.`;
-          } else {
-            anchoredPrompt += ` Atmosphere shifts from "${prevMood}" to "${curMood}" — reflect this transition in lighting and color tone.`;
-          }
-        }
-
-        // 4) Cross-panel character continuity
-        const prevCharIds = (prevPanel?.characters || []).map(pc => pc.id || pc);
-        const curCharIds = (panel.characters || []).map(pc => pc.id || pc);
-        const sharedChars = curCharIds.filter(id => prevCharIds.includes(id));
-        if (sharedChars.length > 0) {
-          const sharedDetails = sharedChars.map(id => {
-            const charInfo = analysis?.characters?.find(c => c.id === id);
-            const cs = charStates[id];
-            const name = charInfo?.name || id;
-            const outfit = cs?.outfit || charInfo?.outfit || '';
-            return `${name} (wearing: ${outfit.substring(0, 80)})`;
-          });
-          anchoredPrompt += `\n[CHARACTER CONTINUITY] These characters appear in both this and previous panel: ${sharedDetails.join('; ')}. Their outfit, hairstyle, accessories, face, and body proportions MUST be IDENTICAL. Only expression and pose may change.`;
-        }
-
-        // 5) Background characters — include ambient/secondary characters in scene
-        if (panel.backgroundCharacters?.length > 0) {
-          const bgCharDescs = panel.backgroundCharacters.map(bc => {
-            const cid = bc.id || bc;
-            const charInfo = analysis?.characters?.find(c => c.id === cid);
-            const cs = charStates[cid];
-            const name = charInfo?.name || cid;
-            const appearance = charInfo?.appearance?.substring(0, 100) || '';
-            const outfit = cs?.outfit || charInfo?.outfit || '';
-            const pose = bc.pose || 'standing in background';
-            const gaze = bc.gazeDirection || '';
-            return `${name}: ${appearance}, wearing ${outfit.substring(0, 60)}, ${pose}${gaze ? ', ' + gaze : ''}`;
-          });
-          anchoredPrompt += `\n[BACKGROUND CHARACTERS] Include these secondary characters in the background: ${bgCharDescs.join('; ')}. They should be less prominent but visually consistent with their established appearance.`;
-        }
-
-        // 6) Scene transition context from storyboard
-        if (panel.sceneTransition) {
-          anchoredPrompt += `\n[SCENE FLOW] ${panel.sceneTransition}`;
-        }
-
-      }
+      // 프롬프트 구성: 단일 재생성(regeneratePanel)과 완전히 동일하게 원본 imagePrompt 사용
+      const anchoredPrompt = panel.imagePrompt;
 
       // Determine aspect ratio from panel imageSize (user-editable) or auto from shotSize + type
       const panelAR = panel.imageSize || (() => {
@@ -6285,19 +6439,22 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       }
 
       const {refImages, assetDescriptions, charIds: panelCharIds} = buildPanelRefs(panel, sharedAssets, analysis, refs, charStates);
-      // Add previous panel image as style/continuity reference
+      // 이전 패널 이미지 + 레퍼런스 병합 모드: 단일 재생성의 'both' 모드와 동일
+      let skipStyle = false;
       if (i > 0 && newPanels[i - 1] && typeof newPanels[i - 1] === 'string' && (newPanels[i - 1].startsWith('data:') || newPanels[i - 1].startsWith('http'))) {
         const prevImgStr = newPanels[i - 1];
         const alreadyHas = refImages.some(r => (r.image || r) === prevImgStr);
         if (!alreadyHas) {
-          refImages.push({image: prevImgStr, description: 'previous panel — use ONLY for visual style consistency, lighting reference, and character appearance matching. Do NOT copy the composition or camera angle.'});
-          assetDescriptions.push('[Previous panel image — use ONLY for visual style consistency, lighting reference, and character appearance matching. Do NOT copy the composition or camera angle.]');
+          refImages.push({image: prevImgStr, description: 'previous panel — use for visual style consistency, lighting reference, and character appearance matching. Do NOT copy the composition.'});
+          assetDescriptions.push('[Previous panel image — use for visual style consistency, lighting reference, and character appearance matching. Do NOT copy the composition.]');
         }
+        skipStyle = true;
+        log(`패널 ${i+1}: 이전 패널 이미지 + 기본 레퍼런스 병합 모드 (스타일 미적용)`, 'info');
       }
       log(`패널 ${i+1}: 레퍼런스 ${refImages.length}개, 에셋 ${assetDescriptions.length}개, 캐릭터 ${panelCharIds.length}명`);
 
       try {
-        const images = await callImage(anchoredPrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: panelAR, characterIds: panelCharIds});
+        const images = await callImage(anchoredPrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: panelAR, characterIds: panelCharIds, skipStyle});
         // callImage returns null when content filter blocks — skip this panel
         const img0 = images?.[0];
         if (!img0 || img0 === 'undefined' || img0.endsWith(',undefined')) {
@@ -6305,15 +6462,6 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
         } else {
           // Convert external URL to base64 immediately for reliable export later
           newPanels[i] = await urlToBase64(img0);
-          // Capture style anchor from first successful panel — comprehensive style lock
-          if (!styleAnchor && panel.imagePrompt) {
-            const curStyle = ART_STYLES[artStyle] || ART_STYLES.naverWebtoon;
-            const styleName = curStyle.name || artStyle;
-            // Build robust style anchor from art style config + first panel characteristics
-            const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
-            styleAnchor = `${styleName} style. ${sm ? sm[0] : ''} CRITICAL: Every panel must use the EXACT same art style — identical line thickness, identical coloring/shading method, identical level of detail, identical face drawing style (eye shape, nose style, lip detail). The reader must feel all panels were drawn by the same artist in a single sitting.`;
-            log(`스타일 앵커 설정: "${styleName}"`, 'info');
-          }
           log(`패널 ${i+1} 완료 (레퍼런스 ${refImages.length}개 사용)`, 'success');
         }
       } catch(e) {
@@ -6327,10 +6475,6 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
             log(`패널 ${i+1} 유효하지 않은 이미지 — 건너뜀`, 'warn');
           } else {
             newPanels[i] = await urlToBase64(retryImg);
-            if (!styleAnchor && panel.imagePrompt) {
-              const sm = panel.imagePrompt.match(/(manhwa|webtoon|anime|illustration|digital painting|cel.shad|cartoon)[^.]*\./i);
-              if (sm) { styleAnchor = sm[0]; log(`스타일 앵커 설정: "${styleAnchor}"`, 'info'); }
-            }
             log(`패널 ${i+1} 레퍼런스 없이 재생성 완료`, 'success');
           }
         } catch(e2) {
@@ -6889,7 +7033,8 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       }
 
       // Save episode metadata
-      const episodeTitle = analysis?.title || `${currentEpisode}화`;
+      const existingTitle = episodes.find(e => e.number === currentEpisode)?.title;
+      const episodeTitle = (existingTitle && existingTitle !== `${currentEpisode}화`) ? existingTitle : (analysis?.title || `${currentEpisode}화`);
       const episodeData = {
         title: episodeTitle,
         number: currentEpisode,
@@ -6939,7 +7084,7 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       setEpisodes(episodeList);
 
       if (episodeList.length > 0) {
-        await loadEpisode(episodeList[0].number, pid);
+        await loadEpisode(episodeList[0].number, pid, assets);
       } else {
         // Create first episode if none exist
         const newEpisode = {number: 1, title: '1화', createdAt: new Date().toISOString()};
@@ -7578,8 +7723,20 @@ Return ONLY the detailed English prompt, nothing else.`,
           <div className="be-header">
             <span className="be-title">페이지 기반 웹툰 에디터</span>
             <div className="be-divider" />
-            {Object.entries(BUBBLE_TYPES).map(([key, bt]) => (
-              <button key={key} className="btn btn-outline btn-sm be-btn" onClick={() => addBubbleToPage(key)}>+ {bt.name}</button>
+            {Object.entries(BUBBLE_TYPES).filter(([,bt]) => bt.svgBalloon).map(([key, bt]) => {
+              const sb = SVG_BALLOONS[bt.svgBalloon];
+              if (!sb) return null;
+              const pathD = sb.path(2, '#333', '#fff', false);
+              return <button key={key} className="btn btn-outline btn-sm be-btn be-balloon-thumb-btn" onClick={() => addBubbleToPage(key)}
+                title={bt.name} style={{padding:'3px 6px',display:'inline-flex',alignItems:'center',gap:4}}>
+                <svg width="28" height={28 * (sb.baseH / sb.baseW)} viewBox={sb.viewBox} style={{flexShrink:0}}>
+                  <path d={pathD} fill="#fff" stroke="#666" strokeWidth="2" strokeLinejoin="round"/>
+                </svg>
+                <span style={{fontSize:10}}>{bt.name}</span>
+              </button>;
+            })}
+            {Object.entries(BUBBLE_TYPES).filter(([,bt]) => !bt.svgBalloon).map(([key, bt]) => (
+              <button key={key} className="btn btn-outline btn-sm be-btn" onClick={() => addBubbleToPage(key)} style={{fontSize:10,padding:'4px 8px'}}>+ {bt.name}</button>
             ))}
             <div className="be-divider" />
             {/* [WebtoonSFX 추가] SFX 드롭다운 버튼 */}
@@ -7713,13 +7870,16 @@ Return ONLY the detailed English prompt, nothing else.`,
                       {[...(page.objects||[])].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1)).map(obj => {
                         const isSelected = selectedObjectId === obj.id;
                         if (obj.type === 'panel' || obj.type === 'image') {
+                          const isCropping = cropMode && cropMode.pageIdx === pageIdx && cropMode.objId === obj.id;
+                          const hasCrop = obj.crop && obj.crop.w > 0 && obj.crop.h > 0;
                           return (
                             <div key={obj.id} className={`be-obj${isSelected ? ' selected' : ''}`}
                               style={{
                                 left: obj.x * scale, top: obj.y * scale, width: obj.w * scale, height: obj.h * scale,
-                                zIndex: obj.zIndex || 1
+                                zIndex: obj.zIndex || 1, overflow: 'hidden'
                               }}
                               onMouseDown={(e) => {
+                                if (isCropping) return;
                                 setCurrentPageIdx(pageIdx);
                                 setSelectedObjectId(obj.id);
                                 setSelectedObjectType(obj.type);
@@ -7728,24 +7888,88 @@ Return ONLY the detailed English prompt, nothing else.`,
                                 dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:true};
                               }}>
                               {obj.src && obj.src !== 'undefined' && !obj.src.endsWith(',undefined') ? (
-                                <img src={obj.src} className="be-obj-img" draggable={false}
-                                  onLoad={(e) => {
-                                    // Auto-adjust panel height to match actual image ratio
-                                    const imgEl = e.target;
-                                    if (imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0) {
-                                      const realRatio = imgEl.naturalHeight / imgEl.naturalWidth;
-                                      const expectedH = Math.round(obj.w * realRatio);
-                                      if (Math.abs(expectedH - obj.h) > 5) {
-                                        setEditorPages(prev => prev.map((pg, pi) => pi !== pageIdx ? pg : {
-                                          ...pg, objects: pg.objects.map(o => o.id !== obj.id ? o : {...o, h: expectedH})
-                                        }));
-                                      }
-                                    }
-                                  }} />
+                                hasCrop && !isCropping ? (
+                                  <div style={{width:'100%', height:'100%', overflow:'hidden', position:'relative'}}>
+                                    <img src={obj.src} className="be-obj-img" draggable={false}
+                                      style={{
+                                        position:'absolute',
+                                        left: `${-obj.crop.x * 100 / obj.crop.w}%`,
+                                        top: `${-obj.crop.y * 100 / obj.crop.h}%`,
+                                        width: `${10000 / obj.crop.w}%`,
+                                        height: `${10000 / obj.crop.h}%`,
+                                        objectFit: 'fill',
+                                        maxWidth:'none', maxHeight:'none',
+                                      }} />
+                                  </div>
+                                ) : (
+                                  <React.Fragment>
+                                    <img src={obj.src} className="be-obj-img" draggable={false}
+                                      style={isCropping ? {opacity: 0.4} : {}}
+                                      onLoad={(e) => {
+                                        const imgEl = e.target;
+                                        if (imgEl.naturalWidth > 0 && imgEl.naturalHeight > 0) {
+                                          const realRatio = imgEl.naturalHeight / imgEl.naturalWidth;
+                                          const expectedH = Math.round(obj.w * realRatio);
+                                          if (Math.abs(expectedH - obj.h) > 5) {
+                                            setEditorPages(prev => prev.map((pg, pi) => pi !== pageIdx ? pg : {
+                                              ...pg, objects: pg.objects.map(o => o.id !== obj.id ? o : {...o, h: expectedH})
+                                            }));
+                                          }
+                                        }
+                                      }} />
+                                    {isCropping && cropRect && (
+                                      <div data-crop-overlay="true" style={{position:'absolute',top:0,left:0,width:'100%',height:'100%',zIndex:25,cursor:'crosshair'}}
+                                        onMouseDown={(e) => {
+                                          e.preventDefault(); e.stopPropagation();
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          const sx = ((e.clientX - rect.left) / rect.width) * 100;
+                                          const sy = ((e.clientY - rect.top) / rect.height) * 100;
+                                          cropDragRef.current = {type:'draw', startX:sx, startY:sy};
+                                        }}>
+                                        {/* Bright crop region */}
+                                        <div style={{
+                                          position:'absolute',
+                                          left: cropRect.x + '%', top: cropRect.y + '%',
+                                          width: cropRect.w + '%', height: cropRect.h + '%',
+                                          border:'2px solid #4fc3f7', background:'transparent',
+                                          boxShadow:'0 0 0 9999px rgba(0,0,0,0.55)',
+                                          cursor:'move', zIndex:26,
+                                        }}
+                                          onMouseDown={(e) => {
+                                            e.preventDefault(); e.stopPropagation();
+                                            const rect = e.currentTarget.parentElement.getBoundingClientRect();
+                                            cropDragRef.current = {
+                                              type:'move_region',
+                                              lastX: ((e.clientX - rect.left) / rect.width) * 100,
+                                              lastY: ((e.clientY - rect.top) / rect.height) * 100
+                                            };
+                                          }}>
+                                          {/* Corner handles */}
+                                          {['tl','tr','bl','br'].map(corner => (
+                                            <div key={corner} className={`be-crop-handle ${corner}`}
+                                              style={{pointerEvents:'auto'}}
+                                              onMouseDown={(e) => {
+                                                e.preventDefault(); e.stopPropagation();
+                                                cropDragRef.current = {type:'resize_crop', corner, origRect: {...cropRect}};
+                                              }} />
+                                          ))}
+                                        </div>
+                                        {/* Apply/Cancel buttons */}
+                                        <div style={{
+                                          position:'absolute', bottom:8, left:'50%', transform:'translateX(-50%)',
+                                          display:'flex', gap:6, zIndex:30
+                                        }}>
+                                          <button className="be-crop-btn" onClick={(e) => {e.stopPropagation(); applyCrop();}}>✓ 적용</button>
+                                          <button className="be-crop-btn danger" onClick={(e) => {e.stopPropagation(); cancelCrop();}}>✕ 취소</button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </React.Fragment>
+                                )
                               ) : (
                                 <div className="be-obj-img" style={{display:'flex',alignItems:'center',justifyContent:'center',background:'#333',color:'#999',fontSize:11,height:'100%'}}>이미지 없음</div>
                               )}
-                              {isSelected && <>
+                              {isSelected && !isCropping && <>
                                 <div data-resize="true" className="be-resize"
                                   onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
                                     dragRef.current = {type:'resize', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origW:obj.w, origH:obj.h, aspectRatio: obj.w / obj.h};
@@ -7786,13 +8010,23 @@ Return ONLY the detailed English prompt, nothing else.`,
                                 e.preventDefault();
                                 dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:true};
                               }}>
-                              <svg width={obj.w * scale} height={svgH} className="be-bubble-svg" style={{filter: bt.shadow ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' : 'none'}}>
+                              <svg width={obj.w * scale} height={svgH} className="be-bubble-svg"
+                                viewBox={(bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon]) ? SVG_BALLOONS[bt.svgBalloon].viewBox : undefined}
+                                preserveAspectRatio={(bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon]) ? 'none' : undefined}
+                                style={{filter: bt.shadow ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.4))' : 'none'}}>
                                 {(() => {
-                                  const bw2 = bt.borderWidth || 2;
-                                  const strokeColor = bt.border==='none'?'transparent':bt.border;
+                                  const bw2 = obj.strokeWidth ?? bt.borderWidth ?? 2;
+                                  const strokeColor = (obj.strokeColor || bt.border)==='none'?'transparent':(obj.strokeColor || bt.border);
+                                  const fillColor = obj.fillColor || bt.bg || '#fff';
                                   const dash = bt.dashed ? '6 4' : 'none';
                                   const W = obj.w*scale, H = obj.h*scale;
-                                  if (bt.plainText && !bt.ellipse) {
+                                  if (bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon]) {
+                                    const sb = SVG_BALLOONS[bt.svgBalloon];
+                                    const isFlipped = obj.flipBalloon || false;
+                                    const pathD = sb.path(bw2, strokeColor, fillColor, isFlipped);
+                                    return <path d={pathD} fill={fillColor} stroke={strokeColor} strokeWidth={bw2}
+                                      strokeLinejoin="round" strokeLinecap="round"/>;
+                                  } else if (bt.plainText && !bt.ellipse) {
                                     return <rect x="0" y="0" width={W} height={H} rx={(bt.radius||2)*scale} ry={(bt.radius||2)*scale} fill={effBg} stroke="none"/>;
                                   } else if (bt.plainText && bt.ellipse) {
                                     return <ellipse cx={W/2} cy={H/2} rx={W/2} ry={H/2} fill={effBg} stroke="none"/>;
@@ -7829,10 +8063,28 @@ Return ONLY the detailed English prompt, nothing else.`,
                                   }
                                 })()}
                               </svg>
-                              <textarea className="be-bubble-text" value={obj.text} onChange={(e) => updatePageObject(pageIdx, obj.id, {text: e.target.value})}
-                                placeholder={bt.name+'...'} onClick={() => { setCurrentPageIdx(pageIdx); setSelectedObjectId(obj.id); }}
-                                style={{width:obj.w*scale-12, height:obj.h*scale-8, fontWeight:bt.fontWeight, fontSize:(obj.fontSize||25)*scale, color:obj.customColor||bt.color||'#111', fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
-                                  transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`}}/>
+                              {(() => {
+                                const sb = bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon];
+                                const ta = sb?.textArea;
+                                const txStyle = ta ? {
+                                  position:'absolute',
+                                  top: ta.top, left: ta.left, width: ta.width, height: ta.height,
+                                  fontWeight:obj.fontWeight||bt.fontWeight, fontSize:(obj.fontSize||25)*scale,
+                                  color:obj.customColor||bt.color||'#111',
+                                  fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
+                                  transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
+                                } : {
+                                  width:obj.w*scale-12, height:obj.h*scale-8,
+                                  fontWeight:obj.fontWeight||bt.fontWeight, fontSize:(obj.fontSize||25)*scale,
+                                  color:obj.customColor||bt.color||'#111',
+                                  fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
+                                  transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
+                                };
+                                return <textarea className="be-bubble-text" value={obj.text}
+                                  onChange={(e) => updatePageObject(pageIdx, obj.id, {text: e.target.value})}
+                                  placeholder={bt.name+'...'} onClick={() => { setCurrentPageIdx(pageIdx); setSelectedObjectId(obj.id); }}
+                                  style={txStyle}/>;
+                              })()}
                               {isSelected && <>
                                 <div data-resize="true" className="be-resize"
                                   onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
@@ -8010,6 +8262,45 @@ Return ONLY the detailed English prompt, nothing else.`,
                           onChange={e => updatePageObject(currentPageIdx, obj.id, {roundness: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
                         <span className="be-ctrl-val" style={{minWidth:28}}>{obj.roundness ?? 100}%</span>
                       </div>}
+                      {bt.svgBalloon && <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>꼬리 방향</label>
+                        <select className="be-select" value={obj.flipBalloon ? 'true' : 'false'} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {flipBalloon: e.target.value === 'true'})}>
+                          <option value="false">기본</option>
+                          <option value="true">반전</option>
+                        </select>
+                      </div>}
+                      {bt.svgBalloon && <React.Fragment>
+                        <div className="be-ctrl-row">
+                          <label className="be-ctrl-label" style={{flexShrink:0}}>선 두께</label>
+                          <input type="range" min="0.5" max="8" step="0.5" value={obj.strokeWidth ?? bt.borderWidth ?? 2.5} onClick={e=>e.stopPropagation()}
+                            onChange={e => updatePageObject(currentPageIdx, obj.id, {strokeWidth: parseFloat(e.target.value)})} style={{flex:1,height:4}}/>
+                          <span className="be-ctrl-val" style={{minWidth:24}}>{obj.strokeWidth ?? bt.borderWidth ?? 2.5}</span>
+                        </div>
+                        <div className="be-ctrl-row">
+                          <label className="be-ctrl-label" style={{flexShrink:0}}>선 색상</label>
+                          <input type="color" value={obj.strokeColor || bt.border || '#333333'} onClick={e=>e.stopPropagation()}
+                            onChange={e => updatePageObject(currentPageIdx, obj.id, {strokeColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                          {obj.strokeColor && <button className="be-ctrl-reset" onClick={e=>{e.stopPropagation(); updatePageObject(currentPageIdx, obj.id, {strokeColor: null});}}>초기화</button>}
+                        </div>
+                        <div className="be-ctrl-row">
+                          <label className="be-ctrl-label" style={{flexShrink:0}}>채우기</label>
+                          <input type="color" value={obj.fillColor || bt.bg || '#ffffff'} onClick={e=>e.stopPropagation()}
+                            onChange={e => updatePageObject(currentPageIdx, obj.id, {fillColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                          {obj.fillColor && obj.fillColor !== '#fff' && obj.fillColor !== '#ffffff' && <button className="be-ctrl-reset" onClick={e=>{e.stopPropagation(); updatePageObject(currentPageIdx, obj.id, {fillColor: null});}}>초기화</button>}
+                        </div>
+                        <div className="be-ctrl-row">
+                          <label className="be-ctrl-label" style={{flexShrink:0}}>글자 굵기</label>
+                          <select className="be-select" value={obj.fontWeight || bt.fontWeight || 500} onClick={e=>e.stopPropagation()}
+                            onChange={e => updatePageObject(currentPageIdx, obj.id, {fontWeight: parseInt(e.target.value)})}>
+                            <option value="300">가늘게</option>
+                            <option value="400">보통</option>
+                            <option value="500">중간</option>
+                            <option value="700">굵게</option>
+                            <option value="900">매우 굵게</option>
+                          </select>
+                        </div>
+                      </React.Fragment>}
                       <div style={{display:'flex',gap:4,marginTop:6,flexWrap:'wrap'}}>
                         {Object.entries(BUBBLE_TYPES).map(([key, t]) => (
                           <button key={key} className={`be-type-btn${obj.bubbleStyle===key?' active':''}`}
@@ -8108,7 +8399,20 @@ Return ONLY the detailed English prompt, nothing else.`,
                         <span className={`be-item-label${isSelected?' selected':''}`}>{oi+1}. {obj.type === 'panel' ? '패널' : '이미지'}</span>
                         <button className="be-item-del" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>삭제</button>
                       </div>
-                      <div style={{fontSize:11,color:'#aaa',padding:6}}>크기: {Math.round(obj.w)}×{Math.round(obj.h)} | 위치: ({Math.round(obj.x)}, {Math.round(obj.y)})</div>
+                      <div style={{fontSize:11,color:'#aaa',padding:6}}>크기: {Math.round(obj.w)}×{Math.round(obj.h)} | 위치: ({Math.round(obj.x)}, {Math.round(obj.y)}){obj.crop ? ` | 잘라내기: ${Math.round(obj.crop.w)}%×${Math.round(obj.crop.h)}%` : ''}</div>
+                      <div style={{display:'flex',gap:4,padding:'4px 6px',flexWrap:'wrap'}}>
+                        {cropMode && cropMode.objId === obj.id ? (
+                          <React.Fragment>
+                            <button className="be-crop-btn" onClick={(e) => {e.stopPropagation(); applyCrop();}}>✓ 잘라내기 적용</button>
+                            <button className="be-crop-btn danger" onClick={(e) => {e.stopPropagation(); cancelCrop();}}>✕ 취소</button>
+                          </React.Fragment>
+                        ) : (
+                          <React.Fragment>
+                            <button className="be-crop-btn" onClick={(e) => {e.stopPropagation(); startCrop(currentPageIdx, obj.id);}}>✂ 잘라내기</button>
+                            {obj.crop && <button className="be-crop-btn danger" onClick={(e) => {e.stopPropagation(); resetCrop(currentPageIdx, obj.id);}}>잘라내기 해제</button>}
+                          </React.Fragment>
+                        )}
+                      </div>
                       {editorPages.length > 1 && (
                         <div className="be-ctrl-row" style={{padding:'4px 6px'}}>
                           <label className="be-ctrl-label" style={{flexShrink:0}}>페이지 이동</label>
@@ -8265,14 +8569,41 @@ Return ONLY the detailed English prompt, nothing else.`,
               const isActive = ep.number === currentEpisode;
               const stepsDone = ep.completedSteps ? ep.completedSteps.length : 0;
               const isComplete = stepsDone >= 4;
+              const isRenaming = renamingEpisode === ep.number;
+              const displayName = ep.title && ep.title !== `${ep.number}화` ? ep.title : `${ep.number}화`;
               return (
                 <div
                   key={ep.number}
                   className={`episode-pill ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}
-                  onClick={() => loadEpisode(ep.number)}
-                  title={`${ep.title || ep.number + '화'} — ${stepsDone}/5 단계 완료`}
+                  onClick={() => handleEpisodeClick(ep)}
+                  title={`${displayName} — ${stepsDone}/5 단계 완료`}
                 >
-                  {ep.number}화 {stepsDone > 0 && !isComplete && <span style={{fontSize:10,opacity:.7}}>({stepsDone}/5)</span>}{isComplete && '✓'}
+                  {isRenaming ? (
+                    <input
+                      ref={renameInputRef}
+                      className="episode-rename-input"
+                      value={renameValue}
+                      onChange={e => setRenameValue(e.target.value)}
+                      onBlur={() => commitRename(ep.number)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') commitRename(ep.number);
+                        if (e.key === 'Escape') setRenamingEpisode(null);
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      autoFocus
+                      style={{width: Math.max(40, renameValue.length * 9) + 'px'}}
+                    />
+                  ) : (
+                    <React.Fragment>
+                      {displayName} {stepsDone > 0 && !isComplete && <span style={{fontSize:10,opacity:.7}}>({stepsDone}/5)</span>}{isComplete && '✓'}
+                      <button
+                        className="episode-rename-btn"
+                        onClick={(e) => startEpisodeRename(ep, e)}
+                        title="이름 변경"
+                        style={{marginLeft:3, background:'none', border:'none', cursor:'pointer', padding:'0 2px', fontSize:10, opacity:0.5, color:'inherit', lineHeight:1}}
+                      >✏️</button>
+                    </React.Fragment>
+                  )}
                   <button
                     className="episode-delete"
                     onClick={(e) => { e.stopPropagation(); deleteEpisode(ep.number); }}
@@ -9488,8 +9819,8 @@ Return ONLY the detailed English prompt, nothing else.`,
                       <label key={ep.number} className={`batch-episode-item ${ep.selected ? 'selected' : ''}`}>
                         <input type="checkbox" checked={!!ep.selected}
                           onChange={() => setBatchEpisodeList(prev => prev.map((e, i) => i === idx ? {...e, selected: !e.selected} : e))} />
-                        <span className="batch-ep-num">{ep.number}화</span>
-                        <span className="batch-ep-title">{ep.title}</span>
+                        <span className="batch-ep-num">{ep.title && ep.title !== `${ep.number}화` ? ep.title : `${ep.number}화`}</span>
+                        <span className="batch-ep-title">{ep.title && ep.title !== `${ep.number}화` ? `(${ep.number}화)` : ''}</span>
                         {ep.status === 'complete' && <span className="batch-ep-badge" style={{background:'#d4edda',color:'#155724'}}>완료 ({ep.generatedPanels}패널)</span>}
                         {ep.status === 'step3' && <span className="batch-ep-badge" style={{background:'#fff3cd',color:'#856404'}}>스토리보드 {ep.generatedPanels > 0 ? `(${ep.generatedPanels}/${ep.totalPanels})` : ''}</span>}
                         {ep.status === 'step1' && <span className="batch-ep-badge" style={{background:'#cce5ff',color:'#004085'}}>분석완료</span>}
