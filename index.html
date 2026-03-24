@@ -2971,9 +2971,9 @@ Rules:
         const bh = 70;
         const bx = di % 2 === 0 ? panelW * 0.05 : panelW - bw - panelW * 0.05;
         pageObj.objects.push({
-          id: 'b_'+i+'_d'+di+'_'+ts, type: 'bubble', bubbleStyle: 'speech',
+          id: 'b_'+i+'_d'+di+'_'+ts, type: 'bubble', bubbleStyle: 'speechWide',
           text: speakerText, x: bx, y: bubbleY,
-          w: bw, h: bh, fontSize: 30,
+          w: bw, h: bh, fontSize: 20,
           fontFamily: "'Noto Sans KR',sans-serif",
           tailPos: di % 2 === 0 ? 0.3 : 0.7, tailSize: 1.0,
           tailStyle: 'straight', textOffsetX: 0, textOffsetY: 0,
@@ -3236,7 +3236,7 @@ Rules:
       id: 'b_' + Date.now(), type: 'bubble', bubbleStyle, text: '',
       x: pos.x, y: pos.y,
       w: defW, h: defH,
-      fontSize: bubbleStyle === 'narration' ? 30 : 25,
+      fontSize: bubbleStyle === 'narration' ? 30 : 20,
       fontWeight: bt.fontWeight || 500,
       fontFamily: "'Noto Sans KR',sans-serif",
       strokeWidth: bt.borderWidth || 2.5,
@@ -4414,6 +4414,11 @@ Rules:
     const mainCharIds = (panel.characters || []).map(pc => pc.id || pc);
     const bgCharIds = (panel.backgroundCharacters || []).map(bc => bc.id || bc);
     console.log(`[buildPanelRefs] 에셋 현황: sharedAssets(캐릭터:${saCharCount}, 배경:${saBgCount}, 소품:${saPropCount}), episodeRefs(캐릭터:${epCharCount}, 배경:${epBgCount})`);
+    console.log(`[buildPanelRefs] sharedAssets 캐릭터 keys:`, Object.keys(sa?.characters || {}));
+    console.log(`[buildPanelRefs] episodeRefs 캐릭터 keys:`, Object.keys(episodeRefs?.characters || {}));
+    // Debug: check if images exist in each source
+    Object.entries(sa?.characters || {}).forEach(([k,v]) => console.log(`[buildPanelRefs] sa.characters["${k}"] hasImage=${!!v?.image}, type=${typeof v?.image}, len=${v?.image?.length||0}`));
+    Object.entries(episodeRefs?.characters || {}).forEach(([k,v]) => console.log(`[buildPanelRefs] episodeRefs.characters["${k}"] type=${typeof v}, isDataUri=${v?.startsWith?.('data:')}, len=${v?.length||0}`));
     console.log(`[buildPanelRefs] 패널 캐릭터: main=[${mainCharIds.join(',')}], background=[${bgCharIds.join(',')}] → 총 ${mainCharIds.length + bgCharIds.length}명`);
 
     const charIds = [];
