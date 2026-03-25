@@ -4783,10 +4783,24 @@ Rules:
     let stylePrefix = getStylePrefix();
     const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.naverWebtoon).name;
 
-    // Skip style prefix when using previous panel as reference — let the reference image define the style
+    // When using previous panel as reference, use a short style hint instead of the full detailed prefix
+    // This keeps the art style name (e.g. "Korean romance webtoon style") for consistency
+    // while letting the reference image define the detailed rendering style
     if (opts.skipStyle) {
-      stylePrefix = '';
-      log('스타일 미적용 모드: 레퍼런스 이미지 스타일 따름', 'info');
+      const curStyle = ART_STYLES[artStyle] || ART_STYLES.naverWebtoon;
+      if (artStyle === 'custom') {
+        // For custom styles, use just the first sentence or short portion as a hint
+        const customHint = customStylePrompt ? customStylePrompt.trim().split('.')[0] + '. ' : '';
+        stylePrefix = customHint;
+      } else {
+        // Extract just the style name portion (first phrase before first comma) as a lightweight hint
+        const fullPrefix = curStyle.prefix || '';
+        const firstPhrase = fullPrefix.split(',')[0].trim();
+        // Avoid "style style" duplication — only append if not already ending with "style"
+        const styleHint = firstPhrase.endsWith('style') ? firstPhrase + '. ' : firstPhrase + ' style. ';
+        stylePrefix = styleHint;
+      }
+      log(`스타일 힌트 모드: "${stylePrefix.trim()}" (레퍼런스 이미지 스타일 보조)`, 'info');
     }
 
     // For reference sheet generation (character/bg/prop), use a clean prefix
@@ -6879,9 +6893,9 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
         if (type === 'dialogue') return '3:4';
         return '1:1';
       })();
-      // Skip style prefix when using previous panel reference — let the reference image define the visual style
+      // Use short style hint when using previous panel reference — art style name is still included
       const skipStyle = refMode !== 'default';
-      log(`패널 ${idx+1} 재생성 중... (ref ${refImages.length}개, 비율:${regenAR}${skipStyle ? ', 스타일 미적용' : ''})`);
+      log(`패널 ${idx+1} 재생성 중... (ref ${refImages.length}개, 비율:${regenAR}${skipStyle ? ', 스타일힌트' : ', 풀스타일'})`);
       const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: regenAR, characterIds: panelCharIds, skipStyle});
       const newPanels = [...panels];
       newPanels[idx] = await urlToBase64(images[0]);
