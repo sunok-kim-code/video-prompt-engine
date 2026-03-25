@@ -2568,50 +2568,67 @@ Rules:
   };
 
   // After saving character edits, update storyboard imagePrompts that reference this character
+  // Respects per-panel outfitOverride: if a panel has an explicit override for this character,
+  // that override takes priority over the base/episode outfit (scene-specific costumes preserved).
   const refreshPanelPromptsForChar = (charId, char) => {
     if (!storyboard || storyboard.length === 0) return;
     const charName = char.name;
     if (!charName) return;
 
-    // Build updated character description snippet
-    const epO = episodeOutfits?.[charId] || {};
-    const outfit = epO.outfit || char.outfit || '';
-    const accessories = epO.accessories || (char.accessories && char.accessories !== 'none' ? char.accessories : '');
     const appearance = char.appearance || '';
+    const epO = episodeOutfits?.[charId] || {};
+    const baseOutfit = epO.outfit || char.outfit || '';
+    const baseAccessories = epO.accessories || (char.accessories && char.accessories !== 'none' ? char.accessories : '');
 
+    // Use buildCharacterStates to get accumulated outfit state per panel (respects outfitOverride persistence)
     let updatedCount = 0;
     const newSb = storyboard.map((panel, idx) => {
       // Check if this panel references the character
-      const hasChar = panel.characters?.some(pc => (pc.id || pc) === charId);
-      if (!hasChar || !panel.imagePrompt) return panel;
+      const pc = panel.characters?.find(p => (p.id || p) === charId);
+      if (!pc || !panel.imagePrompt) return panel;
+
+      // Determine outfit for THIS specific panel:
+      // 1. Panel-level outfitOverride (scene-specific costume change) — highest priority
+      // 2. Accumulated state from previous panels' outfitOverrides (costume persists)
+      // 3. Episode outfit (화차별 의상)
+      // 4. Base character outfit
+      let panelOutfit = baseOutfit;
+      let panelAccessories = baseAccessories;
+
+      // Walk panels up to current to accumulate outfitOverride state
+      let accumulatedOutfit = null;
+      let accumulatedAccessories = null;
+      for (let i = 0; i <= idx; i++) {
+        const p = storyboard[i];
+        const pChar = p?.characters?.find(c => (c.id || c) === charId);
+        if (pChar?.outfitOverride) accumulatedOutfit = pChar.outfitOverride;
+        if (pChar?.accessoriesOverride) accumulatedAccessories = pChar.accessoriesOverride;
+      }
+      if (accumulatedOutfit) panelOutfit = accumulatedOutfit;
+      if (accumulatedAccessories) panelAccessories = accumulatedAccessories;
 
       let prompt = panel.imagePrompt;
-      // Strategy: find character name mention and replace the description block after it
-      // Pattern: "CHARACTER_NAME: description until next character or period-sentence boundary"
-      // We use a regex that finds "CharName:" or "CharName," followed by appearance/outfit text
       const nameEscaped = charName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-      // Try pattern: "CharName: [appearance], [outfit], ..." or "CharName, [appearance], [outfit], ..."
-      // Match from char name up to next character mention (another "charX:" pattern) or end of a major clause
+      // Build replacement description
+      const outfitDesc = panelOutfit ? `wearing ${panelOutfit}` : '';
+      const accDesc = panelAccessories ? `, with ${panelAccessories}` : '';
+      const newCharDesc = `${appearance ? appearance + ', ' : ''}${outfitDesc}${accDesc}`.replace(/,\s*$/, '') + '.';
+
+      // Try pattern: "CharName: [appearance], [outfit/wearing/dressed...], ..."
       const charBlockRegex = new RegExp(
         `(${nameEscaped}[:\\s,]+)([^.]*?(?:wearing|wears|dressed in|outfit|clothing|attire|shirt|jacket|coat|dress|suit|uniform|blouse|pants|skirt|jeans|hoodie|sweater)[^.]*?\\.?)`,
         'i'
       );
 
       if (charBlockRegex.test(prompt)) {
-        // Replace outfit portion while keeping the character name prefix
-        const outfitDesc = outfit ? `wearing ${outfit}` : '';
-        const accDesc = accessories ? `, with ${accessories}` : '';
-        prompt = prompt.replace(charBlockRegex, (match, prefix, oldDesc) => {
-          return `${prefix}${appearance ? appearance + ', ' : ''}${outfitDesc}${accDesc}.`;
-        });
+        prompt = prompt.replace(charBlockRegex, (match, prefix) => `${prefix}${newCharDesc}`);
         updatedCount++;
       } else {
-        // Fallback: try simpler name-based replacement — append updated description
-        // Find "CharName" mention and add/update appearance after it
+        // Fallback: find "CharName" and append updated description in parentheses
         const simpleNameRegex = new RegExp(`(${nameEscaped})(?=\\s*[,:])`, 'i');
         if (simpleNameRegex.test(prompt)) {
-          const appendDesc = [appearance, outfit ? `wearing ${outfit}` : '', accessories ? `with ${accessories}` : ''].filter(Boolean).join(', ');
+          const appendDesc = [appearance, outfitDesc, panelAccessories ? `with ${panelAccessories}` : ''].filter(Boolean).join(', ');
           if (appendDesc) {
             prompt = prompt.replace(simpleNameRegex, `${charName} (${appendDesc})`);
             updatedCount++;
@@ -2627,7 +2644,7 @@ Rules:
 
     if (updatedCount > 0) {
       setStoryboard(newSb);
-      log(`${charName} 특징 변경 → ${updatedCount}개 패널 프롬프트 업데이트됨`, 'success');
+      log(`${charName} 특징 변경 → ${updatedCount}개 패널 프롬프트 업데이트됨 (씬별 의상변경 유지)`, 'success');
       // Auto-save storyboard
       if (projectId && currentEpisode) {
         fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
