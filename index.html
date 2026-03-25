@@ -2073,6 +2073,7 @@ CRITICAL — POSE & BODY STATE CONTINUITY (자세/포즈 연속성):
 - Dialogue should match the original story text
 - Extract ALL sound effects / onomatopoeia into the "soundEffects" array field. If no sound effects, use an empty array [].
 - CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects, or onomatopoeia.
+- VISUAL TONE: Avoid overly graphic or intense visual descriptions in imagePrompt. Do NOT use: "glowing red eyes", "blood-soaked", "blood dripping", "crimson eyes", "blood pool", "gore", "severed", "maniacal grin", "demonic aura", "veins bulging". Instead use softer alternatives: "intense gaze", "dark stain", "wounded", "unsettling expression", "dark energy". Keep the mood dramatic but visually clean — suitable for webtoon illustration.
 
 CRITICAL — GAZE DIRECTION & EYE LINE CONTINUITY (시선 처리):
 - Every character in every panel MUST have an explicit gazeDirection field AND the gaze must be described in imagePrompt.
@@ -2277,6 +2278,7 @@ Rules:
 - ALL dialogue from original scenes must be present in panels
 - Extract ALL sound effects / onomatopoeia into the "soundEffects" array field. If no sound effects, use an empty array [].
 - CRITICAL: imagePrompt must NEVER contain any text, letters, sound effects, or onomatopoeia.
+- VISUAL TONE: Avoid overly graphic or intense visual descriptions in imagePrompt. Do NOT use: "glowing red eyes", "blood-soaked", "blood dripping", "crimson eyes", "blood pool", "gore", "severed", "maniacal grin", "demonic aura", "veins bulging". Instead use softer alternatives: "intense gaze", "dark stain", "wounded", "unsettling expression", "dark energy". Keep the mood dramatic but visually clean — suitable for webtoon illustration.
 
 === MASTER PRODUCER — SCENE ENRICHMENT ===
 1. BACKGROUND CHARACTERS:
@@ -4669,6 +4671,34 @@ Rules:
     p = p.replace(/with\s+(?:the\s+)?sound\s+(?:effect|fx)s?\s+(?:of\s+)?['""']?[^,.'""'\n]*['""']?/gi, '');
     // Remove "onomatopoeia" mentions
     p = p.replace(/onomatopoeia\s*[:.]?\s*['""']?[^,.'""'\n]*['""']?/gi, '');
+
+    // === Tone down intense/graphic visual descriptions ===
+    // Red/glowing eyes → intense/sharp eyes
+    p = p.replace(/\b(glowing|blazing|burning|fiery|flame[- ]like)\s+(red\s+)?eyes?\b/gi, 'intense sharp eyes');
+    p = p.replace(/\bred[- ](glowing|lit|tinged|rimmed|blazing)\s+eyes?\b/gi, 'sharp intense eyes');
+    p = p.replace(/\beyes?\s+(glowing|burning|blazing)\s+red\b/gi, 'eyes with intense gaze');
+    p = p.replace(/\bcrimson\s+eyes?\b/gi, 'deep red-brown eyes');
+    p = p.replace(/\bblood[- ]?red\s+eyes?\b/gi, 'dark red eyes');
+    // Blood / gore → soften or remove
+    p = p.replace(/\bblood[- ]?(soaked|stained|splattered|covered|dripping|pooling|smeared)\b/gi, 'stained');
+    p = p.replace(/\bblood\s+(drips?|flows?|streams?|pours?|gushes?|oozes?)\b/gi, 'tension visible');
+    p = p.replace(/\b(pool|puddle|river|trail)\s+of\s+blood\b/gi, 'dark stain on the ground');
+    p = p.replace(/\bbloody\s+(face|hands?|clothes?|body|wound|knife|sword|weapon)\b/gi, 'battle-worn $1');
+    p = p.replace(/\bgore\b/gi, '');
+    p = p.replace(/\bgory\b/gi, 'dramatic');
+    // Graphic violence toning
+    p = p.replace(/\b(severed|dismembered|decapitated|mutilated)\b/gi, 'injured');
+    p = p.replace(/\b(gushing|spurting|spraying)\s+blood\b/gi, 'visible wound');
+    p = p.replace(/\bopen\s+wound\b/gi, 'wound');
+    p = p.replace(/\bbleeding\s+(profusely|heavily)\b/gi, 'wounded');
+    // Overly intense expressions
+    p = p.replace(/\b(maniacal|psychotic|deranged|insane)\s+(grin|smile|laughter|expression|look)\b/gi, 'unsettling $2');
+    p = p.replace(/\b(murderous|homicidal|bloodthirsty|blood[- ]?lust)\s+(intent|rage|fury|eyes?|gaze|expression)\b/gi, 'fierce $2');
+    p = p.replace(/\bveins?\s+(bulging|popping|throbbing|pulsing)\b/gi, 'tense expression');
+    // Dark aura / demonic toning
+    p = p.replace(/\b(demonic|hellish|satanic|infernal)\s+(aura|energy|power|presence|glow)\b/gi, 'dark $2');
+    p = p.replace(/\bblack\s+(miasma|corruption|ooze)\b/gi, 'dark shadow');
+
     // Clean up extra spaces
     p = p.replace(/\s{2,}/g, ' ').trim();
     return p;
