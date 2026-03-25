@@ -3068,7 +3068,7 @@ Rules:
         pageObj.objects.push({
           id: 'b_'+i+'_d'+di+'_'+ts, type: 'bubble', bubbleStyle: 'speechWide',
           text: speakerText, x: bx, y: bubbleY,
-          w: bw, h: bh, fontSize: 20,
+          w: bw, h: bh, fontSize: 25,
           fontFamily: "'Noto Sans KR',sans-serif",
           tailPos: di % 2 === 0 ? 0.3 : 0.7, tailSize: 1.0,
           tailStyle: 'straight', textOffsetX: 0, textOffsetY: 0,
@@ -3331,7 +3331,7 @@ Rules:
       id: 'b_' + Date.now(), type: 'bubble', bubbleStyle, text: '',
       x: pos.x, y: pos.y,
       w: defW, h: defH,
-      fontSize: bubbleStyle === 'narration' ? 30 : 20,
+      fontSize: 25,
       fontWeight: bt.fontWeight || 500,
       fontFamily: "'Noto Sans KR',sans-serif",
       strokeWidth: bt.borderWidth || 2.5,
