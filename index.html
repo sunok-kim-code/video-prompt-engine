@@ -2567,6 +2567,76 @@ Rules:
     return rp;
   };
 
+  // After saving character edits, update storyboard imagePrompts that reference this character
+  const refreshPanelPromptsForChar = (charId, char) => {
+    if (!storyboard || storyboard.length === 0) return;
+    const charName = char.name;
+    if (!charName) return;
+
+    // Build updated character description snippet
+    const epO = episodeOutfits?.[charId] || {};
+    const outfit = epO.outfit || char.outfit || '';
+    const accessories = epO.accessories || (char.accessories && char.accessories !== 'none' ? char.accessories : '');
+    const appearance = char.appearance || '';
+
+    let updatedCount = 0;
+    const newSb = storyboard.map((panel, idx) => {
+      // Check if this panel references the character
+      const hasChar = panel.characters?.some(pc => (pc.id || pc) === charId);
+      if (!hasChar || !panel.imagePrompt) return panel;
+
+      let prompt = panel.imagePrompt;
+      // Strategy: find character name mention and replace the description block after it
+      // Pattern: "CHARACTER_NAME: description until next character or period-sentence boundary"
+      // We use a regex that finds "CharName:" or "CharName," followed by appearance/outfit text
+      const nameEscaped = charName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      // Try pattern: "CharName: [appearance], [outfit], ..." or "CharName, [appearance], [outfit], ..."
+      // Match from char name up to next character mention (another "charX:" pattern) or end of a major clause
+      const charBlockRegex = new RegExp(
+        `(${nameEscaped}[:\\s,]+)([^.]*?(?:wearing|wears|dressed in|outfit|clothing|attire|shirt|jacket|coat|dress|suit|uniform|blouse|pants|skirt|jeans|hoodie|sweater)[^.]*?\\.?)`,
+        'i'
+      );
+
+      if (charBlockRegex.test(prompt)) {
+        // Replace outfit portion while keeping the character name prefix
+        const outfitDesc = outfit ? `wearing ${outfit}` : '';
+        const accDesc = accessories ? `, with ${accessories}` : '';
+        prompt = prompt.replace(charBlockRegex, (match, prefix, oldDesc) => {
+          return `${prefix}${appearance ? appearance + ', ' : ''}${outfitDesc}${accDesc}.`;
+        });
+        updatedCount++;
+      } else {
+        // Fallback: try simpler name-based replacement — append updated description
+        // Find "CharName" mention and add/update appearance after it
+        const simpleNameRegex = new RegExp(`(${nameEscaped})(?=\\s*[,:])`, 'i');
+        if (simpleNameRegex.test(prompt)) {
+          const appendDesc = [appearance, outfit ? `wearing ${outfit}` : '', accessories ? `with ${accessories}` : ''].filter(Boolean).join(', ');
+          if (appendDesc) {
+            prompt = prompt.replace(simpleNameRegex, `${charName} (${appendDesc})`);
+            updatedCount++;
+          }
+        }
+      }
+
+      if (prompt !== panel.imagePrompt) {
+        return {...panel, imagePrompt: prompt};
+      }
+      return panel;
+    });
+
+    if (updatedCount > 0) {
+      setStoryboard(newSb);
+      log(`${charName} 특징 변경 → ${updatedCount}개 패널 프롬프트 업데이트됨`, 'success');
+      // Auto-save storyboard
+      if (projectId && currentEpisode) {
+        fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+      }
+    } else {
+      log(`${charName} 특징 변경 저장됨 (프롬프트에서 해당 캐릭터 의상 패턴 미발견 — 수동 프롬프트 수정 필요할 수 있음)`, 'info');
+    }
+  };
+
   const saveCharEdits = async (charId) => {
     const char = analysis?.characters?.find(c => c.id === charId);
     if (!char) return;
@@ -2589,6 +2659,8 @@ Rules:
         await fbSaveAsset(projectId, 'characters', charId, updated);
         setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: updated}}));
       }
+      // Update storyboard panel prompts with new character traits
+      refreshPanelPromptsForChar(charId, char);
       log(`${char.name} 수정사항 저장 완료`, 'success');
     } catch(e) { log(`저장 실패: ${e.message}`, 'error'); }
   };
@@ -7417,7 +7489,17 @@ Return ONLY the detailed English prompt, nothing else.`,
   const saveEpisodeOutfits = async (outfits) => {
     if (!projectId || !currentEpisode) return;
     try {
-      await fbSaveEpisode(projectId, currentEpisode, {episodeOutfits: outfits || episodeOutfits});
+      const outfitsToSave = outfits || episodeOutfits;
+      await fbSaveEpisode(projectId, currentEpisode, {episodeOutfits: outfitsToSave});
+      // Update storyboard prompts for characters whose episode outfits changed
+      if (storyboard?.length > 0 && analysis?.characters) {
+        for (const [cid, epData] of Object.entries(outfitsToSave)) {
+          if (epData?.outfit) {
+            const char = analysis.characters.find(c => c.id === cid);
+            if (char) refreshPanelPromptsForChar(cid, char);
+          }
+        }
+      }
       log('에피소드 의상 저장 완료', 'success');
     } catch(e) { log('에피소드 의상 저장 실패: ' + e.message, 'error'); }
   };
