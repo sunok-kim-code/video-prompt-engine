@@ -295,7 +295,7 @@ div:hover > .panel-ctrl{opacity:1 !important;}
 /* Prompt Helper Panel */
 .prompt-helper-toggle{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:500;background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;border:none;border-radius:8px 0 0 8px;padding:12px 6px;cursor:pointer;font-size:12px;font-weight:700;writing-mode:vertical-rl;letter-spacing:2px;box-shadow:-2px 0 12px rgba(108,92,231,0.3);transition:all .2s;}
 .prompt-helper-toggle:hover{padding-right:10px;background:linear-gradient(135deg,#5f3dc4,#845ef7);}
-.prompt-helper-panel{position:fixed;right:0;top:0;bottom:0;width:420px;background:#1a1a2e;border-left:2px solid #6c5ce7;z-index:600;display:flex;flex-direction:column;box-shadow:-4px 0 24px rgba(0,0,0,0.4);transition:transform .3s ease;overflow:hidden;}
+.prompt-helper-panel{position:fixed;right:0;top:0;bottom:0;width:420px;background:#f8f9fa;border-left:2px solid #6c5ce7;z-index:600;display:flex;flex-direction:column;box-shadow:-4px 0 24px rgba(0,0,0,0.12);transition:transform .3s ease;overflow:hidden;}
 .prompt-helper-panel.closed{transform:translateX(100%);}
 .prompt-helper-header{display:flex;align-items:center;justify-content:space-between;padding:16px;background:linear-gradient(135deg,#6c5ce7,#a29bfe);color:#fff;flex-shrink:0;}
 .prompt-helper-header h3{margin:0;font-size:15px;font-weight:700;}
@@ -9824,7 +9824,7 @@ Return ONLY the detailed English prompt, nothing else.`,
         <div className="prompt-helper-header">
           <h3>AI 이미지 도우미</h3>
           <div style={{display:'flex',gap:4,alignItems:'center'}}>
-            <button onClick={() => { setAiChatMessages([]); setAiChatInput(''); }} style={{background:'none',border:'none',color:'rgba(255,255,255,0.7)',fontSize:12,cursor:'pointer',padding:'2px 6px'}} title="대화 초기화">초기화</button>
+            <button onClick={() => { setAiChatMessages([]); setAiChatInput(''); }} style={{background:'rgba(255,255,255,0.2)',border:'none',color:'rgba(255,255,255,0.9)',fontSize:11,cursor:'pointer',padding:'2px 8px',borderRadius:4}} title="대화 초기화">초기화</button>
             <button onClick={() => setPromptHelperOpen(false)} style={{background:'none',border:'none',color:'#fff',fontSize:20,cursor:'pointer',padding:'0 4px'}}>×</button>
           </div>
         </div>
@@ -9832,10 +9832,10 @@ Return ONLY the detailed English prompt, nothing else.`,
           {/* Chat messages area */}
           <div style={{flex:1,overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:10}}>
             {aiChatMessages.length === 0 && (
-              <div style={{color:'var(--text2)',fontSize:12,textAlign:'center',padding:'20px 10px',lineHeight:1.6}}>
+              <div style={{color:'#666',fontSize:12,textAlign:'center',padding:'20px 10px',lineHeight:1.6}}>
                 <div style={{fontSize:16,marginBottom:8}}>🎨 AI 이미지 생성 도우미</div>
-                <div>AI 이미지 생성에 관한 무엇이든 물어보세요!</div>
-                <div style={{marginTop:12,textAlign:'left',fontSize:11,color:'var(--text2)',opacity:0.8}}>
+                <div style={{color:'#444'}}>AI 이미지 생성에 관한 무엇이든 물어보세요!</div>
+                <div style={{marginTop:12,textAlign:'left',fontSize:11,color:'#888'}}>
                   💡 질문 예시:<br/>
                   • 캐릭터 일관성을 높이려면 어떻게 해야 해?<br/>
                   • Gemini vs Flux 어떤 모델이 더 좋아?<br/>
@@ -9856,18 +9856,19 @@ Return ONLY the detailed English prompt, nothing else.`,
                   maxWidth:'85%',
                   padding:'8px 12px',
                   borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                  background: msg.role === 'user' ? 'var(--accent)' : 'var(--card)',
-                  color: msg.role === 'user' ? '#fff' : 'var(--text)',
+                  background: msg.role === 'user' ? '#6c5ce7' : '#fff',
+                  color: msg.role === 'user' ? '#fff' : '#333',
                   fontSize:12,
                   lineHeight:1.6,
                   whiteSpace:'pre-wrap',
                   wordBreak:'break-word',
-                  border: msg.role === 'user' ? 'none' : '1px solid var(--border)',
+                  border: msg.role === 'user' ? 'none' : '1px solid #e0e0e0',
+                  boxShadow: msg.role === 'assistant' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
                 }}>
                   {msg.text}
                   {msg.role === 'assistant' && (
                     <button onClick={() => { navigator.clipboard.writeText(msg.text); log('복사됨', 'success'); }}
-                      style={{display:'block',background:'none',border:'none',color:'var(--text2)',fontSize:10,cursor:'pointer',padding:'4px 0 0',opacity:0.6}}
+                      style={{display:'block',background:'none',border:'none',color:'#999',fontSize:10,cursor:'pointer',padding:'4px 0 0',opacity:0.6}}
                       title="복사">📋 복사</button>
                   )}
                 </div>
@@ -9875,7 +9876,7 @@ Return ONLY the detailed English prompt, nothing else.`,
             ))}
             {aiChatLoading && (
               <div style={{display:'flex',justifyContent:'flex-start'}}>
-                <div style={{padding:'8px 12px',borderRadius:'14px 14px 14px 4px',background:'var(--card)',border:'1px solid var(--border)',fontSize:12,color:'var(--text2)'}}>
+                <div style={{padding:'8px 12px',borderRadius:'14px 14px 14px 4px',background:'#fff',border:'1px solid #e0e0e0',fontSize:12,color:'#999'}}>
                   생각 중...
                 </div>
               </div>
@@ -9883,9 +9884,9 @@ Return ONLY the detailed English prompt, nothing else.`,
             <div ref={aiChatEndRef} />
           </div>
           {/* Chat input area */}
-          <div style={{borderTop:'1px solid var(--border)',padding:'8px 12px',display:'flex',gap:8,alignItems:'flex-end'}}>
+          <div style={{borderTop:'1px solid #e0e0e0',padding:'8px 12px',display:'flex',gap:8,alignItems:'flex-end',background:'#fff'}}>
             <textarea
-              style={{flex:1,resize:'none',border:'1px solid var(--border)',borderRadius:10,padding:'8px 12px',fontSize:12,lineHeight:1.4,fontFamily:'inherit',background:'var(--bg)',color:'var(--text)',minHeight:38,maxHeight:120,outline:'none'}}
+              style={{flex:1,resize:'none',border:'1px solid #ddd',borderRadius:10,padding:'8px 12px',fontSize:12,lineHeight:1.4,fontFamily:'inherit',background:'#fff',color:'#333',minHeight:38,maxHeight:120,outline:'none'}}
               rows={1}
               placeholder="AI 이미지 생성에 대해 질문하세요..."
               value={aiChatInput}
@@ -9894,7 +9895,7 @@ Return ONLY the detailed English prompt, nothing else.`,
               onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
             />
             <button onClick={aiChatSend} disabled={aiChatLoading || !aiChatInput.trim()}
-              style={{padding:'8px 14px',borderRadius:10,border:'none',background: aiChatInput.trim() ? 'var(--accent)' : 'var(--border)',color:'#fff',fontSize:13,cursor: aiChatInput.trim() ? 'pointer' : 'default',fontWeight:600,whiteSpace:'nowrap',flexShrink:0}}>
+              style={{padding:'8px 14px',borderRadius:10,border:'none',background: aiChatInput.trim() ? '#6c5ce7' : '#ddd',color:'#fff',fontSize:13,cursor: aiChatInput.trim() ? 'pointer' : 'default',fontWeight:600,whiteSpace:'nowrap',flexShrink:0}}>
               전송
             </button>
           </div>
