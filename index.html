@@ -2486,55 +2486,61 @@ function App() {
   const [promptEditor, setPromptEditor] = useState(null);
   const [editedPrompt, setEditedPrompt] = useState('');
 
-  // Prompt Helper Panel state
+  // AI Image Assistant Panel state
   const [promptHelperOpen, setPromptHelperOpen] = useState(false);
-  const [phOriginalPrompt, setPhOriginalPrompt] = useState('');
-  const [phKoreanTranslation, setPhKoreanTranslation] = useState('');
-  const [phUserChanges, setPhUserChanges] = useState('');
-  const [phResultPrompt, setPhResultPrompt] = useState('');
-  const [phLoading, setPhLoading] = useState(false);
+  const [aiChatMessages, setAiChatMessages] = useState([]); // [{role:'user'|'assistant', text:'...'}]
+  const [aiChatInput, setAiChatInput] = useState('');
+  const [aiChatLoading, setAiChatLoading] = useState(false);
+  const aiChatEndRef = React.useRef(null);
+  React.useEffect(() => { aiChatEndRef.current?.scrollIntoView({behavior:'smooth'}); }, [aiChatMessages, aiChatLoading]);
 
-  // Prompt Helper: translate English prompt to Korean
-  const phTranslateToKorean = async () => {
-    if (!phOriginalPrompt.trim()) return;
-    setPhLoading(true);
+  // AI Image Assistant: send a message
+  const aiChatSend = async () => {
+    const userMsg = aiChatInput.trim();
+    if (!userMsg || aiChatLoading) return;
+    const newMessages = [...aiChatMessages, {role: 'user', text: userMsg}];
+    setAiChatMessages(newMessages);
+    setAiChatInput('');
+    setAiChatLoading(true);
     try {
-      const result = await callText(
-        `You are a Korean translator for image generation prompts. Translate the following English image generation prompt into natural Korean so the user can understand what the image will look like. Keep technical terms where needed but make it readable. Return ONLY the Korean translation, nothing else.`,
-        phOriginalPrompt,
-        {maxTokens: 2048}
-      );
-      setPhKoreanTranslation(result.trim());
-    } catch(e) { log('번역 실패: ' + e.message, 'error'); }
-    finally { setPhLoading(false); }
-  };
+      // Build conversation context for the AI
+      const conversationContext = newMessages.slice(-10).map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`).join('\n\n');
+      // Include current project context if available
+      const projectContext = analysis ? `\n\nCurrent project context:
+- Art style: ${artStyle === 'custom' ? customStylePrompt : (ART_STYLES[artStyle]||{}).name || artStyle}
+- Image provider: ${imageProvider}${nbVertexModel ? ` (model: ${nbVertexModel})` : ''}
+- Characters: ${analysis.characters?.map(c => c.name).join(', ') || 'none'}
+- Current step: ${step >= 3 ? 'storyboard/image generation' : step >= 1 ? 'analysis' : 'not started'}` : '';
 
-  // Prompt Helper: generate optimized English prompt from Korean changes
-  const phGenerateOptimized = async () => {
-    if (!phOriginalPrompt.trim() && !phUserChanges.trim()) return;
-    setPhLoading(true);
-    try {
-      const input = `Original English prompt:\n${phOriginalPrompt}\n\n${phKoreanTranslation ? `Korean translation of original:\n${phKoreanTranslation}\n\n` : ''}User's requested changes (in Korean):\n${phUserChanges}`;
       const result = await callText(
-        `You are an expert image generation prompt engineer for webtoon/manhwa illustration.
+        `You are an AI image generation expert assistant for a Korean webtoon production tool. You help users with ANY questions related to AI image generation. Answer in Korean (한국어).
 
-Your task: Take the original English image prompt and apply the user's requested changes (written in Korean) to create an optimized English prompt.
+Your expertise includes:
+- Image generation models: Gemini (2.5 Flash/Pro, imagen-4), Flux, DALL-E, Stable Diffusion, Midjourney, fal.ai models
+- Prompt engineering: how to write effective prompts, what keywords work best, how to get specific styles/compositions
+- Webtoon/manhwa art styles: how to achieve consistent character design, color palettes, linework styles
+- Technical knowledge: LoRA, ControlNet, inpainting, upscaling, aspect ratios, resolution, seed, guidance scale
+- Troubleshooting: content filters, quality issues, consistency problems, style drift
+- Reference images: how to use them effectively, character references, style references
+- Workflow optimization: batch generation, prompt templates, iterating on results
+- Comparison of different AI models and their strengths/weaknesses
 
 Rules:
-1. Output ONLY the final English prompt — no explanations, no markdown, no quotes.
-2. Keep all character appearance details (hair, outfit, face) from the original unless the user explicitly wants to change them.
-3. Apply the user's changes precisely — add, remove, or modify elements as requested.
-4. Use specific, descriptive language optimized for image generation models.
-5. Maintain the manhwa/webtoon art style keywords.
-6. NEVER include any Korean text, sound effects, or onomatopoeia in the output.
-7. NEVER include any text, letters, words, or typography instructions in the output.
-8. Structure the prompt well: [shot/angle], [character details], [pose/expression], [background], [lighting/mood], [art style].`,
-        input,
-        {maxTokens: 2048}
+1. Always respond in Korean (한국어)
+2. Be practical and specific — give actionable advice with examples
+3. When suggesting prompts, provide the actual English prompt text the user can use
+4. If the user asks about their current project, use the project context provided
+5. Keep responses concise but thorough — no unnecessary filler
+6. If you don't know something, say so honestly
+7. You can reference the user's current settings (art style, model, etc.) when relevant${projectContext}`,
+        `Conversation so far:\n${conversationContext}\n\nRespond to the user's latest message.`,
+        {maxTokens: 4096}
       );
-      setPhResultPrompt(result.trim());
-    } catch(e) { log('프롬프트 생성 실패: ' + e.message, 'error'); }
-    finally { setPhLoading(false); }
+      setAiChatMessages(prev => [...prev, {role: 'assistant', text: result.trim()}]);
+    } catch(e) {
+      setAiChatMessages(prev => [...prev, {role: 'assistant', text: `오류가 발생했습니다: ${e.message}`}]);
+    }
+    finally { setAiChatLoading(false); }
   };
 
   // Update a character field in analysis (appearance, outfit, refPrompt, etc.)
@@ -9806,79 +9812,92 @@ Return ONLY the detailed English prompt, nothing else.`,
         </div>
       </div>
 
-      {/* Prompt Helper Toggle Button */}
+      {/* AI Image Assistant Toggle Button */}
       {!promptHelperOpen && (
         <button className="prompt-helper-toggle" onClick={() => setPromptHelperOpen(true)}>
-          프롬프트 도우미
+          AI 이미지 도우미
         </button>
       )}
 
-      {/* Prompt Helper Panel */}
+      {/* AI Image Assistant Panel */}
       <div className={`prompt-helper-panel${promptHelperOpen ? '' : ' closed'}`}>
         <div className="prompt-helper-header">
-          <h3>프롬프트 수정 도우미</h3>
-          <button onClick={() => setPromptHelperOpen(false)} style={{background:'none',border:'none',color:'#fff',fontSize:20,cursor:'pointer',padding:'0 4px'}}>×</button>
+          <h3>AI 이미지 도우미</h3>
+          <div style={{display:'flex',gap:4,alignItems:'center'}}>
+            <button onClick={() => { setAiChatMessages([]); setAiChatInput(''); }} style={{background:'none',border:'none',color:'rgba(255,255,255,0.7)',fontSize:12,cursor:'pointer',padding:'2px 6px'}} title="대화 초기화">초기화</button>
+            <button onClick={() => setPromptHelperOpen(false)} style={{background:'none',border:'none',color:'#fff',fontSize:20,cursor:'pointer',padding:'0 4px'}}>×</button>
+          </div>
         </div>
-        <div className="prompt-helper-body">
-          {/* Step 1: Paste original prompt */}
-          <div className="prompt-helper-section">
-            <div className="prompt-helper-label">① 기존 이미지 프롬프트 (영어)</div>
-            <textarea className="prompt-helper-textarea"
-              placeholder="기존 이미지 생성 프롬프트를 여기에 붙여넣으세요..."
-              value={phOriginalPrompt}
-              onChange={e => setPhOriginalPrompt(e.target.value)} />
-            <button className="prompt-helper-btn primary" onClick={phTranslateToKorean} disabled={phLoading || !phOriginalPrompt.trim()}>
-              {phLoading ? '번역 중...' : '한국어로 번역'}
-            </button>
-          </div>
-
-          {/* Step 2: Korean translation */}
-          {phKoreanTranslation && (
-            <div className="prompt-helper-section">
-              <div className="prompt-helper-label">② 한국어 번역 결과</div>
-              <textarea className="prompt-helper-textarea korean" value={phKoreanTranslation} readOnly />
-            </div>
-          )}
-
-          <hr className="prompt-helper-divider" />
-
-          {/* Step 3: User changes */}
-          <div className="prompt-helper-section">
-            <div className="prompt-helper-label">③ 변경하고 싶은 내용 (한국어)</div>
-            <textarea className="prompt-helper-textarea"
-              placeholder="예: 머리색을 금발로 변경, 배경을 카페로, 더 따뜻한 조명으로..."
-              value={phUserChanges}
-              onChange={e => setPhUserChanges(e.target.value)} />
-            <button className="prompt-helper-btn primary" onClick={phGenerateOptimized} disabled={phLoading || (!phOriginalPrompt.trim() && !phUserChanges.trim())}>
-              {phLoading ? '생성 중...' : '최적 프롬프트 생성'}
-            </button>
-          </div>
-
-          {/* Step 4: Result */}
-          {phResultPrompt && (
-            <div className="prompt-helper-section">
-              <div className="prompt-helper-label">④ 최적화된 프롬프트 (영어)</div>
-              <textarea className="prompt-helper-textarea result" value={phResultPrompt}
-                onChange={e => setPhResultPrompt(e.target.value)} />
-              <div style={{display:'flex',gap:8}}>
-                <button className="prompt-helper-btn copy" style={{flex:1}} onClick={() => {
-                  navigator.clipboard.writeText(phResultPrompt);
-                  log('프롬프트가 클립보드에 복사되었습니다', 'success');
-                }}>📋 복사</button>
-                <button className="prompt-helper-btn secondary" style={{flex:1}} onClick={() => {
-                  setPhOriginalPrompt(phResultPrompt);
-                  setPhKoreanTranslation('');
-                  setPhResultPrompt('');
-                  setPhUserChanges('');
-                }}>🔄 이 프롬프트로 다시 수정</button>
+        <div className="prompt-helper-body" style={{display:'flex',flexDirection:'column',height:'100%',padding:0}}>
+          {/* Chat messages area */}
+          <div style={{flex:1,overflowY:'auto',padding:'12px',display:'flex',flexDirection:'column',gap:10}}>
+            {aiChatMessages.length === 0 && (
+              <div style={{color:'var(--text2)',fontSize:12,textAlign:'center',padding:'20px 10px',lineHeight:1.6}}>
+                <div style={{fontSize:16,marginBottom:8}}>🎨 AI 이미지 생성 도우미</div>
+                <div>AI 이미지 생성에 관한 무엇이든 물어보세요!</div>
+                <div style={{marginTop:12,textAlign:'left',fontSize:11,color:'var(--text2)',opacity:0.8}}>
+                  💡 질문 예시:<br/>
+                  • 캐릭터 일관성을 높이려면 어떻게 해야 해?<br/>
+                  • Gemini vs Flux 어떤 모델이 더 좋아?<br/>
+                  • 이 프롬프트를 개선해줘: [프롬프트]<br/>
+                  • 배경을 더 디테일하게 그리려면?<br/>
+                  • LoRA가 뭐야? 어떻게 써?<br/>
+                  • 콘텐츠 필터에 걸리지 않으려면?<br/>
+                  • 야간 씬 조명을 잘 표현하는 프롬프트는?
+                </div>
               </div>
-            </div>
-          )}
-
-          <hr className="prompt-helper-divider" />
-          <button className="prompt-helper-btn secondary" style={{width:'100%'}} onClick={() => {
-            setPhOriginalPrompt(''); setPhKoreanTranslation(''); setPhUserChanges(''); setPhResultPrompt('');
-          }}>전체 초기화</button>
+            )}
+            {aiChatMessages.map((msg, i) => (
+              <div key={i} style={{
+                display:'flex',
+                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+              }}>
+                <div style={{
+                  maxWidth:'85%',
+                  padding:'8px 12px',
+                  borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                  background: msg.role === 'user' ? 'var(--accent)' : 'var(--card)',
+                  color: msg.role === 'user' ? '#fff' : 'var(--text)',
+                  fontSize:12,
+                  lineHeight:1.6,
+                  whiteSpace:'pre-wrap',
+                  wordBreak:'break-word',
+                  border: msg.role === 'user' ? 'none' : '1px solid var(--border)',
+                }}>
+                  {msg.text}
+                  {msg.role === 'assistant' && (
+                    <button onClick={() => { navigator.clipboard.writeText(msg.text); log('복사됨', 'success'); }}
+                      style={{display:'block',background:'none',border:'none',color:'var(--text2)',fontSize:10,cursor:'pointer',padding:'4px 0 0',opacity:0.6}}
+                      title="복사">📋 복사</button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {aiChatLoading && (
+              <div style={{display:'flex',justifyContent:'flex-start'}}>
+                <div style={{padding:'8px 12px',borderRadius:'14px 14px 14px 4px',background:'var(--card)',border:'1px solid var(--border)',fontSize:12,color:'var(--text2)'}}>
+                  생각 중...
+                </div>
+              </div>
+            )}
+            <div ref={aiChatEndRef} />
+          </div>
+          {/* Chat input area */}
+          <div style={{borderTop:'1px solid var(--border)',padding:'8px 12px',display:'flex',gap:8,alignItems:'flex-end'}}>
+            <textarea
+              style={{flex:1,resize:'none',border:'1px solid var(--border)',borderRadius:10,padding:'8px 12px',fontSize:12,lineHeight:1.4,fontFamily:'inherit',background:'var(--bg)',color:'var(--text)',minHeight:38,maxHeight:120,outline:'none'}}
+              rows={1}
+              placeholder="AI 이미지 생성에 대해 질문하세요..."
+              value={aiChatInput}
+              onChange={e => setAiChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiChatSend(); }}}
+              onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
+            />
+            <button onClick={aiChatSend} disabled={aiChatLoading || !aiChatInput.trim()}
+              style={{padding:'8px 14px',borderRadius:10,border:'none',background: aiChatInput.trim() ? 'var(--accent)' : 'var(--border)',color:'#fff',fontSize:13,cursor: aiChatInput.trim() ? 'pointer' : 'default',fontWeight:600,whiteSpace:'nowrap',flexShrink:0}}>
+              전송
+            </button>
+          </div>
         </div>
       </div>
 
