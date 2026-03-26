@@ -7314,7 +7314,25 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
   };
 
   const loadProjectList = async () => {
-    try { setProjectList(await fbListProjects()); } catch(e) { /* Firebase not configured yet */ }
+    try {
+      const all = await fbListProjects();
+      if (editorMode) {
+        // In editor mode, only show projects that have at least one published episode
+        const db = getDb();
+        if (!db) { setProjectList([]); return; }
+        const filtered = [];
+        for (const p of all) {
+          try {
+            const epSnap = await db.collection('webtoon_projects').doc(p.id).collection('episodes')
+              .where('publishedToEditor', '==', true).limit(1).get();
+            if (!epSnap.empty) filtered.push(p);
+          } catch(e) { /* skip */ }
+        }
+        setProjectList(filtered);
+      } else {
+        setProjectList(all);
+      }
+    } catch(e) { /* Firebase not configured yet */ }
   };
 
   // Auto-load project list when no project is selected
@@ -8907,6 +8925,7 @@ Return ONLY the detailed English prompt, nothing else.`,
             // Project selection screen
             <div className="flex-col">
               <div className="card">
+                {!editorMode && (
                 <div className="flex-row flex-wrap gap-8 mb-12">
                   <button className="btn btn-primary btn-sm" onClick={async () => {
                     const newId = 'proj_' + Date.now();
@@ -8931,15 +8950,17 @@ Return ONLY the detailed English prompt, nothing else.`,
                     setShowCoverGenerator(true);
                   }}>🎨 웹툰 표지 만들기</button>
                 </div>
+                )}
 
                 <div style={{padding:12,background:'var(--surface2)',borderRadius:8}}>
-                  <div className="section-title">저장된 프로젝트</div>
+                  <div className="section-title">{editorMode ? '작업 가능한 프로젝트' : '저장된 프로젝트'}</div>
                   {projectList.map(p => (
                     <div key={p.id} className="flex-row" style={{padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
                       <div style={{flex:1,cursor:'pointer',fontSize:13}} onClick={()=>loadProject(p.id)}>
                         {p.title || p.id}
                         {p.updatedAt && <span className="text-xs" style={{marginLeft:8}}>{new Date(p.updatedAt?.seconds ? p.updatedAt.seconds * 1000 : p.updatedAt).toLocaleDateString()}</span>}
                       </div>
+                      {!editorMode && (
                       <button className="btn btn-outline btn-xs" style={{color:'var(--err)',borderColor:'var(--err)',flexShrink:0}} onClick={async (e) => {
                         e.stopPropagation();
                         if (!confirm(`"${p.title || p.id}" 프로젝트를 삭제하시겠습니까?\n모든 에피소드와 데이터가 삭제됩니다.`)) return;
@@ -8949,9 +8970,10 @@ Return ONLY the detailed English prompt, nothing else.`,
                           log(`프로젝트 "${p.title || p.id}" 삭제됨`, 'success');
                         } catch(err) { log('삭제 실패: ' + err.message, 'error'); }
                       }}>삭제</button>
+                      )}
                     </div>
                   ))}
-                  {projectList.length === 0 && <div className="text-muted">저장된 프로젝트가 없습니다. 새 프로젝트를 만들어 시작하세요.</div>}
+                  {projectList.length === 0 && <div className="text-muted">{editorMode ? '공개된 프로젝트가 없습니다.' : '저장된 프로젝트가 없습니다. 새 프로젝트를 만들어 시작하세요.'}</div>}
                 </div>
               </div>
 
