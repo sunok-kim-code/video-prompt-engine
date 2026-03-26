@@ -2444,7 +2444,6 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get('mode') === 'editor';
   });
-  const [editorPendingOpen, setEditorPendingOpen] = useState(false);
 
   // Episode Management
   const [episodes, setEpisodes] = useState([]);
@@ -3082,8 +3081,8 @@ Rules:
 
   // Initialize single long page from panels (no page splits, webtoon-style layout)
   const PANEL_GAP = 300; // Gap between panels
-  const initEditorPages = async () => {
-    const validPanels = panels.filter(Boolean);
+  const initEditorPages = async (overridePanels) => {
+    const validPanels = (overridePanels || panels).filter(Boolean);
     if (validPanels.length === 0) return [];
     const pageObj = {id:'p_'+Date.now(), width:PAGE_W, height:PAGE_H_MAX, objects:[]};
     let yPos = 0; // No top margin — panels start from top
@@ -3273,10 +3272,11 @@ Rules:
   };
 
   // Load saved editor layout from Firebase
-  const loadEditorLayout = async () => {
-    if (!projectId || !currentEpisode) return null;
+  const loadEditorLayout = async (overrideEpisode) => {
+    const ep = overrideEpisode || currentEpisode;
+    if (!projectId || !ep) return null;
     try {
-      const data = await fbLoadPhase(projectId, currentEpisode, 'step5_editor');
+      const data = await fbLoadPhase(projectId, ep, 'step5_editor');
       if (data && data.editorPages && data.editorPages.length > 0) {
         return data;
       }
@@ -3286,13 +3286,16 @@ Rules:
     return null;
   };
 
-  const openBubbleEditor = async () => {
-    const validCount = panels.filter(Boolean).length;
-    console.log('[BubbleEditor] openBubbleEditor called, episode:', currentEpisode, ', validPanels:', validCount, ', panels total:', panels.length);
+  const openBubbleEditor = async (directPanels, directEpisode) => {
+    // Use directPanels if provided (bypasses React state timing issues), otherwise fall back to state
+    const effectivePanels = (directPanels && directPanels.length > 0) ? directPanels : panels;
+    const effectiveEpisode = directEpisode || currentEpisode;
+    const validCount = effectivePanels.filter(Boolean).length;
+    console.log('[BubbleEditor] openBubbleEditor called, episode:', effectiveEpisode, ', validPanels:', validCount, ', panels total:', effectivePanels.length, ', directPanels:', !!directPanels);
     setBubbleEditorOpen(true);
 
     // Try loading saved layout for CURRENT episode from Firebase
-    const saved = await loadEditorLayout();
+    const saved = await loadEditorLayout(directEpisode);
     console.log('[BubbleEditor] loadEditorLayout result:', saved ? `${saved.editorPages?.length} pages` : 'null', ', episode:', currentEpisode);
     if (saved && saved.editorPages?.length > 0) {
       // Fix broken [img:] tokens — replace with actual panel data
@@ -3303,14 +3306,14 @@ Rules:
           if ((obj.type === 'panel' || obj.type === 'image') && obj.src && obj.src.startsWith('[img:')) {
             // Try to restore from panels array using panelIndex
             const pi = obj.panelIndex;
-            const actualSrc = (pi !== undefined && panels[pi]) ? panels[pi] : null;
+            const actualSrc = (pi !== undefined && effectivePanels[pi]) ? effectivePanels[pi] : null;
             // Verify restored source is not itself an [img:] token
             if (actualSrc && !actualSrc.startsWith('[img:')) {
               console.log(`[BubbleEditor] Restored image token: ${obj.src} → panels[${pi}]`);
               return {...obj, src: actualSrc};
             } else {
               unfixedCount++;
-              console.warn(`[BubbleEditor] Could not restore image token: ${obj.src} (panelIndex: ${pi}, panels[${pi}] is ${actualSrc ? 'also [img:]' : 'undefined'})`);
+              console.warn(`[BubbleEditor] Could not restore image token: ${obj.src} (panelIndex: ${pi}, effectivePanels[${pi}] is ${actualSrc ? 'also [img:]' : 'undefined'})`);
               return obj;
             }
           }
@@ -3322,16 +3325,16 @@ Rules:
       }
       setEditorPages(fixedPages);
       setCurrentPageIdx(saved.currentPageIdx || 0);
-      log(`${currentEpisode}화 저장된 배치 불러옴: ${saved.editorPages.length}페이지`, 'success');
+      log(`${effectiveEpisode}화 저장된 배치 불러옴: ${saved.editorPages.length}페이지`, 'success');
     } else if (validCount > 0) {
-      // No saved layout — initialize from current panels
-      log(`${currentEpisode}화 에디터 초기화 중... 패널 크기 측정`, 'info');
-      const newPages = await initEditorPages();
+      // No saved layout — initialize from current panels (pass effectivePanels to bypass state timing)
+      log(`${effectiveEpisode}화 에디터 초기화 중... 패널 크기 측정`, 'info');
+      const newPages = await initEditorPages(effectivePanels);
       setEditorPages(newPages);
-      log(`${currentEpisode}화 에디터 준비 완료: ${newPages.length}페이지, ${validCount}개 패널`, 'success');
+      log(`${effectiveEpisode}화 에디터 준비 완료: ${newPages.length}페이지, ${validCount}개 패널`, 'success');
     } else {
       // No panels at all — empty editor
-      log(`${currentEpisode}화 패널 없음 — 빈 에디터`, 'info');
+      log(`${effectiveEpisode}화 패널 없음 — 빈 에디터`, 'info');
       setEditorPages([{id:'p_'+Date.now(), width:PAGE_W, height:PAGE_H_MAX, objects:[]}]);
     }
     if (!saved) setCurrentPageIdx(0);
@@ -5700,9 +5703,10 @@ Rules:
       }
 
       const s4 = await fbLoadPhase(pid, episodeNum, 'step4_panels');
+      let loadedPanels = [];
       if (s4 && s4.panels?.some(p => p)) {
         // Bidirectional alignment: keep ALL images, pad storyboard if needed
-        let loadedPanels = s4.panels;
+        loadedPanels = s4.panels;
         const sbData = s3?.storyboard || [];
         const sbLen = sbData.length;
         const panelLen = loadedPanels.length;
@@ -5831,7 +5835,9 @@ Rules:
       } else {
         log(`${episodeNum}화 로드 완료 (${detected.size}개 단계 복원됨)`, 'success');
       }
-    } catch(e) { log(`${episodeNum}화 로드 실패: ${e.message}`, 'error'); }
+      // Return loaded data so callers can use it directly without waiting for React state
+      return { panels: loadedPanels, storyboard: s3?.storyboard || [], episodeNum };
+    } catch(e) { log(`${episodeNum}화 로드 실패: ${e.message}`, 'error'); return null; }
   }, [projectId, episodes, sharedAssets, log]);
 
   // Delete episode
@@ -5891,22 +5897,13 @@ Rules:
 
   const handleEpisodeClick = useCallback(async (ep) => {
     if (renamingEpisode === ep.number) return;
-    await loadEpisode(ep.number);
-    // In editor mode, flag that we want to auto-open editor after panels state updates
-    if (editorMode) {
-      setEditorPendingOpen(true);
+    const result = await loadEpisode(ep.number);
+    // In editor mode, directly open bubble editor with loaded panels (bypasses React state timing)
+    if (editorMode && result) {
+      console.log('[EditorMode] loadEpisode returned', result.panels.filter(Boolean).length, 'valid panels, opening editor directly for ep', result.episodeNum);
+      openBubbleEditor(result.panels, result.episodeNum);
     }
   }, [renamingEpisode, loadEpisode, editorMode]);
-
-  // Auto-open bubble editor in editor mode once panels state is committed after loadEpisode
-  React.useEffect(() => {
-    if (editorMode && editorPendingOpen && !bubbleEditorOpen) {
-      setEditorPendingOpen(false);
-      const validCount = panels.filter(Boolean).length;
-      console.log('[EditorMode] Episode loaded, panels:', validCount + '/' + panels.length + ', auto-opening bubble editor');
-      openBubbleEditor();
-    }
-  }, [editorMode, editorPendingOpen, bubbleEditorOpen]);
 
   const commitRename = useCallback((episodeNum) => {
     if (renameValue.trim()) {
