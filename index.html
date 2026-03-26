@@ -2439,6 +2439,12 @@ function App() {
   const [errorMsg, setErrorMsg] = useState('');
   const abortRef = useRef(false);
 
+  // Editor-only mode: ?mode=editor in URL hides Steps 1-4 and shows only the webtoon editor
+  const [editorMode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('mode') === 'editor';
+  });
+
   // Episode Management
   const [episodes, setEpisodes] = useState([]);
   const [currentEpisode, setCurrentEpisode] = useState(null);
@@ -5882,10 +5888,15 @@ Rules:
     setTimeout(() => renameInputRef.current?.select(), 50);
   }, []);
 
-  const handleEpisodeClick = useCallback((ep) => {
+  const handleEpisodeClick = useCallback(async (ep) => {
     if (renamingEpisode === ep.number) return;
-    loadEpisode(ep.number);
-  }, [renamingEpisode, loadEpisode]);
+    await loadEpisode(ep.number);
+    // In editor mode, automatically open the webtoon editor after loading episode data
+    if (editorMode) {
+      // Small delay to ensure panels state is updated
+      setTimeout(() => openBubbleEditor(), 500);
+    }
+  }, [renamingEpisode, loadEpisode, editorMode]);
 
   const commitRename = useCallback((episodeNum) => {
     if (renameValue.trim()) {
@@ -7836,14 +7847,14 @@ Return ONLY the detailed English prompt, nothing else.`,
       )}
       {/* Header */}
       <div className="app-header">
-        <div className="app-logo">웹툰 프로덕션</div>
+        <div className="app-logo">{editorMode ? '웹툰 에디터' : '웹툰 프로덕션'}</div>
         <div style={{flex:1}}></div>
-        {projectId && <button className="api-key-btn" onClick={()=>setShowAssetLibrary(true)} style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',borderColor:'transparent'}}>에셋 라이브러리 ({Object.keys(sharedAssets.characters).length + Object.keys(sharedAssets.backgrounds).length + Object.keys(sharedAssets.props).length})</button>}
-        <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API 설정</button>
+        {!editorMode && projectId && <button className="api-key-btn" onClick={()=>setShowAssetLibrary(true)} style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',borderColor:'transparent'}}>에셋 라이브러리 ({Object.keys(sharedAssets.characters).length + Object.keys(sharedAssets.backgrounds).length + Object.keys(sharedAssets.props).length})</button>}
+        {!editorMode && <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API 설정</button>}
       </div>
 
-      {/* Toolbar */}
-      <div className="toolbar">
+      {/* Toolbar — hidden in editor mode */}
+      {!editorMode && <div className="toolbar">
         <label>이미지 생성</label>
         <select className="form-select" style={{width:160}} value={imageProvider} onChange={e=>setImageProvider(e.target.value)}>
           <option value="grokImage">Grok Image (xAI 고품질)</option>
@@ -7907,7 +7918,7 @@ Return ONLY the detailed English prompt, nothing else.`,
           </div>
         )}
         <span style={{marginLeft:16,fontSize:11,color:'var(--text2)'}}>텍스트: Gemini 3.1 Pro</span>
-      </div>
+      </div>}
 
       {/* ===== Webtoon Bubble Editor ===== */}
       {bubbleEditorOpen && editorPages.length > 0 && (
@@ -8823,11 +8834,12 @@ Return ONLY the detailed English prompt, nothing else.`,
                 </div>
               );
             })}
-            <button className="episode-add" onClick={createNewEpisode}>+ 새 화</button>
+            {!editorMode && <button className="episode-add" onClick={createNewEpisode}>+ 새 화</button>}
           </div>
         )}
 
-        {/* Step Bar */}
+        {/* Step Bar — hidden in editor mode */}
+        {!editorMode && (
         <div className="step-bar">
           {STEPS.map((s, i) => (
             <div key={i}
@@ -8839,6 +8851,7 @@ Return ONLY the detailed English prompt, nothing else.`,
             </div>
           ))}
         </div>
+        )}
 
         {/* Error */}
         {errorMsg && <div style={{padding:'8px 16px',background:'#f8d7da',color:'#721c24',borderRadius:8,marginBottom:12,fontSize:13}}>{errorMsg}</div>}
@@ -9154,8 +9167,28 @@ Return ONLY the detailed English prompt, nothing else.`,
                 </div>
               )}
             </div>
+          ) : editorMode ? (
+            // Editor-only mode: show editor launch or waiting state
+            <div className="flex-col" style={{alignItems:'center',justifyContent:'center',padding:'40px 20px',textAlign:'center'}}>
+              {currentEpisode ? (
+                <div>
+                  <div style={{fontSize:18,fontWeight:700,marginBottom:12}}>📝 {projectTitle} — {currentEpisode}화</div>
+                  <div style={{color:'var(--text2)',marginBottom:20,fontSize:13}}>에피소드를 선택하면 웹툰 에디터가 자동으로 열립니다.</div>
+                  <button className="btn btn-primary" onClick={openBubbleEditor} style={{fontSize:14,padding:'10px 24px'}}>
+                    💬 웹툰 에디터 열기
+                  </button>
+                  {panels.filter(Boolean).length > 0 && (
+                    <div style={{marginTop:12,fontSize:12,color:'var(--text2)'}}>패널 이미지: {panels.filter(Boolean).length}개 로드됨</div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <div style={{fontSize:16,color:'var(--text2)'}}>위에서 에피소드를 선택해주세요</div>
+                </div>
+              )}
+            </div>
           ) : (
-            // Production workflow
+            // Production workflow (full mode)
             <>
               {/* ===== STEP 0: Source Input & Analysis ===== */}
               {step === 0 && (
@@ -9843,7 +9876,8 @@ Return ONLY the detailed English prompt, nothing else.`,
           )}
         </div>
 
-        {/* Log Panel */}
+        {/* Log Panel — hidden in editor mode */}
+        {!editorMode && (
         <div style={{marginTop:12}}>
           <div className="log-toggle" onClick={() => setLogCollapsed(!logCollapsed)}>
             <span>{logCollapsed ? '▶' : '▼'}</span>
@@ -9852,6 +9886,7 @@ Return ONLY the detailed English prompt, nothing else.`,
           </div>
           {!logCollapsed && <LogPanel logs={logs} />}
         </div>
+        )}
       </div>
 
       {/* AI Image Assistant Toggle Button */}
