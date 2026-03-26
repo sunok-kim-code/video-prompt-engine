@@ -3,5 +3,12 @@
     "api/ninjachat-images.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "editor.rhivclass.com" }],
+      "destination": "/?mode=editor"
+    }
+  ]
 }
