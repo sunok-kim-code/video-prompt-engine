@@ -7287,9 +7287,22 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       setEpisodes(episodeList);
 
       if (episodeList.length > 0) {
-        await loadEpisode(episodeList[0].number, pid, assets);
-      } else {
-        // Create first episode if none exist
+        // In editor mode, only load first published episode; in producer mode, load first episode
+        const firstEp = editorMode
+          ? episodeList.find(ep => ep.publishedToEditor)
+          : episodeList[0];
+        if (firstEp) {
+          const result = await loadEpisode(firstEp.number, pid, assets);
+          // In editor mode, auto-open bubble editor
+          if (editorMode && result) {
+            openBubbleEditor(result.panels, result.episodeNum);
+          }
+        } else if (editorMode) {
+          // No published episodes — show nothing
+          log('공개된 에피소드가 없습니다.', 'info');
+        }
+      } else if (!editorMode) {
+        // Create first episode if none exist (producer mode only)
         const newEpisode = {number: 1, title: '1화', createdAt: new Date().toISOString()};
         setEpisodes([newEpisode]);
         setCurrentEpisode(1);
@@ -8793,18 +8806,20 @@ Return ONLY the detailed English prompt, nothing else.`,
               setAnalysis(null); setReferences({characters:{},backgrounds:{}}); setStoryboard([]); setPanels([]);
               setStep(0); setCompletedSteps(new Set()); setSourceText('');
             }}>프로젝트 목록</button>
-            {episodes.map(ep => {
+            {episodes.filter(ep => !editorMode || ep.publishedToEditor).map(ep => {
               const isActive = ep.number === currentEpisode;
               const stepsDone = ep.completedSteps ? ep.completedSteps.length : 0;
               const isComplete = stepsDone >= 4;
               const isRenaming = renamingEpisode === ep.number;
               const displayName = ep.title && ep.title !== `${ep.number}화` ? ep.title : `${ep.number}화`;
+              const isPublished = !!ep.publishedToEditor;
               return (
                 <div
                   key={ep.number}
                   className={`episode-pill ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}
                   onClick={() => handleEpisodeClick(ep)}
-                  title={`${displayName} — ${stepsDone}/5 단계 완료`}
+                  title={`${displayName} — ${stepsDone}/5 단계 완료${!editorMode ? (isPublished ? ' (에디터 공개)' : ' (에디터 비공개)') : ''}`}
+                  style={!editorMode && isPublished ? {boxShadow: 'inset 0 -2px 0 0 #00b894'} : {}}
                 >
                   {isRenaming ? (
                     <input
@@ -8824,23 +8839,45 @@ Return ONLY the detailed English prompt, nothing else.`,
                   ) : (
                     <React.Fragment>
                       {displayName} {stepsDone > 0 && !isComplete && <span style={{fontSize:10,opacity:.7}}>({stepsDone}/5)</span>}{isComplete && '✓'}
-                      <button
-                        className="episode-rename-btn"
-                        onClick={(e) => startEpisodeRename(ep, e)}
-                        title="이름 변경"
-                        style={{marginLeft:3, background:'none', border:'none', cursor:'pointer', padding:'0 2px', fontSize:10, opacity:0.5, color:'inherit', lineHeight:1}}
-                      >✏️</button>
+                      {!editorMode && (
+                        <button
+                          className="episode-rename-btn"
+                          onClick={(e) => startEpisodeRename(ep, e)}
+                          title="이름 변경"
+                          style={{marginLeft:3, background:'none', border:'none', cursor:'pointer', padding:'0 2px', fontSize:10, opacity:0.5, color:'inherit', lineHeight:1}}
+                        >✏️</button>
+                      )}
+                      {!editorMode && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newVal = !isPublished;
+                            // Update local state
+                            setEpisodes(prev => prev.map(epi => epi.number === ep.number ? {...epi, publishedToEditor: newVal} : epi));
+                            // Save to Firebase
+                            if (projectId) fbSaveEpisode(projectId, ep.number, {publishedToEditor: newVal}).catch(err => console.warn('[publishToggle]', err));
+                            log(`${displayName} → 에디터 ${newVal ? '공개' : '비공개'}`, 'success');
+                          }}
+                          title={isPublished ? '에디터에게 비공개로 전환' : '에디터에게 공개'}
+                          style={{marginLeft:2, background:'none', border:'none', cursor:'pointer', padding:'0 2px', fontSize:11, opacity: isPublished ? 1 : 0.4, color:'inherit', lineHeight:1}}
+                        >{isPublished ? '👁️' : '👁️‍🗨️'}</button>
+                      )}
                     </React.Fragment>
                   )}
-                  <button
-                    className="episode-delete"
-                    onClick={(e) => { e.stopPropagation(); deleteEpisode(ep.number); }}
-                  >
-                    ×
-                  </button>
+                  {!editorMode && (
+                    <button
+                      className="episode-delete"
+                      onClick={(e) => { e.stopPropagation(); deleteEpisode(ep.number); }}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               );
             })}
+            {editorMode && episodes.length > 0 && episodes.filter(ep => ep.publishedToEditor).length === 0 && (
+              <span style={{fontSize:12, color:'#999', padding:'4px 8px'}}>공개된 에피소드가 없습니다</span>
+            )}
             {!editorMode && <button className="episode-add" onClick={createNewEpisode}>+ 새 화</button>}
           </div>
         )}
