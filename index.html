@@ -2444,6 +2444,7 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get('mode') === 'editor';
   });
+  const [editorPendingOpen, setEditorPendingOpen] = useState(false);
 
   // Episode Management
   const [episodes, setEpisodes] = useState([]);
@@ -5891,12 +5892,21 @@ Rules:
   const handleEpisodeClick = useCallback(async (ep) => {
     if (renamingEpisode === ep.number) return;
     await loadEpisode(ep.number);
-    // In editor mode, automatically open the webtoon editor after loading episode data
+    // In editor mode, flag that we want to auto-open editor after panels state updates
     if (editorMode) {
-      // Small delay to ensure panels state is updated
-      setTimeout(() => openBubbleEditor(), 500);
+      setEditorPendingOpen(true);
     }
   }, [renamingEpisode, loadEpisode, editorMode]);
+
+  // Auto-open bubble editor in editor mode once panels state is committed after loadEpisode
+  React.useEffect(() => {
+    if (editorMode && editorPendingOpen && !bubbleEditorOpen) {
+      setEditorPendingOpen(false);
+      const validCount = panels.filter(Boolean).length;
+      console.log('[EditorMode] Episode loaded, panels:', validCount + '/' + panels.length + ', auto-opening bubble editor');
+      openBubbleEditor();
+    }
+  }, [editorMode, editorPendingOpen, bubbleEditorOpen]);
 
   const commitRename = useCallback((episodeNum) => {
     if (renameValue.trim()) {
