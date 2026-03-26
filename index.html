@@ -2731,7 +2731,7 @@ Rules:
       // Save to shared assets
       const asset = sharedAssets.characters?.[charId];
       if (asset && projectId) {
-        const updated = {...asset, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', refPrompt: char.refPrompt};
+        const updated = {...asset, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', refPrompt: char.refPrompt, outfitPresets: char.outfitPresets || {}};
         await fbSaveAsset(projectId, 'characters', charId, updated);
         setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: updated}}));
       }
@@ -4507,7 +4507,8 @@ Rules:
         const s = states[cid];
         // Outfit: only changes on explicit outfitOverride
         if (pc.outfitOverride) {
-          s.changeLog.push({panel: i+1, field: 'outfit', from: s.outfit, to: pc.outfitOverride, desc: `패널${i+1}에서 의상 변경`});
+          const presetLabel = pc.outfitPreset ? ` [${pc.outfitPreset}]` : '';
+          s.changeLog.push({panel: i+1, field: 'outfit', from: s.outfit, to: pc.outfitOverride, desc: `패널${i+1}에서 의상 변경${presetLabel}`});
           s.outfit = pc.outfitOverride;
           s.lastChangedAt = i;
         }
@@ -6363,7 +6364,12 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
       const epO = episodeOutfits[c.id];
       const outfitLine = epO?.outfit ? `EPISODE OUTFIT (USE THIS): ${epO.outfit}` : `DEFAULT OUTFIT: ${c.outfit}`;
       const accLine = epO?.accessories ? ` - EPISODE ACCESSORIES: ${epO.accessories}` : (c.accessories && c.accessories !== 'none' ? ` - DEFAULT ACCESSORIES: ${c.accessories}` : '');
-      return `${c.id}: ${c.name} (${c.role}) - appearance: ${c.appearance} - ${outfitLine}${accLine}`;
+      // Include outfit presets if available
+      const presets = c.outfitPresets || {};
+      const presetLine = Object.keys(presets).length > 0
+        ? ` - OUTFIT PRESETS: ${Object.entries(presets).map(([name, p]) => `"${name}"(${p.outfit}${p.accessories ? ', acc: '+p.accessories : ''})`).join(', ')}`
+        : '';
+      return `${c.id}: ${c.name} (${c.role}) - appearance: ${c.appearance} - ${outfitLine}${accLine}${presetLine}`;
     }).join('\n');
     const bgContext = data.backgrounds.map(b => `${b.id}: ${b.name} - ${b.description}`).join('\n');
     const propContext = (data.props||[]).map(p => `${p.id}: ${p.name} - ${p.description}`).join('\n');
@@ -6402,9 +6408,11 @@ ${sourceTextRef.current}
 Each panel captures ONE scene entirely in a single image. Include ALL dialogue from that scene in the panel's dialogue array.
 Each panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details.
 CRITICAL: Do NOT split scenes into multiple panels. Do NOT skip any scene. Return exactly ${data.plotBeats?.length || 1} panels.
-OUTFIT RULE: Characters with "EPISODE OUTFIT" listed above MUST wear that outfit throughout this entire episode unless a plotBeat specifies an outfitOverride. Once a character changes outfit (outfitOverride), that outfit persists for ALL subsequent panels until another change occurs. Include outfitOverride in each panel's character entry to reflect the current outfit state.`
+OUTFIT RULE: Characters with "EPISODE OUTFIT" listed above MUST wear that outfit throughout this entire episode unless the story requires a change. Once a character changes outfit (outfitOverride), that outfit persists for ALL subsequent panels until another change occurs. Include outfitOverride in each panel's character entry to reflect the current outfit state.
+OUTFIT PRESETS: If a character has OUTFIT PRESETS listed above, use the preset name in "outfitPreset" field AND copy the preset's outfit text into "outfitOverride" when the story context matches a preset (e.g. school scene → "교복" preset, home scene → "잠옷" preset). Auto-detect scene context to select the right preset. If no preset matches, write a custom outfitOverride.`
   : `Create a complete webtoon storyboard with 20-40 panels. Each panel's imagePrompt must include FULL character appearance descriptions AND EXACT outfit details (not just IDs).
-CRITICAL: Characters with "EPISODE OUTFIT" listed above MUST wear that outfit throughout this entire episode unless an outfitOverride changes it. When an outfitOverride changes their outfit, that new outfit PERSISTS for ALL subsequent panels until another override. Include outfitOverride field in each panel's character entry to reflect current outfit. Include prop descriptions when they appear in a scene.`);
+CRITICAL: Characters with "EPISODE OUTFIT" listed above MUST wear that outfit throughout this entire episode unless an outfitOverride changes it. When an outfitOverride changes their outfit, that new outfit PERSISTS for ALL subsequent panels until another override. Include outfitOverride field in each panel's character entry to reflect current outfit. Include prop descriptions when they appear in a scene.
+OUTFIT PRESETS: If a character has OUTFIT PRESETS listed, use the preset name in "outfitPreset" field AND copy the preset's outfit text into "outfitOverride" when the story context matches a preset (e.g. school scene → "교복" preset, home → "잠옷"). Auto-detect scene context to select the right preset. If no preset matches, write a custom outfitOverride.`);
 
     let storyboardPrompt = inputModeRef.current === 'scene' ? PROMPTS.CREATE_SCENE_STORYBOARD : PROMPTS.CREATE_STORYBOARD;
     // TL mode: add mature content directive to storyboard prompt
@@ -6552,6 +6560,30 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       log(`스토리보드 완료: ${parsed.length}개 패널`, 'success');
     }
     parsed.forEach((p, i) => { if (!p._uid) p._uid = 'sb_' + Date.now() + '_' + i; });
+
+    // Post-process: resolve outfitPreset names to outfitOverride values
+    let presetApplied = 0;
+    parsed.forEach(panel => {
+      if (!panel.characters) return;
+      panel.characters.forEach(pc => {
+        if (pc.outfitPreset) {
+          const cid = pc.id || pc;
+          const charInfo = data.characters?.find(c => c.id === cid);
+          const presetData = charInfo?.outfitPresets?.[pc.outfitPreset];
+          if (presetData) {
+            if (!pc.outfitOverride || pc.outfitOverride === pc.outfitPreset) {
+              pc.outfitOverride = presetData.outfit;
+            }
+            if (presetData.accessories && !pc.accessoriesOverride) {
+              pc.accessoriesOverride = presetData.accessories;
+            }
+            presetApplied++;
+          }
+        }
+      });
+    });
+    if (presetApplied > 0) log(`의상 프리셋 자동 적용: ${presetApplied}개 패널`, 'success');
+
     setStoryboard(parsed);
     setPanels(new Array(parsed.length).fill(null));
     setCompletedSteps(prev => new Set([...prev, 2]));
@@ -9382,6 +9414,64 @@ Return ONLY the detailed English prompt, nothing else.`,
                                   value={c.accessories || ''} placeholder="안경, 시계, 목걸이, 가방 등"
                                   onChange={e => updateAnalysisChar(c.id, 'accessories', e.target.value)} />
                               </details>
+                              {/* Outfit Presets */}
+                              <details style={{marginTop:4}}>
+                                <summary style={{fontSize:11,color:'#00b894',cursor:'pointer',fontWeight:600}}>👔 의상 프리셋 ({Object.keys(c.outfitPresets || {}).length}개)</summary>
+                                <div style={{marginTop:4,display:'flex',flexDirection:'column',gap:4}}>
+                                  {Object.entries(c.outfitPresets || {}).map(([presetName, presetData]) => (
+                                    <div key={presetName} style={{padding:'4px 6px',background:'var(--surface2)',borderRadius:4,border:'1px solid var(--border)'}}>
+                                      <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2}}>
+                                        <span style={{fontSize:11,fontWeight:600,color:'#00b894'}}>{presetName}</span>
+                                        <button style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',fontSize:10,color:'var(--err)',padding:0}} onClick={() => {
+                                          const presets = {...(c.outfitPresets || {})};
+                                          delete presets[presetName];
+                                          updateAnalysisChar(c.id, 'outfitPresets', presets);
+                                        }}>✕</button>
+                                      </div>
+                                      <input style={{width:'100%',fontSize:10,padding:'2px 4px',borderRadius:3,border:'1px solid var(--border)',background:'var(--bg)',marginBottom:2}}
+                                        value={presetData.outfit || ''} placeholder="의상 설명 (영어)"
+                                        onChange={e => {
+                                          const presets = {...(c.outfitPresets || {}), [presetName]: {...presetData, outfit: e.target.value}};
+                                          updateAnalysisChar(c.id, 'outfitPresets', presets);
+                                        }} />
+                                      <input style={{width:'100%',fontSize:10,padding:'2px 4px',borderRadius:3,border:'1px solid var(--border)',background:'var(--bg)'}}
+                                        value={presetData.accessories || ''} placeholder="악세서리 (선택)"
+                                        onChange={e => {
+                                          const presets = {...(c.outfitPresets || {}), [presetName]: {...presetData, accessories: e.target.value}};
+                                          updateAnalysisChar(c.id, 'outfitPresets', presets);
+                                        }} />
+                                    </div>
+                                  ))}
+                                  <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                                    <input id={`newPreset_${c.id}`} style={{flex:1,fontSize:10,padding:'3px 6px',borderRadius:4,border:'1px solid var(--border)',background:'var(--bg)'}}
+                                      placeholder="프리셋 이름 (예: 교복, 사복, 잠옷)" onKeyDown={e => {
+                                        if (e.key === 'Enter' && e.target.value.trim()) {
+                                          const name = e.target.value.trim();
+                                          const presets = {...(c.outfitPresets || {}), [name]: {outfit: '', accessories: ''}};
+                                          updateAnalysisChar(c.id, 'outfitPresets', presets);
+                                          e.target.value = '';
+                                        }
+                                      }} />
+                                    <button className="btn btn-xs" style={{fontSize:10,padding:'2px 8px',background:'#00b894',color:'#fff',border:'none'}}
+                                      onClick={() => {
+                                        const inp = document.getElementById(`newPreset_${c.id}`);
+                                        if (inp?.value.trim()) {
+                                          const name = inp.value.trim();
+                                          const presets = {...(c.outfitPresets || {}), [name]: {outfit: '', accessories: ''}};
+                                          updateAnalysisChar(c.id, 'outfitPresets', presets);
+                                          inp.value = '';
+                                        }
+                                      }}>+ 추가</button>
+                                  </div>
+                                  {c.outfit && !Object.values(c.outfitPresets || {}).some(p => p.outfit === c.outfit) && (
+                                    <button className="btn btn-xs" style={{fontSize:10,color:'#00b894',border:'1px solid #00b894',background:'transparent'}}
+                                      onClick={() => {
+                                        const presets = {...(c.outfitPresets || {}), ['기본']: {outfit: c.outfit, accessories: c.accessories || ''}};
+                                        updateAnalysisChar(c.id, 'outfitPresets', presets);
+                                      }}>↑ 현재 기본 의상을 "기본" 프리셋으로 등록</button>
+                                  )}
+                                </div>
+                              </details>
                               {/* Episode outfit inline */}
                               {currentEpisode && (
                                 <div style={{marginTop:4,padding:'6px 8px',background:'linear-gradient(135deg,#ffeaa7,#fdcb6e22)',borderRadius:6,border:'1px solid #f9ca24'}}>
@@ -9705,13 +9795,13 @@ Return ONLY the detailed English prompt, nothing else.`,
                                         setStoryboard(prev => prev.map((p, pi) => {
                                           if (pi !== i) return p;
                                           const updatedChars = (p.characters || []).map(pc => {
-                                            const {outfitOverride, ...rest} = pc;
+                                            const {outfitOverride, outfitPreset, accessoriesOverride, ...rest} = pc;
                                             return rest;
                                           });
                                           return {...p, characters: updatedChars};
                                         }));
                                         log(`패널 ${i+1} 의상 변경 취소됨 (기본 의상으로 복원)`, 'success');
-                                      }}>의상변경 ✕</span>}
+                                      }}>{panel.characters.find(pc => pc.outfitPreset)?.outfitPreset ? `👔${panel.characters.find(pc => pc.outfitPreset).outfitPreset} ✕` : '의상변경 ✕'}</span>}
                                       {i > 0 && panel.characters?.some(pc => {
                                         if (!pc.pose) return false;
                                         const prev = storyboard[i-1]?.characters?.find(c => (c.id||c) === (pc.id||pc));
@@ -9734,6 +9824,45 @@ Return ONLY the detailed English prompt, nothing else.`,
                                       }}>포즈변경 ✕</span>}
                                       <button className="btn btn-outline btn-xs" style={{marginLeft:'auto',fontSize:10}} onClick={() => startSbEdit(i)}>수정</button>
                                     </div>
+                                    {/* Outfit preset selectors per character */}
+                                    {panel.characters?.length > 0 && analysis?.characters?.some(c => Object.keys(c.outfitPresets || {}).length > 0) && (
+                                      <div style={{display:'flex',gap:3,flexWrap:'wrap',marginBottom:4}}>
+                                        {panel.characters.map(pc => {
+                                          const cid = pc.id || pc;
+                                          const charInfo = analysis?.characters?.find(c => c.id === cid);
+                                          if (!charInfo || !charInfo.outfitPresets || Object.keys(charInfo.outfitPresets).length === 0) return null;
+                                          const presets = charInfo.outfitPresets;
+                                          const currentPreset = pc.outfitPreset || '';
+                                          return (
+                                            <select key={cid} style={{fontSize:10,padding:'1px 4px',borderRadius:4,border:'1px solid #00b894',background:currentPreset ? '#d5f5e3' : 'var(--bg)',color:'#333',cursor:'pointer',maxWidth:120}}
+                                              value={currentPreset}
+                                              title={`${charInfo.name} 의상 프리셋`}
+                                              onChange={(e) => {
+                                                const presetName = e.target.value;
+                                                const presetData = presetName ? presets[presetName] : null;
+                                                setStoryboard(prev => prev.map((p, pi) => {
+                                                  if (pi !== i) return p;
+                                                  const updatedChars = (p.characters || []).map(c => {
+                                                    if ((c.id || c) !== cid) return c;
+                                                    if (presetName && presetData) {
+                                                      return {...c, outfitPreset: presetName, outfitOverride: presetData.outfit, accessoriesOverride: presetData.accessories || undefined};
+                                                    } else {
+                                                      const {outfitPreset, outfitOverride, accessoriesOverride, ...rest} = c;
+                                                      return rest;
+                                                    }
+                                                  });
+                                                  return {...p, characters: updatedChars};
+                                                }));
+                                                if (presetName) log(`패널 ${i+1} ${charInfo.name} → "${presetName}" 의상 적용`, 'success');
+                                                else log(`패널 ${i+1} ${charInfo.name} → 기본 의상 복원`, 'success');
+                                              }}>
+                                              <option value="">{charInfo.name}: 기본</option>
+                                              {Object.keys(presets).map(pn => <option key={pn} value={pn}>{charInfo.name}: {pn}</option>)}
+                                            </select>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
                                     {/* Character state summary */}
                                     {i > 0 && panel.characters?.length > 0 && (() => {
                                       const cs = buildCharacterStates(storyboard, analysis, i);
@@ -9743,7 +9872,8 @@ Return ONLY the detailed English prompt, nothing else.`,
                                         if (!s) return null;
                                         const name = analysis?.characters?.find(c => c.id === cid)?.name || cid;
                                         const parts = [];
-                                        if (s.outfit) parts.push(s.outfit.length > 30 ? s.outfit.substring(0,30)+'…' : s.outfit);
+                                        const presetLabel = pc.outfitPreset ? `👔${pc.outfitPreset}` : (s.outfit ? (s.outfit.length > 30 ? s.outfit.substring(0,30)+'…' : s.outfit) : '');
+                                        if (presetLabel) parts.push(presetLabel);
                                         if (s.pose) parts.push(s.pose);
                                         return parts.length > 0 ? `${name}: ${parts.join(' / ')}` : null;
                                       }).filter(Boolean);
