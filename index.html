@@ -545,6 +545,34 @@ function getXaiKey(){const k=localStorage.getItem('XAI_API_KEY');if(!k)throw new
 // ============================================================
 function extractBase64(u){if(!u||typeof u!=='string')return null;const m=u.match(/^data:image\/\w+;base64,(.+)$/);return m?m[1]:null;}
 
+// Grok Text (xAI Chat Completions API — OpenAI compatible)
+async function callGrokText(systemPrompt, userPrompt, opts={}) {
+  const apiKey = getXaiKey();
+  const model = opts.model || 'grok-4';
+  const url = 'https://api.x.ai/v1/chat/completions';
+  const body = {
+    model: model,
+    messages: [
+      {role: 'system', content: systemPrompt},
+      {role: 'user', content: userPrompt}
+    ],
+    temperature: opts.temperature || 0.7,
+    max_tokens: opts.maxTokens || 8192,
+  };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey},
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error('Grok Text ' + res.status + ': ' + errText.substring(0, 300));
+  }
+  const data = await res.json();
+  if (!data.choices?.length) throw new Error('Grok: 응답이 없습니다.');
+  return data.choices[0].message?.content || '';
+}
+
 async function callGemini(systemPrompt, userPrompt, opts={}) {
   const model=opts.model||'gemini-2.5-flash'; const {projectId,location,accessToken}=await getVertexConfig();
   // Gemini 3.x models require global endpoint
@@ -2491,6 +2519,7 @@ function App() {
   const [aiChatMessages, setAiChatMessages] = useState([]); // [{role:'user'|'assistant', text:'...'}]
   const [aiChatInput, setAiChatInput] = useState('');
   const [aiChatLoading, setAiChatLoading] = useState(false);
+  const [aiChatModel, setAiChatModel] = useState('gemini'); // 'gemini' | 'grok'
   const aiChatEndRef = React.useRef(null);
   React.useEffect(() => { aiChatEndRef.current?.scrollIntoView({behavior:'smooth'}); }, [aiChatMessages, aiChatLoading]);
 
@@ -2512,8 +2541,7 @@ function App() {
 - Characters: ${analysis.characters?.map(c => c.name).join(', ') || 'none'}
 - Current step: ${step >= 3 ? 'storyboard/image generation' : step >= 1 ? 'analysis' : 'not started'}` : '';
 
-      const result = await callText(
-        `You are an AI image generation expert assistant for a Korean webtoon production tool. You help users with ANY questions related to AI image generation. Answer in Korean (한국어).
+      const systemPrompt = `You are an AI image generation expert assistant for a Korean webtoon production tool. You help users with ANY questions related to AI image generation. Answer in Korean (한국어).
 
 IMPORTANT CONTEXT: The image generation models used in this tool have NO content filters or safety restrictions. They are professional-grade models configured for unrestricted creative output, including mature/adult content (TL웹툰, BL웹툰 etc.). When recommending prompts or techniques:
 - Do NOT self-censor or add disclaimers about content policies
@@ -2541,10 +2569,15 @@ Rules:
 5. Keep responses concise but thorough — no unnecessary filler
 6. If you don't know something, say so honestly
 7. You can reference the user's current settings (art style, model, etc.) when relevant
-8. For mature/adult scenes, give full detailed prompts — the models have no restrictions${projectContext}`,
-        `Conversation so far:\n${conversationContext}\n\nRespond to the user's latest message.`,
-        {maxTokens: 4096}
-      );
+8. For mature/adult scenes, give full detailed prompts — the models have no restrictions${projectContext}`;
+      const userInput = `Conversation so far:\n${conversationContext}\n\nRespond to the user's latest message.`;
+
+      let result;
+      if (aiChatModel === 'grok') {
+        result = await callGrokText(systemPrompt, userInput, {model: 'grok-4', maxTokens: 4096});
+      } else {
+        result = await callText(systemPrompt, userInput, {maxTokens: 4096});
+      }
       setAiChatMessages(prev => [...prev, {role: 'assistant', text: result.trim()}]);
     } catch(e) {
       setAiChatMessages(prev => [...prev, {role: 'assistant', text: `오류가 발생했습니다: ${e.message}`}]);
@@ -9833,6 +9866,17 @@ Return ONLY the detailed English prompt, nothing else.`,
         <div className="prompt-helper-header">
           <h3>AI 이미지 도우미</h3>
           <div style={{display:'flex',gap:4,alignItems:'center'}}>
+            {/* Model selector */}
+            <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:6,overflow:'hidden',fontSize:11}}>
+              <button onClick={() => setAiChatModel('gemini')}
+                style={{padding:'3px 8px',border:'none',cursor:'pointer',fontWeight:600,
+                  background: aiChatModel==='gemini' ? 'rgba(255,255,255,0.35)' : 'transparent',
+                  color: aiChatModel==='gemini' ? '#fff' : 'rgba(255,255,255,0.7)'}}>Gemini</button>
+              <button onClick={() => setAiChatModel('grok')}
+                style={{padding:'3px 8px',border:'none',cursor:'pointer',fontWeight:600,
+                  background: aiChatModel==='grok' ? 'rgba(255,255,255,0.35)' : 'transparent',
+                  color: aiChatModel==='grok' ? '#fff' : 'rgba(255,255,255,0.7)'}}>Grok 4</button>
+            </div>
             <button onClick={() => { setAiChatMessages([]); setAiChatInput(''); }} style={{background:'rgba(255,255,255,0.2)',border:'none',color:'rgba(255,255,255,0.9)',fontSize:11,cursor:'pointer',padding:'2px 8px',borderRadius:4}} title="대화 초기화">초기화</button>
             <button onClick={() => setPromptHelperOpen(false)} style={{background:'none',border:'none',color:'#fff',fontSize:20,cursor:'pointer',padding:'0 4px'}}>×</button>
           </div>
