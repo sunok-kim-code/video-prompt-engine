@@ -2442,7 +2442,8 @@ function App() {
   // Editor-only mode: ?mode=editor in URL hides Steps 1-4 and shows only the webtoon editor
   const [editorMode] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('mode') === 'editor';
+    const host = window.location.hostname;
+    return params.get('mode') === 'editor' || host === 'editor.rhivclass.com';
   });
 
   // Episode Management
