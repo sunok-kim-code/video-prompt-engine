@@ -7994,7 +7994,28 @@ Return ONLY the detailed English prompt, nothing else.`,
     input.click();
   };
 
-  // [REMOVED] saveEpisodeOutfits — outfit management now via character outfitPresets
+  // 패널 이미지 재로딩 (Firebase에서 최신 이미지만 가져오기)
+  const reloadPanelImage = async (panelIndex, editorPageIdx, objId) => {
+    if (!projectId || !currentEpisode) { log('Firebase 미연결 상태입니다.', 'error'); return; }
+    try {
+      log(`패널 ${panelIndex + 1} 이미지 새로고침 중...`, 'info');
+      const s4 = await fbLoadPhase(projectId, currentEpisode, 'step4_panels');
+      if (!s4?.panels?.[panelIndex]) {
+        log(`패널 ${panelIndex + 1} 이미지가 Firebase에 없습니다.`, 'error');
+        return;
+      }
+      const newSrc = s4.panels[panelIndex];
+      // 1) 에디터 객체 src 업데이트
+      updatePageObject(editorPageIdx, objId, {src: newSrc});
+      // 2) panels 배열 업데이트
+      const newPanels = [...panels];
+      newPanels[panelIndex] = newSrc;
+      setPanels(newPanels);
+      log(`✓ 패널 ${panelIndex + 1} 이미지 새로고침 완료`, 'success');
+    } catch(err) {
+      log(`패널 이미지 새로고침 실패: ${err.message}`, 'error');
+    }
+  };
 
   // Firebase에 전체 패널 명시적 저장
   const savePanelsToFirebase = async () => {
@@ -9394,6 +9415,9 @@ Return ONLY the detailed English prompt, nothing else.`,
                               )}
                               {obj.panelIndex !== undefined && (
                                 <button className="be-crop-btn" style={{background:'#e67e22'}} onClick={(e) => {e.stopPropagation(); replacePanelImage(obj.panelIndex, currentPageIdx, obj.id);}}>🔄 이미지 교체</button>
+                              )}
+                              {obj.panelIndex !== undefined && (
+                                <button className="be-crop-btn" style={{background:'#3498db'}} onClick={(e) => {e.stopPropagation(); reloadPanelImage(obj.panelIndex, currentPageIdx, obj.id);}}>🔃 새로고침</button>
                               )}
                             </React.Fragment>
                           )}
