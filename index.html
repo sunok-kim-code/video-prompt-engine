@@ -368,9 +368,12 @@ async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImag
   const retryWrite = async (fn, attempts) => {
     for (let a = 0; a < (attempts||3); a++) {
       try { await fn(); return; } catch(e) {
-        if (a < (attempts||3)-1 && (e.code === 'resource-exhausted' || e.message?.includes('exhausted'))) {
-          console.warn(`[fbSavePhase] resource-exhausted, retry ${a+1}/${attempts||3} after ${3*(a+1)}s...`);
-          await new Promise(r => setTimeout(r, 3000*(a+1)));
+        const retryable = e.code === 'resource-exhausted' || e.code === 'unavailable' || e.message?.includes('exhausted') || e.message?.includes('queued writes');
+        if (a < (attempts||3)-1 && retryable) {
+          const wait = 5000 * (a + 1); // 5s, 10s, 15s, 20s
+          console.warn(`[fbSavePhase] ${e.code || 'error'}, retry ${a+1}/${attempts||3} after ${wait/1000}s...`);
+          if (onProgress) onProgress(-1, imgs.length, `재시도 대기 ${wait/1000}초...`);
+          await new Promise(r => setTimeout(r, wait));
         } else throw e;
       }
     }
@@ -392,30 +395,24 @@ async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImag
       await Promise.all(delBatches);
     }
   } catch(e) { console.warn('[fbSavePhase] old image cleanup failed:', e.message); }
-  // Save images in parallel batches (3 concurrent) for speed
+  // Save images sequentially to avoid Firestore write stream exhaustion
   const CHUNK_SIZE = 800000;
-  const CONCURRENT = 3;
-  for (let i = 0; i < imgs.length; i += CONCURRENT) {
-    const batch = imgs.slice(i, i + CONCURRENT);
-    await Promise.all(batch.map((im, bi) => retryWrite(async () => {
+  for (let i = 0; i < imgs.length; i++) {
+    const im = imgs[i];
+    await retryWrite(async () => {
       if (im.data.length > 900000) {
         const cn = Math.ceil(im.data.length / CHUNK_SIZE);
         await imgColl.doc(im.id).set({key: im.key, chunks: cn});
-        // Save chunks with limited parallelism (2 at a time)
-        for (let c = 0; c < cn; c += 2) {
-          const chunkOps = [];
-          for (let cc = c; cc < Math.min(c + 2, cn); cc++) {
-            chunkOps.push(imgColl.doc(im.id + '_c' + cc).set({data: im.data.substring(cc * CHUNK_SIZE, (cc + 1) * CHUNK_SIZE), idx: cc}));
-          }
-          await Promise.all(chunkOps);
+        // Save chunks one at a time to prevent write queue overflow
+        for (let c = 0; c < cn; c++) {
+          await imgColl.doc(im.id + '_c' + c).set({data: im.data.substring(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE), idx: c});
         }
       } else {
         await imgColl.doc(im.id).set({key: im.key, data: im.data});
       }
-    }, 4)));
-    const done = Math.min(i + CONCURRENT, imgs.length);
-    console.log(`[fbSavePhase] 이미지 ${done}/${imgs.length} 저장 완료`);
-    if (onProgress) onProgress(done, imgs.length, `이미지 ${done}/${imgs.length}`);
+    }, 4);
+    console.log(`[fbSavePhase] 이미지 ${i + 1}/${imgs.length} 저장 완료`);
+    if (onProgress) onProgress(i + 1, imgs.length, `이미지 ${i + 1}/${imgs.length}`);
   }
 }
 
