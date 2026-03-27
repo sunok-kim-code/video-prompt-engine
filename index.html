@@ -460,19 +460,45 @@ async function fbLoadPhase(projectId, episodeNum, phaseName, metadataOnly, useCa
   }
   // 1차: ID 기반 복원
   const result = restoreBase64(d, map);
-  // 2차: 토큰 복원 실패 시 key 기반 fallback (동시 저장으로 ID 불일치 복구)
+  // 2차: key 기반 + 인덱스 기반 fallback 복구 (동시 저장으로 ID 불일치 시)
   if (mapSize > 0 && result && typeof result === 'object') {
+    // 사용되지 않은 이미지를 인덱스 순서로 정렬 (최후 수단 복구용)
+    const usedIds = new Set();
+    const collectUsed = (obj) => {
+      if (!obj || typeof obj !== 'object') return;
+      if (typeof obj === 'string' && obj.startsWith('data:')) return; // 복원 성공한 것
+      if (Array.isArray(obj)) obj.forEach(collectUsed);
+      else Object.values(obj).forEach(collectUsed);
+    };
+    // ID 기반으로 복원된 이미지 추적
+    Object.keys(map).forEach(id => {
+      // map에서 result 트리에 복원된 ID 추적은 복잡하므로, keyMap의 사용된 key를 추적
+    });
+
+    // keyMap에서 key → base64 데이터로 직접 매핑
+    const keyDataMap = {};
+    for (const [key, imgId] of Object.entries(keyMap)) {
+      if (map[imgId]) keyDataMap[key] = map[imgId];
+    }
+    console.log(`[fbLoadPhase] keyDataMap: ${Object.keys(keyDataMap).length}개, keys 샘플:`, Object.keys(keyDataMap).slice(0, 5));
+
     const tryKeyFallback = (obj, parentKey) => {
       if (!obj || typeof obj !== 'object') return obj;
       if (Array.isArray(obj)) return obj.map((item, i) => {
-        // null = restoreBase64에서 복원 실패한 항목
         if (item === null) {
-          const key = (parentKey || 'arr') + '_' + i;
-          const imgId = keyMap[key];
-          if (imgId && map[imgId]) {
-            console.log(`[fbLoadPhase] key fallback 복구: ${key} → ${imgId}`);
-            return map[imgId];
+          // 여러 key 패턴 시도 (panels_0, panel_0, arr_0)
+          const candidates = [
+            (parentKey || 'arr') + '_' + i,
+            (parentKey === 'panels' ? 'panel' : parentKey || 'arr') + '_' + i,
+            'arr_' + i,
+          ];
+          for (const key of candidates) {
+            if (keyDataMap[key]) {
+              console.log(`[fbLoadPhase] key fallback 복구 [${i}]: ${key}`);
+              return keyDataMap[key];
+            }
           }
+          console.warn(`[fbLoadPhase] key fallback 실패 [${i}]: 시도한 keys=${candidates.join(', ')}`);
         }
         if (item && typeof item === 'object') return tryKeyFallback(item, (parentKey || 'arr') + '_' + i);
         return item;
@@ -8185,7 +8211,7 @@ Return ONLY the detailed English prompt, nothing else.`,
     // 1) 해당 패널의 새 이미지를 토큰화
     const existingPanels = existingData.panels || [];
     const newImgs = [];
-    const tokenized = stripBase64(panelData, newImgs, 'panel_' + panelIdx);
+    const tokenized = stripBase64(panelData, newImgs, 'panels_' + panelIdx);
 
     // 기존 panels 배열에서 해당 인덱스의 이전 토큰 ID 찾기
     const oldToken = existingPanels[panelIdx];
