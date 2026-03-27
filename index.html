@@ -4528,7 +4528,7 @@ Rules:
       ctx.translate(bx, by);
       const cl = buildConcentrationLines(bw, bh, b.concentrationPadding || 0);
       // Draw lines as strokes
-      ctx.strokeStyle = bt.border || '#000';
+      ctx.strokeStyle = b.concentrationColor || bt.border || '#000';
       ctx.lineCap = 'round';
       cl.lines.forEach(ln => {
         ctx.lineWidth = ln.sw;
@@ -9646,12 +9646,20 @@ Return ONLY the detailed English prompt, nothing else.`,
                           onChange={e => updatePageObject(currentPageIdx, obj.id, {bubblePadding: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
                         <span className="be-ctrl-val" style={{minWidth:24}}>{obj.bubblePadding ?? (bt.defaultPadding || 0)}</span>
                       </div>}
-                      {bt.concentrationLines && <div className="be-ctrl-row">
+                      {bt.concentrationLines && <React.Fragment>
+                      <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>여백</label>
                         <input type="range" min="-30" max="50" value={obj.concentrationPadding ?? 0} onClick={e=>e.stopPropagation()}
                           onChange={e => updatePageObject(currentPageIdx, obj.id, {concentrationPadding: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
                         <span className="be-ctrl-val" style={{minWidth:24}}>{obj.concentrationPadding ?? 0}</span>
-                      </div>}
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>선 색상</label>
+                        <input type="color" value={obj.concentrationColor || '#000000'} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {concentrationColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                        {obj.concentrationColor && <button className="be-ctrl-reset" onClick={e=>{e.stopPropagation(); updatePageObject(currentPageIdx, obj.id, {concentrationColor: null});}}>초기화</button>}
+                      </div>
+                      </React.Fragment>}
                       {bt.svgBalloon && <React.Fragment>
                         <div className="be-ctrl-row">
                           <label className="be-ctrl-label" style={{flexShrink:0}}>선 두께</label>
