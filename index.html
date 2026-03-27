@@ -4400,12 +4400,14 @@ Rules:
 
   // Build manga-style concentration lines (집중선)
   // Thin dense lines radiating from elliptical center — stroke-based, not filled wedges
-  const buildConcentrationLines = (w, h, padding) => {
+  const buildConcentrationLines = (w, h, padding, outerMargin) => {
     const cx = w / 2, cy = h / 2;
     // padding: -50 ~ +50, 기본 0 → innerR 비율 0.22. 음수=텍스트 영역 축소, 양수=확대
     const baseR = 0.22;
     const rFactor = Math.max(0.08, Math.min(0.45, baseR + (padding || 0) * 0.004));
     const innerRx = w * rFactor, innerRy = h * rFactor;
+    // outerMargin: 0~50, 기본 0. 값이 클수록 바깥쪽 여백이 넓어짐 (선이 짧아짐)
+    const outerScale = Math.max(0.3, 1.0 - (outerMargin || 0) * 0.014);
     const lines = []; // {sx,sy,ex,ey,sw} — start, end, strokeWidth
     const rand = (i, off) => { const x = Math.sin(42 + i * 127.1 + off * 311.7) * 43758.5453; return x - Math.floor(x); };
 
@@ -4427,14 +4429,16 @@ Rules:
         const sx = cx + cosA * innerRx * startDist;
         const sy = cy + sinA * innerRy * startDist;
 
-        // End — varied length
+        // End — varied length, scaled by outerScale (outerMargin)
         const lenType = rand(c * 10 + li, 5);
         let lenMult;
         if (lenType < 0.25) lenMult = 0.25 + rand(c * 10 + li, 6) * 0.15;
         else if (lenType < 0.65) lenMult = 0.45 + rand(c * 10 + li, 6) * 0.2;
         else lenMult = 0.65 + rand(c * 10 + li, 6) * 0.3;
-        const outerDist = innerRx * (1.3 + lenMult * 0.75);
-        const outerDistY = innerRy * (1.3 + lenMult * 0.75);
+        const maxReachX = (cx - innerRx) * outerScale;
+        const maxReachY = (cy - innerRy) * outerScale;
+        const outerDist = innerRx + maxReachX * (0.3 + lenMult * 0.7);
+        const outerDistY = innerRy + maxReachY * (0.3 + lenMult * 0.7);
         const ex = cx + cosA * outerDist;
         const ey = cy + sinA * outerDistY;
 
@@ -4526,7 +4530,7 @@ Rules:
       // 집중선 — thin stroke lines radiating from center
       ctx.save();
       ctx.translate(bx, by);
-      const cl = buildConcentrationLines(bw, bh, b.concentrationPadding || 0);
+      const cl = buildConcentrationLines(bw, bh, b.concentrationPadding || 0, b.concentrationOuterMargin || 0);
       // Draw lines as strokes
       ctx.strokeStyle = b.concentrationColor || bt.border || '#000';
       ctx.lineCap = 'round';
@@ -9648,10 +9652,16 @@ Return ONLY the detailed English prompt, nothing else.`,
                       </div>}
                       {bt.concentrationLines && <React.Fragment>
                       <div className="be-ctrl-row">
-                        <label className="be-ctrl-label" style={{flexShrink:0}}>여백</label>
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>안쪽 여백</label>
                         <input type="range" min="-30" max="50" value={obj.concentrationPadding ?? 0} onClick={e=>e.stopPropagation()}
                           onChange={e => updatePageObject(currentPageIdx, obj.id, {concentrationPadding: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
                         <span className="be-ctrl-val" style={{minWidth:24}}>{obj.concentrationPadding ?? 0}</span>
+                      </div>
+                      <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>바깥 여백</label>
+                        <input type="range" min="0" max="50" value={obj.concentrationOuterMargin ?? 0} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {concentrationOuterMargin: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
+                        <span className="be-ctrl-val" style={{minWidth:24}}>{obj.concentrationOuterMargin ?? 0}</span>
                       </div>
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>선 색상</label>
