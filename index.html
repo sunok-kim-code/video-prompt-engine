@@ -2892,6 +2892,16 @@ Rules:
   const dragRef = React.useRef(null); // {type:'move'|'resize', pageIdx, objId, startX, startY, origX, origY, origW, origH}
   const [dropTargetPageIdx, setDropTargetPageIdx] = useState(null); // highlight page during cross-page drag
 
+  // Translation / language state
+  const [editorLanguage, setEditorLanguage] = useState('ko'); // 'ko' | 'ja'
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  // Helper: get display text for current language
+  const getObjText = (obj) => {
+    if (editorLanguage === 'ja' && obj.translations?.ja) return obj.translations.ja;
+    return obj.text || '';
+  };
+
   // Crop mode state
   const [cropMode, setCropMode] = useState(null); // {pageIdx, objId} or null
   const [cropRect, setCropRect] = useState(null); // {x, y, w, h} in % of image (0-100)
@@ -3525,6 +3535,81 @@ Rules:
     setBubbleEditorOpen(false);
     setEditorPages([]);
     setCurrentPageIdx(0);
+    setEditorLanguage('ko');
+  };
+
+  // ======== Batch Translation (Gemini) ========
+  const translateAllTexts = async () => {
+    if (isTranslating) return;
+    if (!hasGeminiKey()) { log('Vertex AI / Gemini API 키를 먼저 설정해주세요.', 'error'); return; }
+
+    // Collect all text objects across all pages
+    const textItems = [];
+    editorPages.forEach((page, pi) => {
+      (page.objects || []).forEach(obj => {
+        if ((obj.type === 'bubble' || obj.type === 'sfx') && obj.text && obj.text.trim()) {
+          const bt = obj.type === 'bubble' ? (BUBBLE_TYPES[obj.bubbleStyle] || BUBBLE_TYPES.speech) : null;
+          const label = obj.type === 'sfx' ? '효과음' : (bt?.name || '말풍선');
+          textItems.push({ pageIdx: pi, objId: obj.id, text: obj.text, type: obj.type, label });
+        }
+      });
+    });
+
+    if (textItems.length === 0) { log('번역할 텍스트가 없습니다.', 'info'); return; }
+
+    setIsTranslating(true);
+    log(`${textItems.length}개 텍스트 일본어 번역 중...`, 'info');
+
+    try {
+      // Build structured prompt for context-aware translation
+      const textList = textItems.map((item, i) => `[${i}] (${item.label}) ${item.text}`).join('\n');
+      const systemPrompt = `You are a professional Korean-to-Japanese webtoon translator. Translate the following Korean webtoon texts to natural Japanese.
+
+Rules:
+- For speech bubbles (말풍선, 나레이션, etc.): translate naturally as manga dialogue
+- For sound effects (효과음/SFX): translate to common Japanese manga onomatopoeia (e.g., 쾅→ドカーン, 두근두근→ドキドキ, 콰광→ズドーン, 슈우→シュウ, 펑→バーン, 쿵→ドスン, 짠→ジャーン)
+- Keep the tone and emotion of the original text
+- Return ONLY a JSON array of translated strings in the same order, no explanation
+- Example output: ["こんにちは", "ドキドキ", "何を言ってるの？"]`;
+
+      const userPrompt = `Translate these ${textItems.length} Korean webtoon texts to Japanese:\n\n${textList}\n\nReturn ONLY a JSON array of ${textItems.length} translated strings.`;
+
+      const result = await callGemini(systemPrompt, userPrompt, { temperature: 0.3, maxTokens: 4096 });
+
+      // Parse JSON array from response
+      const jsonMatch = result.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) throw new Error('번역 결과를 파싱할 수 없습니다.');
+      const translations = JSON.parse(jsonMatch[0]);
+
+      if (translations.length !== textItems.length) {
+        console.warn(`[translate] Expected ${textItems.length} translations, got ${translations.length}`);
+      }
+
+      // Apply translations to editor pages
+      setEditorPages(prev => {
+        const next = prev.map(page => ({...page, objects: page.objects.map(o => ({...o}))}));
+        textItems.forEach((item, i) => {
+          if (i < translations.length && translations[i]) {
+            const page = next[item.pageIdx];
+            if (page) {
+              const obj = page.objects.find(o => o.id === item.objId);
+              if (obj) {
+                obj.translations = { ...(obj.translations || {}), ja: translations[i] };
+              }
+            }
+          }
+        });
+        return next;
+      });
+
+      setEditorLanguage('ja');
+      log(`✓ ${translations.length}개 텍스트 일본어 번역 완료!`, 'success');
+    } catch(e) {
+      console.error('[translate]', e);
+      log('번역 실패: ' + e.message, 'error');
+    } finally {
+      setIsTranslating(false);
+    }
   };
 
   const addPage = () => {
@@ -4294,13 +4379,14 @@ Rules:
 
     // Draw text
     ctx.shadowColor = 'transparent';
-    if (b.text) {
+    const displayText = getObjText(b);
+    if (displayText) {
       const fs = Math.max(12, (b.fontSize || 25)) * scale;
       const ff = b.fontFamily || "'Noto Sans KR',sans-serif";
       ctx.font = `${b.fontWeight || bt.fontWeight} ${fs}px ${ff}`;
       ctx.fillStyle = b.customColor || bt.color || '#111';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const lines = b.text.split('\n');
+      const lines = displayText.split('\n');
       const lh = fs * 1.3;
       const txOff = (b.textOffsetX || 0) * scale;
       const tyOff = (b.textOffsetY || 0) * scale;
@@ -4376,7 +4462,8 @@ Rules:
       ctx.lineWidth = (obj.strokeWidth || 1.5) * scale * 2;
       ctx.lineJoin = 'round';
       ctx.miterLimit = 2;
-      const lines = (obj.text || '').split('\n');
+      const sfxDisplayText = getObjText(obj);
+      const lines = (sfxDisplayText).split('\n');
       const lh = fs * 1.1;
       const startY = -(lines.length - 1) * lh / 2;
       lines.forEach((l, i) => ctx.strokeText(l, 0, startY + i * lh));
@@ -4384,7 +4471,8 @@ Rules:
     // Fill
     ctx.shadowColor = 'transparent';
     ctx.fillStyle = fillColor;
-    const lines = (obj.text || '').split('\n');
+    const sfxDisplayText2 = getObjText(obj);
+    const lines = (sfxDisplayText2).split('\n');
     const lh = fs * 1.1;
     const startY = -(lines.length - 1) * lh / 2;
     lines.forEach((l, i) => ctx.fillText(l, 0, startY + i * lh));
@@ -8541,6 +8629,18 @@ Return ONLY the detailed English prompt, nothing else.`,
             }} style={{fontSize:12}}>배치 초기화</button>
             <button className="btn btn-outline btn-sm" onClick={compactEditorLayout} style={{fontSize:12}}>빈 공간 정리</button>
             <div className="be-divider" />
+            {/* Translation controls */}
+            <div style={{display:'flex',alignItems:'center',gap:4}}>
+              <button className={`btn btn-sm`} style={{fontSize:11,padding:'3px 8px',background:editorLanguage==='ko'?'#3b82f6':'transparent',color:editorLanguage==='ko'?'#fff':'#aaa',border:'1px solid '+(editorLanguage==='ko'?'#3b82f6':'#555'),borderRadius:'4px 0 0 4px'}}
+                onClick={() => setEditorLanguage('ko')}>🇰🇷 KR</button>
+              <button className={`btn btn-sm`} style={{fontSize:11,padding:'3px 8px',background:editorLanguage==='ja'?'#ef4444':'transparent',color:editorLanguage==='ja'?'#fff':'#aaa',border:'1px solid '+(editorLanguage==='ja'?'#ef4444':'#555'),borderRadius:'0 4px 4px 0',marginLeft:-1}}
+                onClick={() => setEditorLanguage('ja')}>🇯🇵 JP</button>
+              <button className="btn btn-outline btn-sm" onClick={translateAllTexts} disabled={isTranslating}
+                style={{fontSize:11,padding:'3px 10px',color:'#f59e0b',borderColor:'#f59e0b',marginLeft:4}}>
+                {isTranslating ? '번역 중...' : '🌐 일괄 번역'}
+              </button>
+            </div>
+            <div className="be-divider" />
             <button className="btn btn-outline btn-sm be-btn-export" onClick={async () => {
               log('JPG 내보내기 중... (720×4000 단위 분할)', 'info');
               const allJpgs = await exportAllPagesAsJpeg();
@@ -8818,7 +8918,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                 const ta = sb?.textArea;
                                 const fs = (obj.fontSize||25)*scale;
                                 const lineH = fs * 1.3;
-                                const lines = (obj.text || '').split('\n').length || 1;
+                                const lines = (getObjText(obj)).split('\n').length || 1;
                                 const textTotalH = lines * lineH;
                                 const txStyle = ta ? (() => {
                                   const areaH = (parseFloat(ta.height) / 100) * obj.h * scale;
@@ -8859,8 +8959,14 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
                                   };
                                 })();
-                                return <textarea className="be-bubble-text" value={obj.text}
-                                  onChange={(e) => updatePageObject(pageIdx, obj.id, {text: e.target.value})}
+                                return <textarea className="be-bubble-text" value={getObjText(obj)}
+                                  onChange={(e) => {
+                                    if (editorLanguage === 'ja') {
+                                      updatePageObject(pageIdx, obj.id, {translations: {...(obj.translations||{}), ja: e.target.value}});
+                                    } else {
+                                      updatePageObject(pageIdx, obj.id, {text: e.target.value});
+                                    }
+                                  }}
                                   placeholder={bt.name+'...'} onClick={() => { setCurrentPageIdx(pageIdx); setSelectedObjectId(obj.id); }}
                                   style={txStyle}/>;
                               })()}
@@ -8918,7 +9024,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                 paintOrder: 'stroke fill',
                                 filter: cssFilter,
                                 lineHeight: 1.1,
-                              }}>{obj.text}</div>
+                              }}>{getObjText(obj)}</div>
                               {isSelected && <>
                                 <div data-resize="true" className="be-resize"
                                   onMouseDown={(e) => {e.preventDefault();e.stopPropagation();
@@ -8979,6 +9085,10 @@ Return ONLY the detailed English prompt, nothing else.`,
                       )}
                       <textarea className="be-textarea" value={obj.text} onChange={(e) => updatePageObject(currentPageIdx, obj.id, {text: e.target.value})}
                         placeholder="텍스트 입력..." onClick={(e) => e.stopPropagation()} />
+                      {obj.translations?.ja !== undefined && (
+                        <textarea className="be-textarea" value={obj.translations?.ja || ''} onChange={(e) => updatePageObject(currentPageIdx, obj.id, {translations: {...(obj.translations||{}), ja: e.target.value}})}
+                          placeholder="🇯🇵 일본어 번역..." onClick={(e) => e.stopPropagation()} style={{borderColor:'#ef4444',fontSize:12}} />
+                      )}
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>폰트</label>
                         <select className="be-select" value={obj.fontFamily || "'Noto Sans KR',sans-serif"} onClick={e=>e.stopPropagation()}
@@ -9106,7 +9216,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                     <div key={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={() => setSelectedObjectId(obj.id)}
                       style={{borderLeft: isSelected ? '3px solid #ff6b6b' : '3px solid transparent'}}>
                       <div className="be-item-header">
-                        <span className={`be-item-label${isSelected?' selected':''}`} style={{color: isSelected?'#ff6b6b':'#ccc'}}>{oi+1}. 효과음 ({obj.text})</span>
+                        <span className={`be-item-label${isSelected?' selected':''}`} style={{color: isSelected?'#ff6b6b':'#ccc'}}>{oi+1}. 효과음 ({getObjText(obj)})</span>
                         <button className="be-item-del" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>삭제</button>
                       </div>
                       {editorPages.length > 1 && (
@@ -9131,6 +9241,14 @@ Return ONLY the detailed English prompt, nothing else.`,
                         <input className="be-sfx-input" value={obj.text} onClick={e=>e.stopPropagation()}
                           onChange={e => updatePageObject(currentPageIdx, obj.id, {text: e.target.value, w: Math.max(120, e.target.value.length * (obj.fontSize||48) * 0.7)})} />
                       </div>
+                      {obj.translations?.ja !== undefined && (
+                        <div className="be-ctrl-row">
+                          <label className="be-ctrl-label" style={{flexShrink:0,color:'#ef4444'}}>🇯🇵</label>
+                          <input className="be-sfx-input" value={obj.translations?.ja || ''} onClick={e=>e.stopPropagation()}
+                            style={{borderColor:'#ef4444'}}
+                            onChange={e => updatePageObject(currentPageIdx, obj.id, {translations: {...(obj.translations||{}), ja: e.target.value}})} />
+                        </div>
+                      )}
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label">크기</label>
                         <input type="range" min="20" max="120" value={obj.fontSize||48} onClick={e=>e.stopPropagation()}
