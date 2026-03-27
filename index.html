@@ -8146,7 +8146,7 @@ Return ONLY the detailed English prompt, nothing else.`,
       <div className="app-header">
         <div className="app-logo">{editorMode ? '웹툰 에디터' : '웹툰 프로덕션'}</div>
         <div style={{flex:1}}></div>
-        {!editorMode && projectId && <button className="api-key-btn" onClick={()=>setShowAssetPage(p=>!p)} style={{background: showAssetPage ? '#00b894' : 'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',borderColor:'transparent', boxShadow: showAssetPage ? 'inset 0 2px 4px rgba(0,0,0,.3)' : 'none'}}>📦 에셋 라이브러리 ({Object.keys(sharedAssets.characters).length + Object.keys(sharedAssets.backgrounds).length + Object.keys(sharedAssets.props).length})</button>}
+        {/* 에셋 라이브러리 버튼 제거됨 — 스텝 바 탭으로 접근 */}
         {!editorMode && <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API 설정</button>}
       </div>
 
