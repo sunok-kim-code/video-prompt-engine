@@ -4313,7 +4313,7 @@ Rules:
       const bFillC = b.fillColor || bt.bg || '#fff';
       const pathD = sb.path(bStrokeW, bStrokeC, bFillC, isFlipped);
       const vbParts = sb.viewBox.split(' ').map(Number);
-      const pad = b.bubblePadding ?? 0;
+      const pad = b.bubblePadding ?? -7;
       const inset = pad * Math.max(vbParts[2], vbParts[3]) / 100;
       const vbX = vbParts[0] + inset, vbY = vbParts[1] + inset;
       const vbW = vbParts[2] - inset * 2, vbH = vbParts[3] - inset * 2;
@@ -8967,7 +8967,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                 viewBox={(() => {
                                   if (bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon]) {
                                     const sb = SVG_BALLOONS[bt.svgBalloon];
-                                    const pad = obj.bubblePadding ?? 0; // -50 ~ +50, negative = zoom in (remove margin)
+                                    const pad = obj.bubblePadding ?? -7; // -50 ~ +50, negative = zoom in (remove margin)
                                     if (pad === 0) return sb.viewBox;
                                     const vb = sb.viewBox.split(' ').map(Number);
                                     const inset = pad * Math.max(vb[2], vb[3]) / 100;
@@ -9297,9 +9297,9 @@ Return ONLY the detailed English prompt, nothing else.`,
                       </div>}
                       {bt.svgBalloon && <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>여백</label>
-                        <input type="range" min="-30" max="20" value={obj.bubblePadding ?? 0} onClick={e=>e.stopPropagation()}
+                        <input type="range" min="-30" max="20" value={obj.bubblePadding ?? -7} onClick={e=>e.stopPropagation()}
                           onChange={e => updatePageObject(currentPageIdx, obj.id, {bubblePadding: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
-                        <span className="be-ctrl-val" style={{minWidth:24}}>{obj.bubblePadding ?? 0}</span>
+                        <span className="be-ctrl-val" style={{minWidth:24}}>{obj.bubblePadding ?? -7}</span>
                       </div>}
                       {bt.svgBalloon && <React.Fragment>
                         <div className="be-ctrl-row">
