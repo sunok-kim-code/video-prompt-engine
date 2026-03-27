@@ -3206,8 +3206,9 @@ Rules:
 
   // Initialize single long page from panels (no page splits, webtoon-style layout)
   const PANEL_GAP = 300; // Gap between panels
-  const initEditorPages = async (overridePanels) => {
+  const initEditorPages = async (overridePanels, overrideStoryboard) => {
     const validPanels = (overridePanels || panels).filter(Boolean);
+    const effectiveSb = overrideStoryboard || storyboard;
     if (validPanels.length === 0) return [];
     const pageObj = {id:'p_'+Date.now(), width:PAGE_W, height:PAGE_H_MAX, objects:[]};
     let yPos = 0; // No top margin — panels start from top
@@ -3224,7 +3225,7 @@ Rules:
         console.log(`[initEditor] Panel ${i}: measured ${img.width}x${img.height} → ${panelW}x${panelH}`);
       } catch(e) { console.warn('[initEditor] Failed to measure panel', i, ':', e.message); }
 
-      const sbPanel = storyboard[i] || {};
+      const sbPanel = effectiveSb[i] || {};
       const dialogues = sbPanel.dialogue || [];
       const narrationText = sbPanel.narration || '';
 
@@ -3411,12 +3412,13 @@ Rules:
     return null;
   };
 
-  const openBubbleEditor = async (directPanels, directEpisode) => {
-    // Use directPanels if provided (bypasses React state timing issues), otherwise fall back to state
+  const openBubbleEditor = async (directPanels, directEpisode, directStoryboard) => {
+    // Use direct data if provided (bypasses React state timing issues), otherwise fall back to state
     const effectivePanels = (directPanels && directPanels.length > 0) ? directPanels : panels;
+    const effectiveSb = (directStoryboard && directStoryboard.length > 0) ? directStoryboard : storyboard;
     const effectiveEpisode = directEpisode || currentEpisode;
     const validCount = effectivePanels.filter(Boolean).length;
-    console.log('[BubbleEditor] openBubbleEditor called, episode:', effectiveEpisode, ', validPanels:', validCount, ', panels total:', effectivePanels.length, ', directPanels:', !!directPanels);
+    console.log('[BubbleEditor] openBubbleEditor called, episode:', effectiveEpisode, ', validPanels:', validCount, ', storyboard:', effectiveSb.length, ', directPanels:', !!directPanels);
     setBubbleEditorOpen(true);
 
     // Try loading saved layout for CURRENT episode from Firebase
@@ -3452,9 +3454,9 @@ Rules:
       setCurrentPageIdx(saved.currentPageIdx || 0);
       log(`${effectiveEpisode}화 저장된 배치 불러옴: ${saved.editorPages.length}페이지`, 'success');
     } else if (validCount > 0) {
-      // No saved layout — initialize from current panels (pass effectivePanels to bypass state timing)
-      log(`${effectiveEpisode}화 에디터 초기화 중... 패널 크기 측정`, 'info');
-      const newPages = await initEditorPages(effectivePanels);
+      // No saved layout — initialize from current panels + storyboard (pass directly to bypass state timing)
+      log(`${effectiveEpisode}화 에디터 초기화 중... 패널 크기 측정 (스토리보드 ${effectiveSb.length}개)`, 'info');
+      const newPages = await initEditorPages(effectivePanels, effectiveSb);
       setEditorPages(newPages);
       log(`${effectiveEpisode}화 에디터 준비 완료: ${newPages.length}페이지, ${validCount}개 패널`, 'success');
     } else {
@@ -6024,8 +6026,8 @@ Rules:
     const result = await loadEpisode(ep.number);
     // In editor mode, directly open bubble editor with loaded panels (bypasses React state timing)
     if (editorMode && result) {
-      console.log('[EditorMode] loadEpisode returned', result.panels.filter(Boolean).length, 'valid panels, opening editor directly for ep', result.episodeNum);
-      openBubbleEditor(result.panels, result.episodeNum);
+      console.log('[EditorMode] loadEpisode returned', result.panels.filter(Boolean).length, 'valid panels,', result.storyboard.length, 'storyboard, opening editor directly for ep', result.episodeNum);
+      openBubbleEditor(result.panels, result.episodeNum, result.storyboard);
     }
   }, [renamingEpisode, loadEpisode, editorMode]);
 
@@ -7334,7 +7336,7 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
           const result = await loadEpisode(firstEp.number, pid, assets);
           // In editor mode, auto-open bubble editor
           if (editorMode && result) {
-            openBubbleEditor(result.panels, result.episodeNum);
+            openBubbleEditor(result.panels, result.episodeNum, result.storyboard);
           }
         } else if (editorMode) {
           // No published episodes — show nothing
