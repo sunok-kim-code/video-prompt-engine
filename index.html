@@ -2995,6 +2995,7 @@ Rules:
   const [currentPageIdx, setCurrentPageIdx] = useState(0);
   const [selectedObjectId, setSelectedObjectId] = useState(null);
   const [selectedObjectType, setSelectedObjectType] = useState(null); // 'panel'|'image'|'bubble'
+  const [selectedObjectIds, setSelectedObjectIds] = useState([]); // multi-select (shift+click)
   const [editorPanelScale, setEditorPanelScale] = useState(100);
   const editorCanvasRef = React.useRef(null);
   const imageInputRef = React.useRef(null);
@@ -3011,6 +3012,68 @@ Rules:
     const el = document.querySelector(`.be-sidebar [data-obj-id="${selectedObjectId}"]`);
     if (el) el.scrollIntoView({behavior:'smooth', block:'nearest'});
   }, [selectedObjectId]);
+
+  // Multi-select helper: handle click with optional shift
+  const handleObjectSelect = (objId, objType, pageIdx, e) => {
+    setCurrentPageIdx(pageIdx);
+    if (e?.shiftKey) {
+      // Shift+click: toggle in multi-select
+      setSelectedObjectIds(prev => {
+        const set = new Set(prev);
+        // If nothing was multi-selected yet, include the current primary selection
+        if (set.size === 0 && selectedObjectId && selectedObjectId !== objId) {
+          set.add(selectedObjectId);
+        }
+        if (set.has(objId)) { set.delete(objId); } else { set.add(objId); }
+        return [...set];
+      });
+      setSelectedObjectId(objId);
+      setSelectedObjectType(objType);
+    } else {
+      // Normal click: single select, clear multi
+      setSelectedObjectId(objId);
+      setSelectedObjectType(objType);
+      setSelectedObjectIds([]);
+    }
+  };
+
+  // Check if object is in multi-selection or is the primary selection
+  const isObjectSelected = (objId) => {
+    if (selectedObjectIds.length > 0) return selectedObjectIds.includes(objId);
+    return selectedObjectId === objId;
+  };
+
+  // Keyboard arrow keys: move selected objects
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) return;
+      // Don't capture if user is typing in an input
+      if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+      const ids = selectedObjectIds.length > 0 ? selectedObjectIds : (selectedObjectId ? [selectedObjectId] : []);
+      if (ids.length === 0) return;
+      e.preventDefault();
+      const step = e.shiftKey ? 10 : 1; // shift+arrow = 10px step
+      const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+      const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+      setEditorPages(prev => {
+        const next = [...prev];
+        for (let pi = 0; pi < next.length; pi++) {
+          let changed = false;
+          const newObjs = next[pi].objects.map(o => {
+            if (ids.includes(o.id)) {
+              changed = true;
+              return {...o, x: Math.max(0, o.x + dx), y: Math.max(0, o.y + dy)};
+            }
+            return o;
+          });
+          if (changed) next[pi] = {...next[pi], objects: newObjs};
+        }
+        return next;
+      });
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedObjectId, selectedObjectIds]);
 
   // Helper: get display text for current language
   const getObjText = (obj) => {
@@ -3108,6 +3171,13 @@ Rules:
       d.lastClientY = e.clientY;
       if (d.type === 'move') {
         updatePageObject(d.pageIdx, d.objId, {x: Math.max(0, d.origX + dx), y: Math.max(0, d.origY + dy)});
+        // Multi-select: move other selected objects by same delta
+        if (d.multiDragOrigins) {
+          for (const md of d.multiDragOrigins) {
+            if (md.objId === d.objId) continue;
+            updatePageObject(md.pageIdx, md.objId, {x: Math.max(0, md.origX + dx), y: Math.max(0, md.origY + dy)});
+          }
+        }
         // Cross-page drag: auto-scroll + highlight drop target
         if (d.crossPage) {
           // Auto-scroll near edges
@@ -9040,7 +9110,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                   <React.Fragment key={page.id}>
                     {/* Page header bar */}
                     <div className={`be-page-bar${isFocused ? ' focused' : ''}`}
-                      onClick={() => setCurrentPageIdx(pageIdx)}>
+                      onClick={(e) => { setCurrentPageIdx(pageIdx); if (e.target === e.currentTarget) { setSelectedObjectId(null); setSelectedObjectIds([]); } }}>
                       <span style={{fontWeight:700}}>페이지 {pageIdx + 1}</span>
                       <span style={{fontSize:10,color:'#888'}}>({(page.objects||[]).length}개 객체)</span>
                       <div style={{flex:1}} />
@@ -9060,7 +9130,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                     {/* Page canvas */}
                     <div className={`be-page-canvas${isFocused ? ' focused' : ''}${dropTargetPageIdx === pageIdx ? ' drop-target' : ''}`}
                       style={{width: displayW, height: displayH, position:'relative'}}
-                      onClick={() => setCurrentPageIdx(pageIdx)}>
+                      onClick={(e) => { setCurrentPageIdx(pageIdx); if (e.target === e.currentTarget) { setSelectedObjectId(null); setSelectedObjectIds([]); } }}>
                       {/* Dotted page boundary lines every PAGE_H (4000px) */}
                       {Array.from({length: Math.floor(actualH / PAGE_H)}, (_, i) => (i + 1) * PAGE_H).map(y => (
                         <div key={'pgline_'+y} style={{
@@ -9075,7 +9145,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                       ))}
                       {/* Render all objects in z-order */}
                       {[...(page.objects||[])].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1)).filter(obj => !obj.hidden).map(obj => {
-                        const isSelected = selectedObjectId === obj.id;
+                        const isSelected = isObjectSelected(obj.id);
                         if (obj.type === 'panel' || obj.type === 'image') {
                           const isCropping = cropMode && cropMode.pageIdx === pageIdx && cropMode.objId === obj.id;
                           const hasCrop = obj.crop && obj.crop.w > 0 && obj.crop.h > 0;
@@ -9087,12 +9157,17 @@ Return ONLY the detailed English prompt, nothing else.`,
                               }}
                               onMouseDown={(e) => {
                                 if (isCropping) return;
-                                setCurrentPageIdx(pageIdx);
-                                setSelectedObjectId(obj.id);
-                                setSelectedObjectType(obj.type);
+                                handleObjectSelect(obj.id, obj.type, pageIdx, e);
                                 if (['TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.dataset.resize) return;
                                 e.preventDefault();
-                                dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:true};
+                                // Build multi-drag origins for all selected objects
+                                const ids = e.shiftKey && selectedObjectIds.length > 0 ? [...new Set([...selectedObjectIds, obj.id])] : (selectedObjectIds.includes(obj.id) && selectedObjectIds.length > 1 ? selectedObjectIds : null);
+                                let multiDragOrigins = null;
+                                if (ids && ids.length > 1) {
+                                  multiDragOrigins = [];
+                                  for (const pg of editorPages) { for (const o of pg.objects) { if (ids.includes(o.id)) multiDragOrigins.push({pageIdx: editorPages.indexOf(pg), objId: o.id, origX: o.x, origY: o.y}); } }
+                                }
+                                dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:!multiDragOrigins, multiDragOrigins};
                               }}>
                               {obj.src && obj.src !== 'undefined' && !obj.src.endsWith(',undefined') ? (
                                 hasCrop && !isCropping ? (
@@ -9210,12 +9285,16 @@ Return ONLY the detailed English prompt, nothing else.`,
                             <div key={obj.id} className={`be-bubble${isSelected ? ' selected' : ''}`}
                               style={{left: obj.x * scale, top: obj.y * scale, width: obj.w * scale, height: svgH, zIndex: obj.zIndex || 1}}
                               onMouseDown={(e) => {
-                                setCurrentPageIdx(pageIdx);
-                                setSelectedObjectId(obj.id);
-                                setSelectedObjectType('bubble');
+                                handleObjectSelect(obj.id, 'bubble', pageIdx, e);
                                 if (['TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.dataset.resize) return;
                                 e.preventDefault();
-                                dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:true};
+                                const ids = e.shiftKey && selectedObjectIds.length > 0 ? [...new Set([...selectedObjectIds, obj.id])] : (selectedObjectIds.includes(obj.id) && selectedObjectIds.length > 1 ? selectedObjectIds : null);
+                                let multiDragOrigins = null;
+                                if (ids && ids.length > 1) {
+                                  multiDragOrigins = [];
+                                  for (const pg of editorPages) { for (const o of pg.objects) { if (ids.includes(o.id)) multiDragOrigins.push({pageIdx: editorPages.indexOf(pg), objId: o.id, origX: o.x, origY: o.y}); } }
+                                }
+                                dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:!multiDragOrigins, multiDragOrigins};
                               }}>
                               <svg width={obj.w * scale} height={svgH} className="be-bubble-svg"
                                 viewBox={(() => {
@@ -9380,12 +9459,16 @@ Return ONLY the detailed English prompt, nothing else.`,
                             <div key={obj.id} className={`be-sfx${isSelected ? ' selected' : ''}`}
                               style={{left: obj.x * scale, top: obj.y * scale, width: obj.w * scale, height: obj.h * scale, zIndex: obj.zIndex || 1}}
                               onMouseDown={(e) => {
-                                setCurrentPageIdx(pageIdx);
-                                setSelectedObjectId(obj.id);
-                                setSelectedObjectType('sfx');
+                                handleObjectSelect(obj.id, 'sfx', pageIdx, e);
                                 if (e.target.dataset.resize) return;
                                 e.preventDefault();
-                                dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:true};
+                                const ids = e.shiftKey && selectedObjectIds.length > 0 ? [...new Set([...selectedObjectIds, obj.id])] : (selectedObjectIds.includes(obj.id) && selectedObjectIds.length > 1 ? selectedObjectIds : null);
+                                let multiDragOrigins = null;
+                                if (ids && ids.length > 1) {
+                                  multiDragOrigins = [];
+                                  for (const pg of editorPages) { for (const o of pg.objects) { if (ids.includes(o.id)) multiDragOrigins.push({pageIdx: editorPages.indexOf(pg), objId: o.id, origX: o.x, origY: o.y}); } }
+                                }
+                                dragRef.current = {type:'move', pageIdx, objId:obj.id, startX:e.clientX, startY:e.clientY, origX:obj.x, origY:obj.y, crossPage:!multiDragOrigins, multiDragOrigins};
                               }}>
                               <div className="be-sfx-text" style={{
                                 transform: `rotate(${rot}deg) skewX(${skw}deg)`,
@@ -9421,7 +9504,7 @@ Return ONLY the detailed English prompt, nothing else.`,
 
             {/* Right sidebar — shows focused page objects */}
             <div className="be-sidebar">
-              <div className="be-sidebar-title">페이지 {currentPageIdx + 1} 객체</div>
+              <div className="be-sidebar-title">페이지 {currentPageIdx + 1} 객체{selectedObjectIds.length > 1 && <span style={{fontSize:10,color:'var(--accent)',marginLeft:6}}>{selectedObjectIds.length}개 선택</span>}</div>
               {(editorPages[currentPageIdx]?.objects?.length || 0) === 0 && <div className="be-sidebar-empty">상단 버튼으로 말풍선이나 이미지를 추가하세요.</div>}
               {(() => {
                 const allObjs = editorPages[currentPageIdx]?.objects || [];
@@ -9430,11 +9513,11 @@ Return ONLY the detailed English prompt, nothing else.`,
                 allObjs.forEach(o => { if (o.type === 'panel' || o.type === 'image') { pc++; panelNumMap[o.id] = pc; } });
                 return allObjs.map((obj, oi) => ({obj, oi, panelNum: panelNumMap[obj.id] || 0}));
               })().map(({obj, oi, panelNum}) => {
-                const isSelected = selectedObjectId === obj.id;
+                const isSelected = isObjectSelected(obj.id);
                 if (obj.type === 'bubble') {
                   const bt = BUBBLE_TYPES[obj.bubbleStyle] || BUBBLE_TYPES.speech;
                   return (
-                    <div key={obj.id} data-obj-id={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={() => setSelectedObjectId(obj.id)}>
+                    <div key={obj.id} data-obj-id={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={(e) => handleObjectSelect(obj.id, 'bubble', currentPageIdx, e)}>
                       <div className="be-item-header">
                         <span className={`be-item-label${isSelected?' selected':''}`}>{oi+1}. 말풍선 ({bt.name})</span>
                         <button className="be-item-del" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>삭제</button>
@@ -9597,7 +9680,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                 } else if (obj.type === 'sfx') {
                   // [WebtoonSFX 추가] SFX 사이드바 컨트롤
                   return (
-                    <div key={obj.id} data-obj-id={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={() => setSelectedObjectId(obj.id)}
+                    <div key={obj.id} data-obj-id={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={(e) => handleObjectSelect(obj.id, 'sfx', currentPageIdx, e)}
                       style={{borderLeft: isSelected ? '3px solid #ff6b6b' : '3px solid transparent'}}>
                       <div className="be-item-header">
                         <span className={`be-item-label${isSelected?' selected':''}`} style={{color: isSelected?'#ff6b6b':'#ccc'}}>{oi+1}. 효과음 ({getObjText(obj)})</span>
@@ -9698,7 +9781,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                 } else {
                   return (
                     <div key={obj.id} data-obj-id={obj.id} className={`be-item${isSelected?' selected':''}`}
-                      onClick={() => !obj.hidden && setSelectedObjectId(obj.id)}
+                      onClick={(e) => !obj.hidden && handleObjectSelect(obj.id, obj.type, currentPageIdx, e)}
                       style={{opacity: obj.hidden ? 0.45 : 1, borderLeft: obj.hidden ? '3px solid #e74c3c' : undefined}}>
                       <div className="be-item-header">
                         <span className={`be-item-label${isSelected?' selected':''}`} style={{textDecoration: obj.hidden ? 'line-through' : 'none'}}>
