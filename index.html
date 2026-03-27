@@ -3995,40 +3995,71 @@ Rules:
 
   // Build concentration lines (집중선) — radiating spikes from an elliptical center
   // Returns an array of path strings: [centerEllipse, ...rays]
-  const buildConcentrationLines = (w, h, rayCount) => {
+  // Build manga-style concentration lines (집중선)
+  // Creates clustered, varied-thickness rays radiating from an elliptical center
+  const buildConcentrationLines = (w, h) => {
     const cx = w / 2, cy = h / 2;
-    // Inner ellipse where text goes (~55% of total size)
-    const innerRx = w * 0.28, innerRy = h * 0.28;
-    // Outer boundary for ray tips (~95% of total size)
-    const outerRx = w * 0.48, outerRy = h * 0.48;
-    const count = rayCount || 60;
+    const innerRx = w * 0.24, innerRy = h * 0.24;
     const rays = [];
-    // Use seeded pseudo-random for consistent look
-    const seed = 42;
-    const rand = (i, offset) => {
-      const x = Math.sin(seed + i * 127.1 + offset * 311.7) * 43758.5453;
-      return x - Math.floor(x);
-    };
-    for (let i = 0; i < count; i++) {
-      const baseAngle = (Math.PI * 2 * i) / count;
-      // Slight angle jitter for natural look
-      const angle = baseAngle + (rand(i, 0) - 0.5) * (Math.PI * 2 / count) * 0.5;
-      // Ray start: on the inner ellipse edge (with small gap)
-      const gapFactor = 1.0 + rand(i, 1) * 0.08;
-      const sx = cx + Math.cos(angle) * innerRx * gapFactor;
-      const sy = cy + Math.sin(angle) * innerRy * gapFactor;
-      // Ray end: varying distance outward
-      const lenFactor = 0.6 + rand(i, 2) * 0.4; // 60%-100% of max
-      const ex = cx + Math.cos(angle) * outerRx * (1 + lenFactor * 0.3);
-      const ey = cy + Math.sin(angle) * outerRy * (1 + lenFactor * 0.3);
-      // Width: thin wedge shape — wider at base, pointed at tip
-      const halfW = (0.8 + rand(i, 3) * 1.8) * (w / 200);
-      const perpAngle = angle + Math.PI / 2;
-      const dx = Math.cos(perpAngle) * halfW;
-      const dy = Math.sin(perpAngle) * halfW;
-      rays.push(`M ${sx + dx} ${sy + dy} L ${ex} ${ey} L ${sx - dx} ${sy - dy} Z`);
+    // Seeded pseudo-random for consistent rendering
+    const rand = (i, off) => { const x = Math.sin(42 + i * 127.1 + off * 311.7) * 43758.5453; return x - Math.floor(x); };
+
+    // Generate ~45 clusters of 1-3 lines each, like the reference image
+    const clusterCount = 45;
+    let angle = 0;
+    for (let c = 0; c < clusterCount; c++) {
+      // Vary gap between clusters
+      const gap = (Math.PI * 2 / clusterCount) * (0.6 + rand(c, 0) * 0.8);
+      angle += gap;
+      // How many lines in this cluster (1-3)
+      const linesInCluster = rand(c, 1) < 0.3 ? 1 : (rand(c, 2) < 0.6 ? 2 : 3);
+      const clusterSpread = (Math.PI * 2 / clusterCount) * 0.35;
+
+      for (let li = 0; li < linesInCluster; li++) {
+        const a = angle + (li - (linesInCluster - 1) / 2) * clusterSpread * (0.5 + rand(c * 10 + li, 3) * 0.5);
+        const cosA = Math.cos(a), sinA = Math.sin(a);
+
+        // Inner start — slight variation from the ellipse edge
+        const startDist = 1.0 + rand(c * 10 + li, 4) * 0.15;
+        const sx = cx + cosA * innerRx * startDist;
+        const sy = cy + sinA * innerRy * startDist;
+
+        // Outer end — large variation in length (short to very long)
+        // Some lines reach far out, some are quite short
+        const lenType = rand(c * 10 + li, 5);
+        let lenMult;
+        if (lenType < 0.15) lenMult = 0.55 + rand(c * 10 + li, 6) * 0.15; // short
+        else if (lenType < 0.5) lenMult = 0.75 + rand(c * 10 + li, 6) * 0.2; // medium
+        else lenMult = 0.95 + rand(c * 10 + li, 6) * 0.35; // long
+        const outerDist = innerRx * (1.5 + lenMult * 1.8);
+        const outerDistY = innerRy * (1.5 + lenMult * 1.8);
+        const ex = cx + cosA * outerDist;
+        const ey = cy + sinA * outerDistY;
+
+        // Thickness — high variation: some hair-thin, some thick wedges
+        const thickType = rand(c * 10 + li, 7);
+        let baseHalfW;
+        const unit = w / 200;
+        if (thickType < 0.35) baseHalfW = (0.3 + rand(c * 10 + li, 8) * 0.5) * unit; // thin needle
+        else if (thickType < 0.7) baseHalfW = (1.0 + rand(c * 10 + li, 8) * 1.5) * unit; // medium
+        else baseHalfW = (2.5 + rand(c * 10 + li, 8) * 2.5) * unit; // thick
+
+        // Tip can be sharp or slightly blunt
+        const tipHalfW = thickType > 0.85 ? baseHalfW * 0.08 : 0;
+
+        const perpA = a + Math.PI / 2;
+        const pdx = Math.cos(perpA), pdy = Math.sin(perpA);
+
+        if (tipHalfW > 0) {
+          // Thick line with slightly blunt tip
+          rays.push(`M ${sx + pdx * baseHalfW} ${sy + pdy * baseHalfW} L ${ex + pdx * tipHalfW} ${ey + pdy * tipHalfW} L ${ex - pdx * tipHalfW} ${ey - pdy * tipHalfW} L ${sx - pdx * baseHalfW} ${sy - pdy * baseHalfW} Z`);
+        } else {
+          // Sharp pointed wedge
+          rays.push(`M ${sx + pdx * baseHalfW} ${sy + pdy * baseHalfW} L ${ex} ${ey} L ${sx - pdx * baseHalfW} ${sy - pdy * baseHalfW} Z`);
+        }
+      }
     }
-    // Ellipse approximation path for center
+    // Smooth ellipse path for white center
     const k = 0.5523;
     const ellipse = `M ${cx - innerRx} ${cy} C ${cx - innerRx} ${cy - innerRy * k} ${cx - innerRx * k} ${cy - innerRy} ${cx} ${cy - innerRy} C ${cx + innerRx * k} ${cy - innerRy} ${cx + innerRx} ${cy - innerRy * k} ${cx + innerRx} ${cy} C ${cx + innerRx} ${cy + innerRy * k} ${cx + innerRx * k} ${cy + innerRy} ${cx} ${cy + innerRy} C ${cx - innerRx * k} ${cy + innerRy} ${cx - innerRx} ${cy + innerRy * k} ${cx - innerRx} ${cy} Z`;
     return {ellipse, rays, innerRx, innerRy};
@@ -4107,7 +4138,7 @@ Rules:
       // 집중선 — radiating manga-style concentration lines
       ctx.save();
       ctx.translate(bx, by);
-      const cl = buildConcentrationLines(bw, bh, 60);
+      const cl = buildConcentrationLines(bw, bh);
       // Draw rays (black thin wedges)
       ctx.fillStyle = bt.border || '#000';
       cl.rays.forEach(rayPath => {
@@ -8699,7 +8730,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     const pathD = buildWavePath(W, H, tailPos, tailLen, tailWid, scale);
                                     return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeLinejoin="round"/>;
                                   } else if (bt.concentrationLines) {
-                                    const cl = buildConcentrationLines(W, H, 60);
+                                    const cl = buildConcentrationLines(W, H);
                                     return <g>
                                       {cl.rays.map((rp, ri) => <path key={ri} d={rp} fill={strokeColor} stroke="none"/>)}
                                       <path d={cl.ellipse} fill={fillColor} stroke="none"/>
