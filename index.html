@@ -3487,15 +3487,20 @@ Rules:
   };
 
   // Save editor layout to Firebase
-  const saveEditorLayout = async () => {
+  const [isSavingEditor, setIsSavingEditor] = useState(false);
+  const saveEditorLayout = async (andClose) => {
     if (!projectId || !currentEpisode) { log('프로젝트/에피소드를 먼저 선택하세요.', 'error'); return; }
     try {
+      setIsSavingEditor(true);
       log(`${currentEpisode}화 에디터 배치 저장 중...`, 'info');
       await fbSavePhase(projectId, currentEpisode, 'step5_editor', { editorPages, currentPageIdx });
-      log(`${currentEpisode}화 에디터 배치 저장 완료!`, 'success');
+      log(`✅ ${currentEpisode}화 에디터 배치 저장 완료!`, 'success');
+      if (andClose) closeBubbleEditor();
     } catch(e) {
       console.error('[saveEditorLayout]', e);
       log('에디터 배치 저장 실패: ' + e.message, 'error');
+    } finally {
+      setIsSavingEditor(false);
     }
   };
 
@@ -8769,7 +8774,7 @@ Return ONLY the detailed English prompt, nothing else.`,
               log(`✓ JPG ${allJpgs.length}장 내보내기 완료 (720×4000)`, 'success');
             }}>전체 JPG 내보내기</button>
             <button className="btn btn-outline btn-sm be-btn-export" style={{background:'linear-gradient(135deg,#667eea,#764ba2)',color:'#fff',borderColor:'transparent'}} onClick={exportAsPsd}>PSD 내보내기</button>
-            <button className="btn btn-success btn-sm" onClick={() => { saveEditorLayout(); closeBubbleEditor(); }} style={{fontSize:12}}>저장 후 완료</button>
+            <button className="btn btn-success btn-sm" disabled={isSavingEditor} onClick={() => saveEditorLayout(true)} style={{fontSize:12}}>{isSavingEditor ? '💾 저장 중...' : '저장 후 완료'}</button>
             <button className="btn btn-outline btn-sm" onClick={() => { if (window.confirm('저장하지 않고 나가시겠습니까? 변경사항이 사라집니다.')) closeBubbleEditor(); }} style={{fontSize:12,color:'var(--text2)'}}>저장없이 나가기</button>
           </div>
 
