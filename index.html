@@ -358,7 +358,8 @@ async function fbSaveEpisode(projectId, episodeNum, data) { const db = getDb(); 
 async function fbDeleteEpisode(projectId, episodeNum) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); const phases = await db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).collection('phases').get(); const batch = db.batch(); phases.docs.forEach(d => batch.delete(d.ref)); batch.delete(db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum))); await batch.commit(); }
 
 // Phase-level with episode support (skipImages: save metadata only, no base64 images)
-async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImages) {
+// onProgress(current, total, message) — optional callback for progress tracking
+async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImages, onProgress) {
   const db = getDb(); if (!db) return;
   const ref = db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).collection('phases').doc(phaseName);
   const imgs = []; const safe = stripBase64(phaseData, imgs);
@@ -372,8 +373,9 @@ async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImag
       }
     }
   };
+  if (onProgress) onProgress(0, imgs.length + 1, '메타데이터 저장 중...');
   await retryWrite(() => ref.set({...safe, imageCount: skipImages ? 0 : imgs.length, savedAt: firebase.firestore.FieldValue.serverTimestamp()}));
-  if (skipImages || imgs.length === 0) return;
+  if (skipImages || imgs.length === 0) { if (onProgress) onProgress(1, 1, '완료'); return; }
   const imgColl = ref.collection('images');
   // Delete old images in parallel batches (max 500 per batch, Firestore limit)
   try {
@@ -409,7 +411,9 @@ async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImag
         await imgColl.doc(im.id).set({key: im.key, data: im.data});
       }
     }, 4)));
-    console.log(`[fbSavePhase] 이미지 ${Math.min(i + CONCURRENT, imgs.length)}/${imgs.length} 저장 완료`);
+    const done = Math.min(i + CONCURRENT, imgs.length);
+    console.log(`[fbSavePhase] 이미지 ${done}/${imgs.length} 저장 완료`);
+    if (onProgress) onProgress(done, imgs.length, `이미지 ${done}/${imgs.length}`);
   }
 }
 
@@ -3488,12 +3492,17 @@ Rules:
 
   // Save editor layout to Firebase
   const [isSavingEditor, setIsSavingEditor] = useState(false);
+  const [saveProgress, setSaveProgress] = useState('');
   const saveEditorLayout = async (andClose) => {
     if (!projectId || !currentEpisode) { log('프로젝트/에피소드를 먼저 선택하세요.', 'error'); return; }
     try {
       setIsSavingEditor(true);
+      setSaveProgress('준비 중...');
       log(`${currentEpisode}화 에디터 배치 저장 중...`, 'info');
-      await fbSavePhase(projectId, currentEpisode, 'step5_editor', { editorPages, currentPageIdx });
+      await fbSavePhase(projectId, currentEpisode, 'step5_editor', { editorPages, currentPageIdx }, false, (done, total, msg) => {
+        setSaveProgress(msg);
+      });
+      setSaveProgress('');
       log(`✅ ${currentEpisode}화 에디터 배치 저장 완료!`, 'success');
       if (andClose) closeBubbleEditor();
     } catch(e) {
@@ -3501,6 +3510,7 @@ Rules:
       log('에디터 배치 저장 실패: ' + e.message, 'error');
     } finally {
       setIsSavingEditor(false);
+      setSaveProgress('');
     }
   };
 
@@ -8774,7 +8784,7 @@ Return ONLY the detailed English prompt, nothing else.`,
               log(`✓ JPG ${allJpgs.length}장 내보내기 완료 (720×4000)`, 'success');
             }}>전체 JPG 내보내기</button>
             <button className="btn btn-outline btn-sm be-btn-export" style={{background:'linear-gradient(135deg,#667eea,#764ba2)',color:'#fff',borderColor:'transparent'}} onClick={exportAsPsd}>PSD 내보내기</button>
-            <button className="btn btn-success btn-sm" disabled={isSavingEditor} onClick={() => saveEditorLayout(true)} style={{fontSize:12}}>{isSavingEditor ? '💾 저장 중...' : '저장 후 완료'}</button>
+            <button className="btn btn-success btn-sm" disabled={isSavingEditor} onClick={() => saveEditorLayout(true)} style={{fontSize:12}}>{isSavingEditor ? `💾 ${saveProgress || '저장 중...'}` : '저장 후 완료'}</button>
             <button className="btn btn-outline btn-sm" onClick={() => { if (window.confirm('저장하지 않고 나가시겠습니까? 변경사항이 사라집니다.')) closeBubbleEditor(); }} style={{fontSize:12,color:'var(--text2)'}}>저장없이 나가기</button>
           </div>
 
