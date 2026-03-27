@@ -8975,6 +8975,9 @@ Return ONLY the detailed English prompt, nothing else.`,
                             <React.Fragment>
                               <button className="be-crop-btn" onClick={(e) => {e.stopPropagation(); startCrop(currentPageIdx, obj.id);}}>✂ 잘라내기</button>
                               {obj.crop && <button className="be-crop-btn danger" onClick={(e) => {e.stopPropagation(); resetCrop(currentPageIdx, obj.id);}}>잘라내기 해제</button>}
+                              {obj.src && !obj.src.startsWith('[img:') && (
+                                <button className="be-crop-btn" style={{background:'#27ae60'}} onClick={(e) => {e.stopPropagation(); savePanelImage(obj.src, `panel_${obj.panelIndex !== undefined ? obj.panelIndex + 1 : oi + 1}.png');}}>💾 다운로드</button>
+                              )}
                             </React.Fragment>
                           )}
                         </div>
