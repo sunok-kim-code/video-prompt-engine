@@ -3088,13 +3088,41 @@ Rules:
       textArea: {top:'22%', left:'18%', width:'64%', height:'50%'},
       path: () => `M100,2 L118,28 L148,5 L142,35 L175,22 L158,50 L198,48 L170,68 L195,90 L160,82 L165,115 L130,95 L110,128 L95,95 L60,118 L68,85 L25,98 L48,70 L5,60 L40,48 L15,25 L55,38 L50,8 L80,30 Z`
     },
-    // 조롱박형 — 오른쪽 안으로 들어간 핀치 + 좌하단 꼬리
+    // 이중 말풍선 — 두 타원이 겹쳐진 8자형 + 하단 꼬리
     gourd: {
-      viewBox: '0 0 200 260', baseW:200, baseH:260,
-      textArea: {top:'5%', left:'10%', width:'70%', height:'48%'},
+      viewBox: '0 0 200 270', baseW:200, baseH:270,
+      textArea: {top:'4%', left:'12%', width:'76%', height:'88%'},
       path: (sw, sc, fc, flip) => {
-        if (flip) return `M 90,10 C 35,10 8,42 8,78 C 8,108 22,124 42,132 C 62,140 64,154 52,170 C 38,188 35,210 52,230 C 62,242 78,250 98,250 L 138,258 C 128,248 122,240 118,232 C 148,225 172,205 175,175 C 178,148 165,132 148,124 C 132,116 130,106 140,92 C 155,72 158,45 140,25 C 125,12 108,10 90,10 Z`;
-        return `M 110,10 C 165,10 192,42 192,78 C 192,108 178,124 158,132 C 138,140 136,154 148,170 C 162,188 165,210 148,230 C 138,242 122,250 102,250 L 62,258 C 72,248 78,240 82,232 C 52,225 28,205 25,175 C 22,148 35,132 52,124 C 68,116 70,106 60,92 C 45,72 42,45 60,25 C 75,12 92,10 110,10 Z`;
+        if (flip) return [
+          'M 95,8',
+          'C 40,8 10,38 10,75',       // upper-left arc
+          'C 10,107 25,124 45,134',    // left going to indent
+          'C 63,142 63,156 45,168',    // left concave indent
+          'C 22,182 12,205 18,228',    // lower-left arc
+          'C 25,250 55,266 95,266',    // bottom going right
+          'L 148,276',                  // tail tip (right)
+          'C 140,266 135,258 132,250', // tail return
+          'C 168,244 188,222 188,195', // lower-right arc
+          'C 188,172 175,157 155,148', // right going to indent
+          'C 138,140 138,126 155,116', // right concave indent
+          'C 178,104 190,82 190,60',   // upper-right arc
+          'C 190,30 160,8 95,8 Z'      // top back
+        ].join(' ');
+        return [
+          'M 105,8',
+          'C 160,8 190,38 190,75',     // upper-right arc
+          'C 190,107 175,124 155,134',  // right going to indent
+          'C 138,142 138,156 155,168',  // right concave indent
+          'C 178,182 188,205 182,228',  // lower-right arc
+          'C 175,250 145,266 105,266',  // bottom going left
+          'L 52,276',                    // tail tip (left)
+          'C 60,266 65,258 68,250',     // tail return
+          'C 32,244 12,222 12,195',     // lower-left arc
+          'C 12,172 25,157 45,148',     // left going to indent
+          'C 62,140 62,126 45,116',     // left concave indent
+          'C 22,104 10,82 10,60',       // upper-left arc
+          'C 10,30 40,8 105,8 Z'        // top back
+        ].join(' ');
       }
     },
   };
@@ -3105,7 +3133,7 @@ Rules:
     speechFlat: {name:'원형 (우측)', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechFlat'},
     speechRound: {name:'원형 (우측하단)', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechRound'},
     shout: {name:'폭발형', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:700, shadow:true, svgBalloon:'shout'},
-    gourd: {name:'조롱박', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'gourd'},
+    gourd: {name:'이중', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'gourd'},
     thought: {name:'생각', tail:true, bg:'#fff', border:'#999', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, shadow:true},
     cloud: {name:'구름', tail:true, bg:'#fff', border:'#888', borderWidth:2, cloudShape:true, fontWeight:400, shadow:true},
     box: {name:'사각형', tail:true, bg:'#fff', border:'#222', borderWidth:3, boxShape:true, radius:10, fontWeight:500, shadow:true},
