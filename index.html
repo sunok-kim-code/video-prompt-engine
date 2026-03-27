@@ -3257,7 +3257,7 @@ Rules:
     const page = editorPages[pageIdx];
     if (!page || !page.objects) return;
     const pos = getInsertPosition();
-    const text = overrideText || sfxText || preset.examples[0];
+    const text = (typeof overrideText === 'string' ? overrideText : '') || sfxText || preset.examples[0];
     const newSfx = {
       id: 'sfx_' + Date.now(), type: 'sfx',
       text: text,
@@ -7333,7 +7333,8 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
         return {ep, s1, s3, s4};
       } catch(e) { return {ep, error: e}; }
     }));
-    for (const {ep, s1, s3, s4, error} of epResults) {
+    for (let ri = 0; ri < epResults.length; ri++) {
+      const {ep, s1, s3, s4, error} = epResults[ri];
       if (error) continue;
       try {
         const hasSource = !!(s1?.sourceText?.trim());
@@ -8687,7 +8688,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                     <label style={{marginLeft:8}}>외곽</label>
                     <input type="color" value={sfxStroke} onChange={e => setSfxStroke(e.target.value)} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}} />
                   </div>
-                  <button className="be-sfx-insert-btn" onClick={addSfxToPage}>효과음 삽입</button>
+                  <button className="be-sfx-insert-btn" onClick={() => addSfxToPage()}>효과음 삽입</button>
                 </div>
               )}
             </div>
