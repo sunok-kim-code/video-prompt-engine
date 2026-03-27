@@ -3182,12 +3182,12 @@ Rules:
   };
 
   const BUBBLE_TYPES = {
-    speech: {name:'기본 타원', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speech'},
-    speechWide: {name:'넓은 타원', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechWide'},
-    speechFlat: {name:'원형 (우측)', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechFlat'},
-    speechRound: {name:'원형 (우측하단)', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechRound'},
+    speech: {name:'기본 타원', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speech', defaultPadding:-6},
+    speechWide: {name:'넓은 타원', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechWide', defaultPadding:-2},
+    speechFlat: {name:'원형 (우측)', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechFlat', defaultPadding:-1},
+    speechRound: {name:'원형 (우측하단)', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'speechRound', defaultPadding:-1},
     shout: {name:'폭발형', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:700, shadow:true, svgBalloon:'shout'},
-    gourd: {name:'이중', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'gourd'},
+    gourd: {name:'이중', tail:false, bg:'#fff', border:'#333', borderWidth:2.5, fontWeight:500, shadow:true, svgBalloon:'gourd', defaultPadding:-4},
     thought: {name:'생각', tail:true, bg:'#fff', border:'#999', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, shadow:true},
     cloud: {name:'구름', tail:true, bg:'#fff', border:'#888', borderWidth:2, cloudShape:true, fontWeight:400, shadow:true},
     box: {name:'사각형', tail:true, bg:'#fff', border:'#222', borderWidth:3, boxShape:true, radius:10, fontWeight:500, shadow:true},
@@ -4313,7 +4313,7 @@ Rules:
       const bFillC = b.fillColor || bt.bg || '#fff';
       const pathD = sb.path(bStrokeW, bStrokeC, bFillC, isFlipped);
       const vbParts = sb.viewBox.split(' ').map(Number);
-      const pad = b.bubblePadding ?? 0;
+      const pad = b.bubblePadding ?? (bt.defaultPadding || 0);
       const inset = pad * Math.max(vbParts[2], vbParts[3]) / 100;
       const vbX = vbParts[0] + inset, vbY = vbParts[1] + inset;
       const vbW = vbParts[2] - inset * 2, vbH = vbParts[3] - inset * 2;
@@ -8967,7 +8967,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                 viewBox={(() => {
                                   if (bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon]) {
                                     const sb = SVG_BALLOONS[bt.svgBalloon];
-                                    const pad = obj.bubblePadding ?? 0; // -50 ~ +50, negative = zoom in (remove margin)
+                                    const pad = obj.bubblePadding ?? (bt.defaultPadding || 0); // -50 ~ +50, negative = zoom in (remove margin)
                                     if (pad === 0) return sb.viewBox;
                                     const vb = sb.viewBox.split(' ').map(Number);
                                     const inset = pad * Math.max(vb[2], vb[3]) / 100;
@@ -9297,9 +9297,9 @@ Return ONLY the detailed English prompt, nothing else.`,
                       </div>}
                       {bt.svgBalloon && <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>여백</label>
-                        <input type="range" min="-30" max="20" value={obj.bubblePadding ?? 0} onClick={e=>e.stopPropagation()}
+                        <input type="range" min="-30" max="20" value={obj.bubblePadding ?? (bt.defaultPadding || 0)} onClick={e=>e.stopPropagation()}
                           onChange={e => updatePageObject(currentPageIdx, obj.id, {bubblePadding: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
-                        <span className="be-ctrl-val" style={{minWidth:24}}>{obj.bubblePadding ?? 0}</span>
+                        <span className="be-ctrl-val" style={{minWidth:24}}>{obj.bubblePadding ?? (bt.defaultPadding || 0)}</span>
                       </div>}
                       {bt.svgBalloon && <React.Fragment>
                         <div className="be-ctrl-row">
