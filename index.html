@@ -3508,8 +3508,16 @@ Rules:
       setEditorPages([{id:'p_'+Date.now(), width:PAGE_W, height:PAGE_H_MAX, objects:[]}]);
     }
     if (!saved) setCurrentPageIdx(0);
-    setSelectedObjectId(null);
     if (!Array.isArray(bubbleOverlays)) setBubbleOverlays([]);
+    // 첫 번째 페이지의 첫 패널을 자동 선택 (state 대신 로컬 데이터 사용)
+    setTimeout(() => {
+      setEditorPages(prev => {
+        const fp = prev?.[0];
+        const panel = fp?.objects?.find(o => o.type === 'panel' && !o.hidden);
+        if (panel) { setSelectedObjectId(panel.id); setSelectedObjectType('panel'); }
+        return prev;
+      });
+    }, 50);
   };
 
   const closeBubbleEditor = () => {
