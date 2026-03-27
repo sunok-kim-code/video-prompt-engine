@@ -4400,9 +4400,12 @@ Rules:
 
   // Build manga-style concentration lines (집중선)
   // Thin dense lines radiating from elliptical center — stroke-based, not filled wedges
-  const buildConcentrationLines = (w, h) => {
+  const buildConcentrationLines = (w, h, padding) => {
     const cx = w / 2, cy = h / 2;
-    const innerRx = w * 0.22, innerRy = h * 0.22;
+    // padding: -50 ~ +50, 기본 0 → innerR 비율 0.22. 음수=텍스트 영역 축소, 양수=확대
+    const baseR = 0.22;
+    const rFactor = Math.max(0.08, Math.min(0.45, baseR + (padding || 0) * 0.004));
+    const innerRx = w * rFactor, innerRy = h * rFactor;
     const lines = []; // {sx,sy,ex,ey,sw} — start, end, strokeWidth
     const rand = (i, off) => { const x = Math.sin(42 + i * 127.1 + off * 311.7) * 43758.5453; return x - Math.floor(x); };
 
@@ -4523,7 +4526,7 @@ Rules:
       // 집중선 — thin stroke lines radiating from center
       ctx.save();
       ctx.translate(bx, by);
-      const cl = buildConcentrationLines(bw, bh);
+      const cl = buildConcentrationLines(bw, bh, b.concentrationPadding || 0);
       // Draw lines as strokes
       ctx.strokeStyle = bt.border || '#000';
       ctx.lineCap = 'round';
@@ -4645,8 +4648,10 @@ Rules:
       let textCenterY = by + bh / 2 + tyOff;
       let maxTextW = bw - 16 * scale;
       if (bt.concentrationLines) {
-        // 집중선: constrain text to inner ellipse (~50%)
-        maxTextW = bw * 0.45;
+        // 집중선: constrain text to inner ellipse (adjustable)
+        const cBaseR2 = 0.22;
+        const cRF2 = Math.max(0.08, Math.min(0.45, cBaseR2 + (b.concentrationPadding || 0) * 0.004));
+        maxTextW = bw * Math.min(0.85, cRF2 * 2.05);
       } else if (ta) {
         const taLeft = parseFloat(ta.left) / 100;
         const taTop = parseFloat(ta.top) / 100;
@@ -9385,9 +9390,12 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
                                   };
                                 })() : bt.concentrationLines ? (() => {
-                                  // 집중선: text area confined to inner ellipse (~50% centered)
+                                  // 집중선: text area confined to inner ellipse (adjustable)
                                   const W2 = obj.w * scale, H2 = obj.h * scale;
-                                  const areaW = W2 * 0.50, areaH2 = H2 * 0.50;
+                                  const cBaseR = 0.22;
+                                  const cRFactor = Math.max(0.08, Math.min(0.45, cBaseR + (obj.concentrationPadding || 0) * 0.004));
+                                  const areaRatio = Math.min(0.9, cRFactor * 2.27); // proportional to inner ellipse
+                                  const areaW = W2 * areaRatio, areaH2 = H2 * areaRatio;
                                   const padTop = Math.max(0, (areaH2 - textTotalH) / 2);
                                   return {
                                     position:'absolute', top: (H2 - areaH2) / 2, left: (W2 - areaW) / 2,
@@ -9637,6 +9645,12 @@ Return ONLY the detailed English prompt, nothing else.`,
                         <input type="range" min="-30" max="20" value={obj.bubblePadding ?? (bt.defaultPadding || 0)} onClick={e=>e.stopPropagation()}
                           onChange={e => updatePageObject(currentPageIdx, obj.id, {bubblePadding: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
                         <span className="be-ctrl-val" style={{minWidth:24}}>{obj.bubblePadding ?? (bt.defaultPadding || 0)}</span>
+                      </div>}
+                      {bt.concentrationLines && <div className="be-ctrl-row">
+                        <label className="be-ctrl-label" style={{flexShrink:0}}>여백</label>
+                        <input type="range" min="-30" max="50" value={obj.concentrationPadding ?? 0} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {concentrationPadding: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
+                        <span className="be-ctrl-val" style={{minWidth:24}}>{obj.concentrationPadding ?? 0}</span>
                       </div>}
                       {bt.svgBalloon && <React.Fragment>
                         <div className="be-ctrl-row">
