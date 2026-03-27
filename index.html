@@ -4003,25 +4003,20 @@ Rules:
     return pts.join(' ');
   };
 
-  // Build concentration lines (집중선) — radiating spikes from an elliptical center
-  // Returns an array of path strings: [centerEllipse, ...rays]
   // Build manga-style concentration lines (집중선)
   // Creates clustered, varied-thickness rays radiating from an elliptical center
   const buildConcentrationLines = (w, h) => {
     const cx = w / 2, cy = h / 2;
-    const innerRx = w * 0.24, innerRy = h * 0.24;
+    // Inner circle ~44% of total size, rays extend to ~80-90%
+    const innerRx = w * 0.22, innerRy = h * 0.22;
     const rays = [];
-    // Seeded pseudo-random for consistent rendering
     const rand = (i, off) => { const x = Math.sin(42 + i * 127.1 + off * 311.7) * 43758.5453; return x - Math.floor(x); };
 
-    // Generate ~45 clusters of 1-3 lines each, like the reference image
     const clusterCount = 45;
     let angle = 0;
     for (let c = 0; c < clusterCount; c++) {
-      // Vary gap between clusters
       const gap = (Math.PI * 2 / clusterCount) * (0.6 + rand(c, 0) * 0.8);
       angle += gap;
-      // How many lines in this cluster (1-3)
       const linesInCluster = rand(c, 1) < 0.3 ? 1 : (rand(c, 2) < 0.6 ? 2 : 3);
       const clusterSpread = (Math.PI * 2 / clusterCount) * 0.35;
 
@@ -4029,20 +4024,18 @@ Rules:
         const a = angle + (li - (linesInCluster - 1) / 2) * clusterSpread * (0.5 + rand(c * 10 + li, 3) * 0.5);
         const cosA = Math.cos(a), sinA = Math.sin(a);
 
-        // Inner start — slight variation from the ellipse edge
-        const startDist = 1.0 + rand(c * 10 + li, 4) * 0.15;
+        const startDist = 1.0 + rand(c * 10 + li, 4) * 0.12;
         const sx = cx + cosA * innerRx * startDist;
         const sy = cy + sinA * innerRy * startDist;
 
-        // Outer end — large variation in length (short to very long)
-        // Some lines reach far out, some are quite short
+        // Outer end — shorter rays that stay closer to center
         const lenType = rand(c * 10 + li, 5);
         let lenMult;
-        if (lenType < 0.15) lenMult = 0.55 + rand(c * 10 + li, 6) * 0.15; // short
-        else if (lenType < 0.5) lenMult = 0.75 + rand(c * 10 + li, 6) * 0.2; // medium
-        else lenMult = 0.95 + rand(c * 10 + li, 6) * 0.35; // long
-        const outerDist = innerRx * (1.5 + lenMult * 1.8);
-        const outerDistY = innerRy * (1.5 + lenMult * 1.8);
+        if (lenType < 0.2) lenMult = 0.3 + rand(c * 10 + li, 6) * 0.15;  // short
+        else if (lenType < 0.6) lenMult = 0.5 + rand(c * 10 + li, 6) * 0.2; // medium
+        else lenMult = 0.7 + rand(c * 10 + li, 6) * 0.3;  // long
+        const outerDist = innerRx * (1.35 + lenMult * 0.7);
+        const outerDistY = innerRy * (1.35 + lenMult * 0.7);
         const ex = cx + cosA * outerDist;
         const ey = cy + sinA * outerDistY;
 
