@@ -357,9 +357,16 @@ async function fbListEpisodes(projectId) { const db = getDb(); if (!db) throw ne
 async function fbSaveEpisode(projectId, episodeNum, data) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); await db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).set({...data, number: episodeNum, updatedAt: firebase.firestore.FieldValue.serverTimestamp()}, {merge:true}); }
 async function fbDeleteEpisode(projectId, episodeNum) { const db = getDb(); if (!db) throw new Error('Firebase not configured'); const phases = await db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).collection('phases').get(); const batch = db.batch(); phases.docs.forEach(d => batch.delete(d.ref)); batch.delete(db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum))); await batch.commit(); }
 
+// Global write queue: ensures only one fbSavePhase runs at a time
+let _saveQueue = Promise.resolve();
+function fbSavePhaseQueued(projectId, episodeNum, phaseName, phaseData, skipImages, onProgress) {
+  _saveQueue = _saveQueue.then(() => _fbSavePhaseInner(projectId, episodeNum, phaseName, phaseData, skipImages, onProgress)).catch(e => { console.error('[fbSavePhaseQueued]', e); throw e; });
+  return _saveQueue;
+}
+
 // Phase-level with episode support (skipImages: save metadata only, no base64 images)
 // onProgress(current, total, message) — optional callback for progress tracking
-async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImages, onProgress) {
+async function _fbSavePhaseInner(projectId, episodeNum, phaseName, phaseData, skipImages, onProgress) {
   const db = getDb(); if (!db) return;
   // Invalidate cache for this phase
   clearPhaseCache(projectId, episodeNum, phaseName);
@@ -2863,7 +2870,7 @@ Rules:
       log(`${charName} 특징 변경 → ${updatedCount}개 패널 프롬프트 업데이트됨 (씬별 의상변경 유지)`, 'success');
       // Auto-save storyboard
       if (projectId && currentEpisode) {
-        fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+        fbSavePhaseQueued(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
       }
     } else {
       log(`${charName} 특징 변경 저장됨 (프롬프트에서 해당 캐릭터 의상 패턴 미발견 — 수동 프롬프트 수정 필요할 수 있음)`, 'info');
@@ -2883,7 +2890,7 @@ Rules:
       }
       // Save analysis to Firebase
       if (projectId && currentEpisode) {
-        await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis});
+        await fbSavePhaseQueued(projectId, currentEpisode, 'step1_analysis', {analysis});
       }
       // Save to shared assets
       const asset = sharedAssets.characters?.[charId];
@@ -3521,7 +3528,7 @@ Rules:
       setIsSavingEditor(true);
       setSaveProgress('준비 중...');
       log(`${currentEpisode}화 에디터 배치 저장 중...`, 'info');
-      await fbSavePhase(projectId, currentEpisode, 'step5_editor', { editorPages, currentPageIdx }, false, (done, total, msg) => {
+      await fbSavePhaseQueued(projectId, currentEpisode, 'step5_editor', { editorPages, currentPageIdx }, false, (done, total, msg) => {
         setSaveProgress(msg);
       });
       setSaveProgress('');
@@ -6140,7 +6147,7 @@ Rules:
       if (currentEpisode && currentEpisode !== episodeNum && sourceText.trim()) {
         try {
           const existing = await fbLoadPhase(pid, currentEpisode, 'step1_analysis');
-          await fbSavePhase(pid, currentEpisode, 'step1_analysis', {
+          await fbSavePhaseQueued(pid, currentEpisode, 'step1_analysis', {
             analysis: existing?.analysis || analysis,
             sourceText,
             inputMode,
@@ -6238,7 +6245,7 @@ Rules:
             log(`  스토리보드 ${sbLen}개 → ${panelLen}개로 확장 (이미지 수에 맞춤)`, 'info');
             // Save expanded storyboard to Firebase
             if (pid && episodeNum) {
-              fbSavePhase(pid, episodeNum, 'step3_storyboard', {storyboard: padded}).catch(() => {});
+              fbSavePhaseQueued(pid, episodeNum, 'step3_storyboard', {storyboard: padded}).catch(() => {});
             }
           }
         }
@@ -6602,7 +6609,7 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
     if (projectId && currentEpisode) {
       try {
         const cs = [...new Set([...completedSteps, 0])];
-        await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis: parsed, sourceText: sourceTextRef.current, inputMode: inputModeRef.current});
+        await fbSavePhaseQueued(projectId, currentEpisode, 'step1_analysis', {analysis: parsed, sourceText: sourceTextRef.current, inputMode: inputModeRef.current});
         await fbSaveEpisode(projectId, currentEpisode, {step: 2, completedSteps: cs});
         updateEpisodeState(2, cs);
         log(`Step 1 자동 저장 완료`, 'info');
@@ -6710,7 +6717,7 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
           backgroundIds: Object.keys(refs.backgrounds),
           hasImages: true
         };
-        await fbSavePhase(projectId, currentEpisode, 'step2_references', step2Data, true);
+        await fbSavePhaseQueued(projectId, currentEpisode, 'step2_references', step2Data, true);
         await fbSaveEpisode(projectId, currentEpisode, {step: 2, completedSteps: cs});
         updateEpisodeState(2, cs);
         log('Step 2 자동 저장 완료', 'info');
@@ -6957,7 +6964,7 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
     if (projectId && currentEpisode) {
       try {
         const cs = [...new Set([...completedSteps, 0, 1, 2])];
-        await fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: parsed});
+        await fbSavePhaseQueued(projectId, currentEpisode, 'step3_storyboard', {storyboard: parsed});
         await fbSaveEpisode(projectId, currentEpisode, {step: 3, completedSteps: cs});
         updateEpisodeState(3, cs);
         log('Step 3 자동 저장 완료', 'info');
@@ -7103,7 +7110,7 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
     setStep(4);
     // Auto-save panels to Firebase
     if (projectId && currentEpisode) {
-      fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(e => log('패널 자동저장 실패: ' + e.message, 'error'));
+      fbSavePhaseQueued(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(e => log('패널 자동저장 실패: ' + e.message, 'error'));
     }
     log(`패널 ${newPanels.filter(Boolean).length}개 생성 완료!`, 'success');
     return newPanels;
@@ -7150,7 +7157,7 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
     log(`패널 ${idx+1} 수정됨`, 'success');
     // Auto-save to Firebase
     if (projectId && currentEpisode) {
-      fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+      fbSavePhaseQueued(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
     }
   };
   const deleteSbPanel = (idx) => {
@@ -7162,8 +7169,8 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
     setEditingSbPanel(null);
     log(`패널 ${idx+1} 삭제됨`, 'info');
     if (projectId && currentEpisode) {
-      fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
-      fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
+      fbSavePhaseQueued(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+      fbSavePhaseQueued(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
     }
   };
   const insertSbPanel = (atIdx) => {
@@ -7191,8 +7198,8 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
     setPanels(newPanels);
     // Auto-save both storyboard AND panels to Firebase to keep indices in sync
     if (projectId && currentEpisode) {
-      fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
-      fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
+      fbSavePhaseQueued(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+      fbSavePhaseQueued(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
     }
     // Auto-open editor for new panel
     setEditingSbPanel(atIdx);
@@ -7214,8 +7221,8 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
     setDraggingSbIdx(null);
     log(`패널 순서 변경됨`, 'info');
     if (projectId && currentEpisode) {
-      fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
-      fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
+      fbSavePhaseQueued(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+      fbSavePhaseQueued(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
     }
   };
 
@@ -7335,9 +7342,9 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
           setBatchProgress({current: i + 1, total: targetEpisodes.length, episode: epNum, step: 'Firebase 저장 중...'});
           log(`${epNum}화 패널 Firebase 저장 중...`, 'info');
           const panelCount = (panelsResult || []).filter(Boolean).length;
-          await fbSavePhase(projectId, epNum, 'step4_panels', {panels: panelsResult || [], bubbleOverlays: []});
+          await fbSavePhaseQueued(projectId, epNum, 'step4_panels', {panels: panelsResult || [], bubbleOverlays: []});
           if (sbResult && sbResult.length > 0) {
-            await fbSavePhase(projectId, epNum, 'step3_storyboard', {storyboard: sbResult});
+            await fbSavePhaseQueued(projectId, epNum, 'step3_storyboard', {storyboard: sbResult});
           }
           await fbSaveEpisode(projectId, epNum, {step: 4, completedSteps: [0,1,2,3,4]});
           log(`${epNum}화 패널 ${panelCount}개 Firebase 저장 완료`, 'success');
@@ -7519,7 +7526,7 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       setPanels(newPanels);
       // Auto-save to Firebase so editor reload can pick up the new image
       if (projectId && currentEpisode) {
-        fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
+        fbSavePhaseQueued(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
       }
       log(`패널 ${idx+1} 재생성 완료`, 'success');
     } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
@@ -7648,13 +7655,11 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       };
       await fbSaveEpisode(projectId, currentEpisode, episodeData);
 
-      // Save phases in parallel
-      const saveOps = [];
-      if (sourceText.trim() || analysis) saveOps.push(fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis, sourceText, inputMode}));
-      if (Object.keys(references.characters).length > 0) saveOps.push(fbSavePhase(projectId, currentEpisode, 'step2_references', {characterIds: Object.keys(references.characters), backgroundIds: Object.keys(references.backgrounds), hasImages: true}, true));
-      if (storyboard.length > 0) saveOps.push(fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard}));
-      if (panels.some(p => p)) saveOps.push(fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels}));
-      await Promise.all(saveOps);
+      // Save phases sequentially to avoid Firestore write stream exhaustion
+      if (sourceText.trim() || analysis) await fbSavePhaseQueued(projectId, currentEpisode, 'step1_analysis', {analysis, sourceText, inputMode});
+      if (Object.keys(references.characters).length > 0) await fbSavePhaseQueued(projectId, currentEpisode, 'step2_references', {characterIds: Object.keys(references.characters), backgroundIds: Object.keys(references.backgrounds), hasImages: true}, true);
+      if (storyboard.length > 0) await fbSavePhaseQueued(projectId, currentEpisode, 'step3_storyboard', {storyboard});
+      if (panels.some(p => p)) await fbSavePhaseQueued(projectId, currentEpisode, 'step4_panels', {panels});
 
       // Update episodes state with saved info
       setEpisodes(prev => prev.map(e =>
@@ -8061,7 +8066,7 @@ Return ONLY the detailed English prompt, nothing else.`,
 
         // 3) Firebase에 저장 (패널 이미지 생성 단계와 동일 효과)
         if (projectId && currentEpisode) {
-          await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays});
+          await fbSavePhaseQueued(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays});
           log(`✓ 패널 ${panelIndex + 1} 이미지 교체 및 Firebase 저장 완료`, 'success');
         } else {
           log(`✓ 패널 ${panelIndex + 1} 이미지 교체 완료 (Firebase 미연결)`, 'success');
@@ -8113,12 +8118,11 @@ Return ONLY the detailed English prompt, nothing else.`,
     try {
       setRunning(true);
       log(`패널 ${count}개 Firebase 저장 중...`, 'info');
-      // Save panels + storyboard in parallel
-      const panelSaveOps = [fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels, bubbleOverlays})];
-      if (storyboard.length > 0) panelSaveOps.push(fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard}));
+      // Save panels + storyboard sequentially to avoid write stream exhaustion
+      await fbSavePhaseQueued(projectId, currentEpisode, 'step4_panels', {panels, bubbleOverlays});
+      if (storyboard.length > 0) await fbSavePhaseQueued(projectId, currentEpisode, 'step3_storyboard', {storyboard});
       const cs = [...new Set([...completedSteps, 0, 1, 2, 3])];
-      panelSaveOps.push(fbSaveEpisode(projectId, currentEpisode, {step: 4, completedSteps: cs}));
-      await Promise.all(panelSaveOps);
+      await fbSaveEpisode(projectId, currentEpisode, {step: 4, completedSteps: cs});
       updateEpisodeState(4, cs);
       log(`✓ 패널 ${count}개 Firebase 저장 완료! 다시 불러올 수 있습니다.`, 'success');
     } catch(e) { log(`Firebase 저장 실패: ${e.message}`, 'error'); }
@@ -8139,7 +8143,7 @@ Return ONLY the detailed English prompt, nothing else.`,
       if (!phaseDoc.exists) {
         // 기존 저장 데이터 없음 — 전체 저장 fallback
         log('기존 패널 데이터 없음, 전체 저장으로 전환...', 'info');
-        await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels, bubbleOverlays});
+        await fbSavePhaseQueued(projectId, currentEpisode, 'step4_panels', {panels, bubbleOverlays});
       } else {
         const existingData = phaseDoc.data();
         const imgColl = phaseRef.collection('images');
@@ -10037,7 +10041,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                     <textarea className="form-textarea" value={sourceText} onChange={e=>setSourceText(e.target.value)}
                       onBlur={() => {
                         if (projectId && currentEpisode && sourceText.trim()) {
-                          fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis, sourceText, inputMode})
+                          fbSavePhaseQueued(projectId, currentEpisode, 'step1_analysis', {analysis, sourceText, inputMode})
                             .then(() => log('소스 텍스트 자동 저장됨', 'info'))
                             .catch(() => {});
                         }
@@ -10131,13 +10135,13 @@ Return ONLY the detailed English prompt, nothing else.`,
                             }
                             newSb.forEach((p, i) => { p.panelNumber = i + 1; });
                             setStoryboard(newSb);
-                            if (projectId && currentEpisode) fbSavePhase(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
+                            if (projectId && currentEpisode) fbSavePhaseQueued(projectId, currentEpisode, 'step3_storyboard', {storyboard: newSb}).catch(() => {});
                             log(`스토리보드 ${sbCount} → ${totalPanels}개로 동기화 (이미지 기준)`, 'success');
                           } else if (sbCount > totalPanels) {
                             // Pad panels array to match storyboard
                             const newPanels = [...panels, ...new Array(sbCount - totalPanels).fill(null)];
                             setPanels(newPanels);
-                            if (projectId && currentEpisode) fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
+                            if (projectId && currentEpisode) fbSavePhaseQueued(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
                             log(`패널 배열 ${totalPanels} → ${sbCount}개로 동기화 (스토리보드 기준)`, 'success');
                           }
                         }}>⚠ 동기화 ({panels.length}↔{storyboard.length})</button>
