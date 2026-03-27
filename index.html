@@ -1751,8 +1751,11 @@ async function pollLoraTraining(requestId, onProgress) {
 // ============================================================
 // NEW PIPELINE: WEBTOON EPISODE PRODUCTION (5 Steps)
 // ============================================================
+// 내부 step 번호는 Firebase 호환성을 위해 유지 (0=분석, 1=레퍼런스(숨김), 2=스토리보드, 3=패널생성, 4=미리보기)
+// UI에서는 Step 1(레퍼런스)을 숨기고, 에셋 라이브러리 전체 화면 페이지로 대체
 const STEPS = ['분석','레퍼런스','스토리보드','패널생성','미리보기'];
-const STEP_LABELS = ['1. 스토리 분석','2. 캐릭터/배경 레퍼런스','3. 스토리보드','4. 패널 이미지 생성','5. 웹툰 미리보기'];
+const STEP_LABELS = ['1. 스토리 분석','(에셋 — 숨김)','2. 스토리보드','3. 패널 이미지 생성','4. 웹툰 미리보기'];
+const VISIBLE_STEPS = [0, 2, 3, 4]; // UI 탭에 표시할 step 번호 (1 제외)
 
 // Art Style Presets
 // prefix: 패널 이미지 생성 시 프롬프트 앞에 붙는 스타일 지시
@@ -1789,6 +1792,11 @@ const ART_STYLES = {
     loras: [
       {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.7},
     ],
+    // Provider-specific style overrides: map to another ART_STYLE key, or 'none' to skip style
+    providerStyleMap: {
+      grok: 'naverWebtoon',       // Grok의 네이버웹툰 = Gemini의 로맨스와 가장 비슷
+      ninjaChat: 'none',          // NinjaChat은 레퍼런스 이미지만 따라감
+    },
   },
   blWebtoon: {
     name: 'BL 웹툰',
@@ -1800,6 +1808,10 @@ const ART_STYLES = {
     loras: [
       {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.7},
     ],
+    providerStyleMap: {
+      grok: 'naverWebtoon',
+      ninjaChat: 'none',
+    },
   },
   tlWebtoon: {
     name: 'TL 웹툰 (성인)',
@@ -1810,6 +1822,10 @@ const ART_STYLES = {
     loras: [
       {path: 'https://huggingface.co/XLabs-AI/flux-lora-collection/resolve/main/anime_lora.safetensors', scale: 0.6},
     ],
+    providerStyleMap: {
+      grok: 'naverWebtoon',
+      ninjaChat: 'none',
+    },
   },
   realistic: {
     name: '사실적 (Realistic)',
@@ -2034,8 +2050,9 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action|anxious|romantic|determined|melancholic|excited|playful|desperate|fearful|embarrassed",
     "description": "Brief Korean description of what happens in this panel",
-    "sceneTransition": "How this panel connects to the previous one: 'continuous shot', 'cut to reaction', 'time skip', 'new angle same scene'",
-    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. SCENE ACTION: [Describe the KEY ACTION/SITUATION from the plotBeat summary — what is physically happening in this moment: e.g. 'character slamming door shut', 'two characters sitting across a cafe table with untouched coffee', 'character running through rain-soaked street', 'character discovering a letter on the desk'. This is the CORE of the image — do NOT omit the scene's main action/event]. [CHARACTER 1 NAME]: [COPY-PASTE exact hair from appearance], [COPY-PASTE exact outfit], [detailed pose performing the scene action], [vivid specific expression matching the situation], [GAZE DIRECTION with emotional subtext]. [REPEAT for each character including background characters]. SCENE DETAILS: [specific objects, items, or environmental elements mentioned in the plotBeat — food on table, broken glass on floor, open laptop, rain on window, flowers in hand, etc.]. Background: [specific environment with time of day, lighting direction, ambient details]. Lighting: [mood-appropriate with direction]. Atmosphere: [weather, temperature cues, ambient activity]. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image."
+    "sceneTransition": "continuous|cut_to_reaction|new_angle_same_scene|time_skip|new_scene",
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. SCENE ACTION: [Describe the KEY ACTION/SITUATION from the plotBeat summary — what is physically happening in this moment: e.g. 'character slamming door shut', 'two characters sitting across a cafe table with untouched coffee', 'character running through rain-soaked street', 'character discovering a letter on the desk'. This is the CORE of the image — do NOT omit the scene's main action/event]. [CHARACTER 1 NAME]: [COPY-PASTE exact hair from appearance], [COPY-PASTE exact outfit], [detailed pose performing the scene action], [vivid specific expression matching the situation], [GAZE DIRECTION with emotional subtext]. [REPEAT for each character including background characters]. SCENE DETAILS: [specific objects, items, or environmental elements mentioned in the plotBeat — food on table, broken glass on floor, open laptop, rain on window, flowers in hand, etc.]. Background: [specific environment with time of day, lighting direction, ambient details]. Lighting: [mood-appropriate with direction]. Atmosphere: [weather, temperature cues, ambient activity]. NEVER include any text, letters, words, sound effects, onomatopoeia, or typography in the image.",
+    "deltaPrompt": "(ONLY for continuous/cut_to_reaction/new_angle_same_scene panels) Short English prompt describing ONLY what CHANGES from previous panel. Format: 'CHANGES: [what moved/changed]. KEEP: same background, same lighting, same character outfits.' Example: 'CHANGES: char_1 now turns head left toward char_2 with shocked wide eyes, mouth slightly open. char_2 smirks confidently with arms crossed. Camera shifts to over-the-shoulder angle. KEEP: same cafe interior, same afternoon warm lighting, same outfits, same table setup.'"
   }
 ]
 
@@ -2049,6 +2066,7 @@ Rules:
 - Include at least one panel per plot beat
 - Add transition panels between major scene changes
 - Each imagePrompt must be self-contained (include full character appearance details, EXACT outfit, not just names)
+- DELTA PROMPT RULE: For panels where sceneTransition is "continuous", "cut_to_reaction", or "new_angle_same_scene", you MUST also provide a "deltaPrompt" field. The deltaPrompt describes ONLY what changes from the previous panel (pose change, expression change, camera angle change, small prop change) and explicitly states what stays the same. This is used when the previous panel image is available as reference — the AI only needs to know what to modify. For "time_skip" or "new_scene" transitions, leave deltaPrompt empty or omit it.
 - SCENE DETAIL RULE: The imagePrompt MUST incorporate the specific actions, situations, and visual details from the plotBeat summary. Read the plotBeat carefully and translate EVERY visual element into the imagePrompt — character actions (opening door, picking up object, turning away), environmental details (rain, scattered papers, empty bottles on table), spatial relationships (standing at doorway, sitting across from each other), and situational context (caught in the act, arriving late, discovering something). The imagePrompt should paint a COMPLETE picture of the scene, not just describe characters standing/sitting with expressions.
 - CRITICAL STYLE RULE: Do NOT include any art style keywords in imagePrompt (no "manhwa style", "webtoon style", "anime", "illustration", "digital painting", "photorealistic", "cinematic", "cartoon", "cel-shaded", "vibrant colors", etc.). The art style is controlled separately and will be prepended automatically. imagePrompt should ONLY describe: shot size, camera angle, character appearances, poses, expressions, outfits, background environment, lighting, and mood. Nothing about rendering style.
 - Include prop descriptions in imagePrompt when props appear in scene
@@ -2288,8 +2306,9 @@ Return ONLY a valid JSON array (no markdown):
     "narration": "나레이션이 있으면 여기에",
     "mood": "calm|tense|dramatic|warm|sad|comedic|action|anxious|romantic|determined|melancholic|excited|playful|desperate|fearful|embarrassed",
     "description": "Brief Korean description of what happens",
-    "sceneTransition": "How this connects to previous panel: 'continuous', 'cut to reaction', 'time skip', 'new angle same scene'",
-    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. SCENE ACTION: [Describe the KEY ACTION/SITUATION from the scene summary — the core visual event happening in this moment. e.g. 'character grabbing another's wrist as they try to leave', 'character staring at phone screen showing a message', 'two characters walking side by side under one umbrella'. NEVER omit the scene's main action]. [CHARACTER NAME]: [COPY-PASTE exact hair], [COPY-PASTE exact outfit], [detailed pose performing the scene action], [vivid expression], [GAZE with emotional subtext]. [REPEAT for ALL characters]. SCENE DETAILS: [specific objects/items/environmental elements from the scene — papers scattered on desk, steaming cup of coffee, crumpled photo, wet footprints on floor, etc.]. Background: [environment with time of day, lighting, ambient details]. [Background characters with brief descriptions]. Lighting: [direction and mood]. NEVER include any text, sound effects, or typography."
+    "sceneTransition": "continuous|cut_to_reaction|new_angle_same_scene|time_skip|new_scene",
+    "imagePrompt": "Detailed English prompt: [shot size], [camera angle]. SCENE ACTION: [Describe the KEY ACTION/SITUATION from the scene summary — the core visual event happening in this moment. e.g. 'character grabbing another's wrist as they try to leave', 'character staring at phone screen showing a message', 'two characters walking side by side under one umbrella'. NEVER omit the scene's main action]. [CHARACTER NAME]: [COPY-PASTE exact hair], [COPY-PASTE exact outfit], [detailed pose performing the scene action], [vivid expression], [GAZE with emotional subtext]. [REPEAT for ALL characters]. SCENE DETAILS: [specific objects/items/environmental elements from the scene — papers scattered on desk, steaming cup of coffee, crumpled photo, wet footprints on floor, etc.]. Background: [environment with time of day, lighting, ambient details]. [Background characters with brief descriptions]. Lighting: [direction and mood]. NEVER include any text, sound effects, or typography.",
+    "deltaPrompt": "(ONLY for continuous/cut_to_reaction/new_angle_same_scene) Short prompt describing ONLY what changes from the previous panel. Example: 'CHANGES: char_1 turns head left with shocked expression. char_2 now smirks with arms crossed. Camera shifts to over-the-shoulder. KEEP: same cafe, same lighting, same outfits.'"
   }
 ]
 
@@ -2302,6 +2321,7 @@ Rules:
 - Use wide shots for action and establishing scenes
 - EVERY plotBeat must have at least 1 panel — verify this before returning
 - Each imagePrompt must be self-contained — COPY character hair+outfit descriptions verbatim from character data
+- DELTA PROMPT RULE: For panels where sceneTransition is "continuous", "cut_to_reaction", or "new_angle_same_scene", you MUST provide a "deltaPrompt" describing ONLY what changes from the previous panel and what stays the same. For "time_skip" or "new_scene", leave deltaPrompt empty.
 - SCENE DETAIL RULE: The imagePrompt MUST incorporate ALL specific actions, situations, and visual details from the scene summary. Read each scene carefully and translate EVERY visual element into the imagePrompt — character actions (pushing someone away, handing over a gift, typing on laptop), environmental details (rain hitting window, candles on birthday cake, broken vase on floor), spatial relationships (facing each other across a narrow hallway, sitting side by side on a bench), and situational context (caught eavesdropping, arriving at a new place, discovering a secret). A good imagePrompt paints a COMPLETE, vivid picture of the scene moment — not just "characters standing with expressions."
 - CRITICAL STYLE RULE: Do NOT include any art style keywords in imagePrompt (no "manhwa style", "webtoon style", "anime", "illustration", "digital painting", "photorealistic", "cinematic", "cartoon", "cel-shaded", "vibrant colors", etc.). The art style is controlled separately and will be prepended automatically. imagePrompt should ONLY describe: shot size, camera angle, character appearances, poses, expressions, outfits, background environment, lighting, and mood. Nothing about rendering style.
 - Include prop descriptions when they appear
@@ -2459,8 +2479,116 @@ function App() {
   const setInputMode = (val) => { inputModeRef.current = val; _setInputMode(val); };
   const [analysis, setAnalysis] = useState(null);
   const [references, setReferences] = useState({characters:{}, backgrounds:{}});
-  const [storyboard, setStoryboard] = useState([]);
-  const [panels, setPanels] = useState([]);
+  const [storyboard, setStoryboardRaw] = useState([]);
+  const [panels, setPanelsRaw] = useState([]);
+
+  // ======== Undo/Redo 히스토리 ========
+  const undoStackRef = useRef([]);   // [{storyboard, panels}]
+  const redoStackRef = useRef([]);
+  const sbRef = useRef([]);          // 현재 storyboard 추적
+  const pnRef = useRef([]);          // 현재 panels 추적
+  const skipSnapshotRef = useRef(false);
+  const MAX_UNDO = 30;
+  const [undoCount, setUndoCount] = useState(0);  // UI 리렌더 트리거용
+  const [redoCount, setRedoCount] = useState(0);
+
+  // 스냅샷 저장 (변경 직전 상태를 저장)
+  const saveSnapshot = useCallback(() => {
+    if (skipSnapshotRef.current) return;
+    undoStackRef.current.push({
+      storyboard: JSON.parse(JSON.stringify(sbRef.current)),
+      panels: [...pnRef.current],
+    });
+    if (undoStackRef.current.length > MAX_UNDO) undoStackRef.current.shift();
+    redoStackRef.current = [];
+    setUndoCount(undoStackRef.current.length);
+    setRedoCount(0);
+  }, []);
+
+  // 래퍼: setStoryboard — 변경 전 스냅샷 자동 저장
+  const setStoryboard = useCallback((valOrFn) => {
+    saveSnapshot();
+    setStoryboardRaw(prev => {
+      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      sbRef.current = next;
+      return next;
+    });
+  }, [saveSnapshot]);
+
+  // 래퍼: setPanels — 변경 전 스냅샷 자동 저장
+  const setPanels = useCallback((valOrFn) => {
+    saveSnapshot();
+    setPanelsRaw(prev => {
+      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      pnRef.current = next;
+      return next;
+    });
+  }, [saveSnapshot]);
+
+  // 히스토리 초기화 (에피소드 로드/리셋 시 호출)
+  const clearUndoHistory = useCallback(() => {
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    setUndoCount(0);
+    setRedoCount(0);
+  }, []);
+
+  const undo = useCallback(() => {
+    if (undoStackRef.current.length === 0) return;
+    // 현재 상태를 redo에 저장
+    redoStackRef.current.push({
+      storyboard: JSON.parse(JSON.stringify(sbRef.current)),
+      panels: [...pnRef.current],
+    });
+    const snapshot = undoStackRef.current.pop();
+    skipSnapshotRef.current = true;
+    sbRef.current = snapshot.storyboard;
+    pnRef.current = snapshot.panels;
+    setStoryboardRaw(snapshot.storyboard);
+    setPanelsRaw(snapshot.panels);
+    skipSnapshotRef.current = false;
+    setUndoCount(undoStackRef.current.length);
+    setRedoCount(redoStackRef.current.length);
+  }, []);
+
+  const redo = useCallback(() => {
+    if (redoStackRef.current.length === 0) return;
+    // 현재 상태를 undo에 저장
+    undoStackRef.current.push({
+      storyboard: JSON.parse(JSON.stringify(sbRef.current)),
+      panels: [...pnRef.current],
+    });
+    const snapshot = redoStackRef.current.pop();
+    skipSnapshotRef.current = true;
+    sbRef.current = snapshot.storyboard;
+    pnRef.current = snapshot.panels;
+    setStoryboardRaw(snapshot.storyboard);
+    setPanelsRaw(snapshot.panels);
+    skipSnapshotRef.current = false;
+    setUndoCount(undoStackRef.current.length);
+    setRedoCount(redoStackRef.current.length);
+  }, []);
+  // Ctrl+Z / Ctrl+Shift+Z 키보드 단축키
+  useEffect(() => {
+    const handler = (e) => {
+      // textarea, input 등 포커스 중이면 브라우저 기본 undo 사용
+      const tag = document.activeElement?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT' || document.activeElement?.contentEditable === 'true') return;
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        redo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo]);
+
   const [imageProvider, setImageProvider] = useState('ninjaChat');
   const [nbVertexModel, setNbVertexModel] = useState('gemini-2.5-flash'); // Vertex AI NanoBanana model key
   const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | zimage | seedream
@@ -2470,7 +2598,7 @@ function App() {
 
   // Shared assets (project-level)
   const [sharedAssets, setSharedAssets] = useState({characters:{}, backgrounds:{}, props:{}});
-  const [showAssetLibrary, setShowAssetLibrary] = useState(false);
+  const [showAssetPage, setShowAssetPage] = useState(false);
   const [assetTab, setAssetTab] = useState('characters');
 
   // LoRA models (character consistency) — {charId: {url, triggerWord, status, requestId}}
@@ -2486,10 +2614,7 @@ function App() {
   const [projectList, setProjectList] = useState([]);
   const [showProjects, setShowProjects] = useState(false);
 
-  // Episode outfits (per-episode character outfit/accessory overrides)
-  // { charId: { outfit: '...', accessories: '...' } }
-  const [episodeOutfits, setEpisodeOutfits] = useState({});
-  const [showEpisodeOutfits, setShowEpisodeOutfits] = useState(false);
+  // [DEPRECATED] episodeOutfits removed — outfit management is now via outfitPresets on each character
 
   // Standalone Cover Generator (home screen)
   const [showCoverGenerator, setShowCoverGenerator] = useState(false);
@@ -2635,9 +2760,8 @@ Rules:
     if (!charName) return;
 
     const appearance = char.appearance || '';
-    const epO = episodeOutfits?.[charId] || {};
-    const baseOutfit = epO.outfit || char.outfit || '';
-    const baseAccessories = epO.accessories || (char.accessories && char.accessories !== 'none' ? char.accessories : '');
+    const baseOutfit = char.outfit || '';
+    const baseAccessories = char.accessories && char.accessories !== 'none' ? char.accessories : '';
 
     // Use buildCharacterStates to get accumulated outfit state per panel (respects outfitOverride persistence)
     let updatedCount = 0;
@@ -3452,10 +3576,20 @@ Rules:
   const deletePageObject = (pageIdx, objId) => {
     setEditorPages(prev => {
       const next = [...prev];
-      next[pageIdx] = {
-        ...next[pageIdx],
-        objects: next[pageIdx].objects.filter(o => o.id !== objId)
-      };
+      const obj = next[pageIdx].objects.find(o => o.id === objId);
+      // 패널/이미지는 실제 삭제 대신 hidden 토글 (리스트에서 복원 가능)
+      if (obj && (obj.type === 'panel' || obj.type === 'image')) {
+        next[pageIdx] = {
+          ...next[pageIdx],
+          objects: next[pageIdx].objects.map(o => o.id === objId ? {...o, hidden: !o.hidden} : o)
+        };
+      } else {
+        // 말풍선/SFX 등은 기존대로 실제 삭제
+        next[pageIdx] = {
+          ...next[pageIdx],
+          objects: next[pageIdx].objects.filter(o => o.id !== objId)
+        };
+      }
       return next;
     });
     if (selectedObjectId === objId) setSelectedObjectId(null);
@@ -4161,12 +4295,13 @@ Rules:
 
     let contentH = 0;
     for (const obj of page.objects) {
+      if (obj.hidden) continue;
       const bottom = (obj.y || 0) + (obj.h || 0);
       if (bottom > contentH) contentH = bottom;
     }
     contentH = Math.max(contentH + 20, 100);
 
-    const sorted = [...page.objects].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1));
+    const sorted = [...page.objects].filter(o => !o.hidden).sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1));
     const totalPages = Math.ceil(contentH / PAGE_H);
 
     // Pre-load all images once (avoids repeated proxy calls)
@@ -4234,15 +4369,16 @@ Rules:
     log('PSD 내보내기 중... (레이어 생성)', 'info');
 
     const page = editorPages[0];
-    // Calculate actual content height
+    // Calculate actual content height (hidden 객체 제외)
     let contentH = 0;
     for (const obj of page.objects) {
+      if (obj.hidden) continue;
       const bottom = (obj.y || 0) + (obj.h || 0);
       if (bottom > contentH) contentH = bottom;
     }
     contentH = Math.max(contentH + 20, 100);
 
-    const sorted = [...page.objects].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1));
+    const sorted = [...page.objects].filter(o => !o.hidden).sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1));
     const children = [];
 
     for (let idx = 0; idx < sorted.length; idx++) {
@@ -4478,10 +4614,8 @@ Rules:
     const states = {}; // {charId: {outfit, pose, expression, location, props, lastChangedAt, changeLog}}
     if (analysisData?.characters) {
       for (const c of analysisData.characters) {
-        // 에피소드 의상/악세서리가 설정되었으면 그것을 초기값으로 사용
-        const epData = episodeOutfits?.[c.id] || {};
-        const initOutfit = epData.outfit || c.outfit || '';
-        const initAccessories = epData.accessories || c.accessories || '';
+        const initOutfit = c.outfit || '';
+        const initAccessories = c.accessories || '';
         states[c.id] = {
           outfit: initOutfit,
           accessories: initAccessories,
@@ -4490,7 +4624,7 @@ Rules:
           location: '',
           props: [],
           lastChangedAt: 0,
-          changeLog: [{panel: 0, field: 'init', from: '', to: initOutfit, desc: epData.outfit ? `${currentEpisode || ''}화 의상` : '기본 상태'}],
+          changeLog: [{panel: 0, field: 'init', from: '', to: initOutfit, desc: '기본 상태'}],
         };
       }
     }
@@ -4538,7 +4672,7 @@ Rules:
       }
     }
     return states;
-  }, [episodeOutfits, currentEpisode]);
+  }, [currentEpisode]);
 
   // Generate a compact state summary string for a character (used in image prompts)
   const formatCharacterState = (charId, charState, panelCharData) => {
@@ -4590,18 +4724,19 @@ Rules:
       charIds.push(charId);
       const saCharImg = sa?.characters?.[charId]?.image;
       const epCharImg = episodeRefs?.characters?.[charId];
-      // 에피소드 레퍼런스 우선 (에피소드 의상이 반영된 이미지), 없으면 기본 sharedAssets
-      const charImg = epCharImg || saCharImg;
+      // 프리셋 이미지 우선: 패널에 outfitPreset이 지정되어 있으면 해당 프리셋 이미지 사용
+      const presetName = pc.outfitPreset;
+      const presetImg = presetName ? sa?.characters?.[charId]?.outfitPresets?.[presetName]?.image : null;
+      // 우선순위: 프리셋 이미지 > 에피소드 레퍼런스 > 기본 sharedAssets
+      const charImg = presetImg || epCharImg || saCharImg;
+      if (presetImg) console.log(`[buildPanelRefs] ✓ 캐릭터 "${charId}" 프리셋 "${presetName}" 이미지 사용`);
       const charInfo = analysisData.characters?.find(c => c.id === charId);
       const saCharData = sa?.characters?.[charId];
       const charState = charStates?.[charId];
-      // Outfit priority: panel-level override > episode outfit > accumulated state > default
-      // (episode outfit은 buildCharacterStates에서 이미 초기값으로 반영되므로 charState.outfit에 포함)
-      const epOutfitData = episodeOutfits?.[charId] || {};
-      const epOutfit = epOutfitData.outfit;
-      const outfitDesc = pc.outfitOverride || epOutfit || charState?.outfit || charInfo?.outfit || '';
-      // Accessories priority: panel override > accumulated state > episode > default
-      const accessoriesDesc = pc.accessoriesOverride || charState?.accessories || epOutfitData.accessories || charInfo?.accessories || '';
+      // Outfit priority: panel-level override (from preset or manual) > accumulated state > default
+      const outfitDesc = pc.outfitOverride || charState?.outfit || charInfo?.outfit || '';
+      // Accessories priority: panel override > accumulated state > default
+      const accessoriesDesc = pc.accessoriesOverride || charState?.accessories || charInfo?.accessories || '';
       const appearanceDesc = charInfo?.appearance || charId;
       // Build detailed Visual ID Card: combine all available description fields
       const detailParts = [appearanceDesc];
@@ -4627,7 +4762,8 @@ Rules:
       assetDescriptions.push(`${charLabel}: ${fullDesc}`);
       if (charImg) {
         refImages.push({image: charImg, description: `character: ${charInfo?.name || charId} — ${fullDesc}`});
-        console.log(`[buildPanelRefs] ✓ 캐릭터 "${charId}" 이미지 발견 (source: ${epCharImg ? 'episodeRefs(의상변경)' : 'sharedAssets(기본)'}, length: ${charImg.length})`);
+        const imgSource = presetImg ? `프리셋(${presetName})` : epCharImg ? 'episodeRefs(의상변경)' : 'sharedAssets(기본)';
+        console.log(`[buildPanelRefs] ✓ 캐릭터 "${charId}" 이미지 발견 (source: ${imgSource}, length: ${charImg.length})`);
       } else {
         console.warn(`[buildPanelRefs] ✗ 캐릭터 "${charId}" 이미지 없음 (sharedAssets keys: [${Object.keys(sa?.characters || {}).join(',')}])`);
       }
@@ -4711,7 +4847,7 @@ Rules:
 
     console.log(`[buildPanelRefs] 결과: refImages=${refImages.length}개, assetDescriptions=${assetDescriptions.length}개`);
     return {refImages, assetDescriptions, charIds: charIds.filter(Boolean)};
-  }, [episodeOutfits]);
+  }, []);
 
   // Helper: get style prefix for current art style selection
   const getStylePrefix = useCallback(() => {
@@ -4914,16 +5050,15 @@ Rules:
     }
 
     // === OUTFIT DETAIL REINFORCEMENT ===
-    // Pull structured outfit from episodeOutfits or analysis and reinforce
+    // Pull structured outfit from preset/override or analysis default and reinforce
     if (panel.characters?.length > 0) {
       const outfitDetails = [];
       for (const pc of panel.characters) {
         const charId = pc.id || pc;
         const charInfo = analysis?.characters?.find(c => c.id === charId);
         const charName = charInfo?.name || charId;
-        const epO = episodeOutfits?.[charId] || {};
-        const outfit = pc.outfitOverride || epO.outfit || charInfo?.outfit || '';
-        const accessories = epO.accessories || '';
+        const outfit = pc.outfitOverride || charInfo?.outfit || '';
+        const accessories = pc.accessoriesOverride || charInfo?.accessories || '';
         if (outfit) {
           let detail = `${charName} wears EXACTLY: ${outfit}`;
           if (accessories) detail += ` with ${accessories}`;
@@ -4960,48 +5095,142 @@ Rules:
       .trim();
   };
 
-  const callImage = useCallback(async (prompt, opts={}) => {
-    let stylePrefix = getStylePrefix();
-    const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.naverWebtoon).name;
+  // ============================================================
+  // buildStyledPrompt: CENTRALIZED style prompt builder for ALL providers
+  // ============================================================
+  const buildStyledPrompt = useCallback((prompt, opts={}) => {
+    const curStyle = ART_STYLES[artStyle] || ART_STYLES.naverWebtoon;
 
-    // When using previous panel as reference, use a short style hint instead of the full detailed prefix
-    // This keeps the art style name (e.g. "Korean romance webtoon style") for consistency
-    // while letting the reference image define the detailed rendering style
-    if (opts.skipStyle) {
-      const curStyle = ART_STYLES[artStyle] || ART_STYLES.naverWebtoon;
+    // --- Provider-specific style mapping ---
+    // Some providers produce better results with a different style preset
+    // e.g., Grok's "naverWebtoon" output ≈ Gemini's "romanceWebtoon" output
+    const provider = opts.provider || '';
+    const mappedStyleKey = curStyle.providerStyleMap?.[provider];
+    const isStyleNone = mappedStyleKey === 'none'; // Provider works best with refs only, no style
+    const effectiveStyle = isStyleNone ? null : (mappedStyleKey ? (ART_STYLES[mappedStyleKey] || curStyle) : curStyle);
+
+    let stylePrefix;
+    if (isStyleNone) {
+      // Provider works best without style prompts (e.g., NinjaChat with ref images)
+      stylePrefix = '';
+    } else if (mappedStyleKey && ART_STYLES[mappedStyleKey]) {
+      // Use mapped style's prefix for this provider
       if (artStyle === 'custom') {
-        // For custom styles, use just the first sentence or short portion as a hint
-        const customHint = customStylePrompt ? customStylePrompt.trim().split('.')[0] + '. ' : '';
+        stylePrefix = customStylePrompt ? customStylePrompt + ' ' : '';
+      } else {
+        stylePrefix = ART_STYLES[mappedStyleKey].prefix || '';
+      }
+    } else {
+      stylePrefix = getStylePrefix();
+    }
+
+    // --- Style prefix mode ---
+    if (opts.skipStyle && !isStyleNone) {
+      // When using previous panel as reference, use a MEDIUM style hint (not too short)
+      // Include core visual descriptors to prevent style drift
+      if (artStyle === 'custom') {
+        const customHint = customStylePrompt ? customStylePrompt.trim().split('.').slice(0, 2).join('.') + '. ' : '';
         stylePrefix = customHint;
       } else {
-        // Extract just the style name portion (first phrase before first comma) as a lightweight hint
-        const fullPrefix = curStyle.prefix || '';
-        const firstPhrase = fullPrefix.split(',')[0].trim();
-        // Avoid "style style" duplication — only append if not already ending with "style"
-        const styleHint = firstPhrase.endsWith('style') ? firstPhrase + '. ' : firstPhrase + ' style. ';
+        const srcPrefix = effectiveStyle?.prefix || curStyle.prefix || '';
+        const phrases = srcPrefix.split(',').map(s => s.trim());
+        const styleHint = phrases.slice(0, Math.min(3, phrases.length)).join(', ') + '. ';
         stylePrefix = styleHint;
       }
-      log(`스타일 힌트 모드: "${stylePrefix.trim()}" (레퍼런스 이미지 스타일 보조)`, 'info');
     }
 
-    // For reference sheet generation (character/bg/prop), use a clean prefix
-    // to avoid content filters rejecting T-pose reference images
+    // For TL reference sheets, use safer prefix
     const isRefSheet = /character reference sheet|full body.*front view|clean.*background.*T-pose|reference sheet/i.test(prompt);
     if (!opts.skipStyle && isRefSheet && artStyle === 'tlWebtoon') {
-      // Use romance-style prefix for reference sheets — same art quality without mature keywords
-      stylePrefix = 'Korean romance webtoon style, semi-realistic detailed art, beautifully detailed eyes and hair, smooth digital painting, delicate linework, elegant composition. ';
+      stylePrefix = ART_STYLES.romanceWebtoon.prefix;
     }
 
-    // Strip Korean onomatopoeia / sound effects + conflicting style keywords from prompt
-    const cleanPrompt = stripStyleKeywords(sanitizeImagePrompt(prompt));
+    // --- Clean prompt ---
+    const cleanedPrompt = stripStyleKeywords(sanitizeImagePrompt(prompt));
 
-    // Build asset-enriched prompt: append asset descriptions only when NO reference images
-    // (when refs exist, images speak louder than text — avoid prompt overload)
+    // --- No-text directive (universal) ---
+    const noTextDirective = '\nDo NOT render any text, letters, words, sound effects, onomatopoeia, or speech bubbles in the image.';
+
+    // --- Rendering consistency directive ---
+    // For ref-only providers (isStyleNone), use a lighter consistency hint that doesn't impose style
+    const toneDirective = isStyleNone
+      ? '\nMaintain consistent art style matching the reference images across all panels.'
+      : '\n[STYLE LOCK] Maintain IDENTICAL art style across all panels: same linework weight, color palette, shading technique, skin rendering, background detail level. Every panel must look like the same artist drew it in one session.';
+
+    // --- Style reinforcement at end (prevents drift on long prompts) ---
+    // Skip for ref-only providers — they should follow reference images, not text style
+    const styleReinforce = isStyleNone ? '' : ('\n[ART STYLE] ' + (stylePrefix.trim().substring(0, 150)));
+
+    // --- Visual ID Cards (for text-only providers) ---
+    let visualIdCards = '';
+    if (opts.assetDescriptions?.length > 0 && !opts.compact) {
+      const charDescs = opts.assetDescriptions.filter(d => d.startsWith('[Character'));
+      const propDescs = opts.assetDescriptions.filter(d => d.startsWith('[Prop'));
+      const bgDescs = opts.assetDescriptions.filter(d => d.startsWith('[Background'));
+      if (charDescs.length + propDescs.length + bgDescs.length > 0) {
+        visualIdCards = '\n\n=== VISUAL ID CARDS ===\n' +
+          'Render EVERY character/prop/background EXACTLY as described — these are canonical designs.\n\n';
+        if (charDescs.length > 0) {
+          visualIdCards += charDescs.map(d => d + '\n→ MUST look identical in every panel: same hair, outfit, face, accessories.').join('\n\n') + '\n\n';
+        }
+        if (propDescs.length > 0) {
+          visualIdCards += propDescs.map(d => d + '\n→ Same design/color/shape whenever it appears.').join('\n\n') + '\n\n';
+        }
+        if (bgDescs.length > 0) {
+          visualIdCards += bgDescs.map(d => d + '\n→ Consistent architecture, color, layout.').join('\n\n') + '\n\n';
+        }
+        visualIdCards += '=== END VISUAL ID CARDS ===\n';
+      }
+    }
+    // Compact version for providers with shorter prompt limits
+    let compactIdCards = '';
+    if (opts.assetDescriptions?.length > 0 && opts.compact) {
+      const charDescs = opts.assetDescriptions.filter(d => d.startsWith('[Character'));
+      const bgDescs = opts.assetDescriptions.filter(d => d.startsWith('[Background'));
+      if (charDescs.length + bgDescs.length > 0) {
+        const compactDescs = charDescs.map(d => d.replace(/,?\s*PREVIOUS POSE:.*?(?=,\s*\[|$)/gi, '').replace(/,?\s*pose:.*?(?=,\s*\[|$)/gi, ''));
+        compactIdCards = '\nCHARACTER REFS: ' + compactDescs.join(' | ');
+        if (bgDescs.length > 0) compactIdCards += '\nBACKGROUND: ' + bgDescs[0];
+      }
+    }
+
+    // --- Asset suffix (when no reference images available) ---
     const refs = opts.referenceImages || [];
-    const assetSuffix = (opts.assetDescriptions?.length > 0 && refs.length === 0)
+    const assetSuffix = (opts.assetDescriptions?.length > 0 && refs.length === 0 && !visualIdCards && !compactIdCards)
       ? '\n\nCharacter/asset details:\n' + opts.assetDescriptions.join('\n')
       : '';
-    const basePrompt = stylePrefix + cleanPrompt + assetSuffix;
+
+    return {
+      stylePrefix,
+      cleanedPrompt,
+      noTextDirective,
+      toneDirective,
+      styleReinforce,
+      visualIdCards,
+      compactIdCards,
+      assetSuffix,
+      // Pre-built prompt variants
+      full: stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective + styleReinforce,
+      compact: stylePrefix + cleanedPrompt + compactIdCards + toneDirective + noTextDirective + styleReinforce,
+      base: stylePrefix + cleanedPrompt + assetSuffix,
+    };
+  }, [artStyle, customStylePrompt, getStylePrefix]);
+
+  const callImage = useCallback(async (prompt, opts={}) => {
+    const curStyleName = artStyle === 'custom' ? '사용자 정의' : (ART_STYLES[artStyle]||ART_STYLES.naverWebtoon).name;
+    const refs = opts.referenceImages || [];
+
+    // Map imageProvider to provider key for style mapping
+    const providerKey = {
+      nanoBanana: 'gemini', falAI: 'flux', grok: 'grok', imagen4: 'imagen4',
+      a2eImage: 'a2e', a2eNanoBanana: 'a2eNanoBanana', flux2Pro: 'flux2Pro',
+      ninjaChat: 'ninjaChat', stableDiffusion: 'stableDiffusion'
+    }[imageProvider] || imageProvider;
+
+    // Build styled prompt variants using centralized builder (with provider-specific style mapping)
+    const sp = buildStyledPrompt(prompt, {...opts, provider: providerKey});
+    const stylePrefix = sp.stylePrefix;
+    const basePrompt = sp.base;
 
     // ========== Gemini (Vertex AI NanoBanana — supports multiple models) ==========
     if (imageProvider === 'nanoBanana') {
@@ -5030,7 +5259,7 @@ Rules:
         log(`${nbInfo.name} 사용 (${curStyleName} 스타일 적용)`, 'info');
       }
       try {
-        return await callNanoBanana(basePrompt, geminiOpts);
+        return await callNanoBanana(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, geminiOpts);
       } catch (gemErr) {
         const errMsg = gemErr.message || '';
         if (errMsg.includes('policy') || errMsg.includes('filtered') || errMsg.includes('Prohibited') || errMsg.includes('SAFETY')) {
@@ -5044,7 +5273,7 @@ Rules:
 
     // ========== fal.ai FLUX ==========
     if (imageProvider === 'falAI') {
-      let styledPrompt = basePrompt;
+      let styledPrompt = basePrompt + sp.toneDirective + sp.styleReinforce;
       log(`fal.ai FLUX: "${curStyleName}" 스타일 프롬프트 적용됨`, 'info');
       const falOpts = {
         imageSize: opts.aspectRatio === '16:9' ? {width:1024,height:576} : opts.aspectRatio === '1:1' ? {width:768,height:768} : {width:768,height:1024}
@@ -5118,36 +5347,15 @@ Rules:
 
       const isMatureStyle = artStyle === 'tlWebtoon' || artStyle === 'blWebtoon';
 
-      // Build COMPACT Visual ID Cards for Grok (shorter than Imagen to avoid prompt bloat)
-      let visualIdCards = '';
-      if (opts.assetDescriptions?.length > 0) {
-        const charDescs = opts.assetDescriptions.filter(d => d.startsWith('[Character'));
-        const bgDescs = opts.assetDescriptions.filter(d => d.startsWith('[Background'));
-        if (charDescs.length + bgDescs.length > 0) {
-          // For Grok: strip verbose pose transition text, keep core appearance only
-          const compactDescs = charDescs.map(d => {
-            // Remove "PREVIOUS POSE: ... → CURRENT POSE: ... (maintain...)" to keep it short
-            return d.replace(/,?\s*PREVIOUS POSE:.*?(?=,\s*\[|$)/gi, '')
-                    .replace(/,?\s*pose:.*?(?=,\s*\[|$)/gi, '');
-          });
-          visualIdCards = '\n\nCHARACTER REFS: ' + compactDescs.join(' | ');
-          if (bgDescs.length > 0) visualIdCards += '\nBACKGROUND: ' + bgDescs[0];
-        }
-      }
-      const noTextDirective = '\nNo text/letters/words in image.';
-
-      // Clean prompt: basic SFX removal + Grok sanitization for mature styles
-      let cleanedPrompt = sanitizeImagePrompt(prompt);
+      // Use centralized prompt builder (compact mode for Grok)
+      const grokSp = buildStyledPrompt(prompt, {...opts, compact: true, provider: 'grok'});
+      let cleanedPrompt = grokSp.cleanedPrompt;
       if (isMatureStyle) {
         cleanedPrompt = sanitizeForGrok(cleanedPrompt);
         log('Grok: TL/BL 모드 — 콘텐츠 필터 대응 프롬프트 적용', 'info');
       }
 
-      // Compact tone directive (shorter for Grok to keep focus on style)
-      const toneDirective = '\nMaintain IDENTICAL art style, color palette, linework weight, shading technique, and skin rendering across all panels. Same artist, same episode.';
-
-      // Style reinforcement: place style prefix at start AND end to prevent drift
-      const grokPrompt = stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
+      const grokPrompt = grokSp.stylePrefix + cleanedPrompt + grokSp.compactIdCards + grokSp.toneDirective + grokSp.noTextDirective + grokSp.styleReinforce;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
 
       // Collect ALL reference images for Grok Edit (max 5 per xAI API)
@@ -5189,7 +5397,7 @@ Rules:
         const refContext = refLabels.length > 0
           ? `\nReference images provided: ${refLabels.join('; ')}. You MUST faithfully reproduce the visual details from ALL reference images — backgrounds, characters, art style, color palette.`
           : '';
-        const editPrompt = stylePrefix + cleanedPrompt + refContext + visualIdCards + toneDirective + noTextDirective + '\nStyle: ' + (stylePrefix.substring(0, 120));
+        const editPrompt = grokSp.stylePrefix + cleanedPrompt + refContext + grokSp.compactIdCards + grokSp.toneDirective + grokSp.noTextDirective + grokSp.styleReinforce;
         log(`Grok Edit (imagine 기본) 사용 — 레퍼런스 ${grokRefImages.length}개 + ${curStyleName}${charCount > 0 ? ' + 캐릭터 '+charCount+'명' : ''}`, 'info');
         try {
           return await callGrokEdit(editPrompt, grokRefImages, {aspectRatio: opts.aspectRatio || '3:4', model: grokImageModel});
@@ -5204,10 +5412,11 @@ Rules:
         }
       }
 
+      const grokEffectiveStyleName = grokSp.stylePrefix ? (ART_STYLES[artStyle]?.providerStyleMap?.grok ? ART_STYLES[ART_STYLES[artStyle].providerStyleMap.grok]?.name + ' → ' + curStyleName : curStyleName) : curStyleName;
       if (charCount > 0) {
-        log(`Grok ${grokImageModel === 'grok-imagine-image-pro' ? 'Pro' : 'Image'} 사용 (${curStyleName} + 에셋 ID카드: 캐릭터 ${charCount}명)`, 'info');
+        log(`Grok ${grokImageModel === 'grok-imagine-image-pro' ? 'Pro' : 'Image'} 사용 (${grokEffectiveStyleName} + 에셋 ID카드: 캐릭터 ${charCount}명)`, 'info');
       } else {
-        log(`Grok ${grokImageModel === 'grok-imagine-image-pro' ? 'Pro' : 'Image'} 사용 (${curStyleName} 스타일 적용)`, 'info');
+        log(`Grok ${grokImageModel === 'grok-imagine-image-pro' ? 'Pro' : 'Image'} 사용 (${grokEffectiveStyleName} 스타일 적용)`, 'info');
       }
       try {
         return await callGrokImage(grokPrompt, {aspectRatio: opts.aspectRatio || '3:4', model: grokImageModel});
@@ -5237,7 +5446,7 @@ Rules:
 
       // A2E adjustments — brighter skin + slightly lighter colors
       const a2eFix = ', bright fair translucent skin tone, slightly brighter color tones';
-      const a2ePrompt = basePrompt + a2eFix;
+      const a2ePrompt = basePrompt + a2eFix + sp.toneDirective + sp.noTextDirective + sp.styleReinforce;
 
       try {
         const urls = await callA2eImage(a2ePrompt, {
@@ -5267,7 +5476,7 @@ Rules:
         log('A2E NanoBanana 사용 (이미지 생성)', 'info');
       }
       try {
-        const urls = await callA2eNanoBanana(basePrompt, {
+        const urls = await callA2eNanoBanana(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, {
           referenceImages: nbRefs.length > 0 ? nbRefs : undefined
         });
         return urls;
@@ -5295,7 +5504,7 @@ Rules:
         log('Flux 2 Pro 사용 (텍스트→이미지)', 'info');
       }
       try {
-        const urls = await callFlux2Pro(basePrompt, {
+        const urls = await callFlux2Pro(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, {
           referenceImages: fluxRefs.length > 0 ? fluxRefs : undefined,
           aspectRatio: opts.aspectRatio || '3:4'
         });
@@ -5318,15 +5527,16 @@ Rules:
       const modelName = ninjaChatModel.split('-').slice(0, 2).join('-');
       console.log(`[NinjaChat] ref 선택: 전체 ${refs.length}개 중 배경 ${bgRefs.length}개 발견, 선택: ${refCount}개`, njcRefs.map(r => ({desc: r.description?.substring(0,50), len: r.image?.length})));
 
+      const njcStyleMode = sp.styleReinforce ? curStyleName : '레퍼런스 추종';
       if (prevPanelRefs.length > 0) {
-        log(`NinjaChat ${modelName} 사용 (이전 패널 레퍼런스)`, 'info');
+        log(`NinjaChat ${modelName} 사용 (이전 패널 레퍼런스, ${njcStyleMode})`, 'info');
       } else if (refCount > 0) {
-        log(`NinjaChat ${modelName} 사용 (배경 레퍼런스)`, 'info');
+        log(`NinjaChat ${modelName} 사용 (배경 레퍼런스, ${njcStyleMode})`, 'info');
       } else {
-        log(`NinjaChat ${modelName} 사용 (텍스트→이미지)`, 'info');
+        log(`NinjaChat ${modelName} 사용 (텍스트→이미지, ${njcStyleMode})`, 'info');
       }
       try {
-        const urls = await callNinjaChat(basePrompt, {
+        const urls = await callNinjaChat(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, {
           model: ninjaChatModel,
           referenceImages: refCount > 0 ? njcRefs : undefined,
           aspectRatio: opts.aspectRatio || '3:4'
@@ -5355,56 +5565,13 @@ Rules:
       } else {
         log(`Stable Diffusion 사용 (${curStyleName} 스타일 적용)`, 'info');
       }
-      return await callStableDiffusion(basePrompt, sdOpts);
+      return await callStableDiffusion(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, sdOpts);
     }
 
     // ========== Imagen 4 (default) — text-only, use detailed Character Visual ID Cards ==========
     {
-      // Build Visual ID Cards for ALL assets (characters, props, backgrounds)
-      let visualIdCards = '';
-      if (opts.assetDescriptions?.length > 0) {
-        const charDescs = opts.assetDescriptions.filter(d => d.startsWith('[Character'));
-        const propDescs = opts.assetDescriptions.filter(d => d.startsWith('[Prop'));
-        const bgDescs = opts.assetDescriptions.filter(d => d.startsWith('[Background'));
-        const totalAssets = charDescs.length + propDescs.length + bgDescs.length;
-        if (totalAssets > 0) {
-          visualIdCards = '\n\n=== MANDATORY VISUAL ID CARDS (ALL ASSETS) ===\n' +
-            'CRITICAL: You MUST render EVERY character, prop, and background EXACTLY as described below. ' +
-            'These are the CANONICAL designs for this webtoon. They must be VISUALLY IDENTICAL every time they appear, across ALL panels. ' +
-            'Do NOT change, reimagine, simplify, or add any visual details not listed here.\n\n';
-
-          if (charDescs.length > 0) {
-            visualIdCards += '--- CHARACTERS ---\n';
-            for (const desc of charDescs) {
-              visualIdCards += desc + '\n→ RULE: This character must look EXACTLY the same in every panel. HAIR must be identical: same color, same length, same style (straight/wavy/curly), same parting, same bangs. OUTFIT must be identical: same garments, same colors, same accessories, same footwear. FACE must be identical: same shape, same features. A reader must instantly recognize this character.\n\n';
-            }
-          }
-          if (propDescs.length > 0) {
-            visualIdCards += '--- PROPS & OBJECTS ---\n';
-            for (const desc of propDescs) {
-              visualIdCards += desc + '\n→ RULE: This prop must look EXACTLY the same whenever it appears — same design, same color, same shape, same material, same size proportions relative to characters.\n\n';
-            }
-          }
-          if (bgDescs.length > 0) {
-            visualIdCards += '--- BACKGROUNDS & LOCATIONS ---\n';
-            for (const desc of bgDescs) {
-              visualIdCards += desc + '\n→ RULE: This location must maintain consistent architectural style, color palette, spatial layout, and atmosphere whenever it appears. Key landmarks and features must be in the same positions.\n\n';
-            }
-          }
-          visualIdCards += '=== END OF VISUAL ID CARDS ===\n';
-        }
-      }
-
-      // Build the final Imagen4 prompt: style + scene + visual ID cards + tone consistency + no-text directive
-      const noTextDirective = '\nIMPORTANT: Do NOT render any text, letters, words, sound effects, onomatopoeia, speech bubbles, or typography anywhere in the image. The image must be purely visual. No Korean text or characters.';
-      const cleanedPrompt = sanitizeImagePrompt(prompt);
-      const toneDirective = '\n\n=== RENDERING CONSISTENCY ===\n' +
-        'Maintain IDENTICAL rendering style across all images in this series:\n' +
-        '- Same color temperature, saturation, linework weight, shading technique, skin rendering.\n' +
-        '- Consistent background detail level and lighting approach.\n' +
-        '- Every panel must look like the same artist drew it in one session.\n' +
-        '=== END RENDERING CONSISTENCY ===\n';
-      const imagen4Prompt = stylePrefix + cleanedPrompt + visualIdCards + toneDirective + noTextDirective;
+      // Use centralized prompt builder (full mode for Imagen4 with detailed ID cards)
+      const imagen4Prompt = sp.full;
       const charCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Character')).length;
       const propCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Prop')).length;
       const bgCount = (opts.assetDescriptions || []).filter(d => d.startsWith('[Background')).length;
@@ -5645,7 +5812,6 @@ Rules:
       setStoryboard([]);
       setPanels([]);
       setBubbleOverlays([]);
-      setEpisodeOutfits({});
       setCompletedSteps(new Set());
       setStep(0);
 
@@ -5677,14 +5843,7 @@ Rules:
           console.log(`[loadEpisode] references 복원: effectiveAssets 캐릭터=${Object.keys(curAssets.characters||{}).length}개, 배경=${Object.keys(curAssets.backgrounds||{}).length}개`);
           (s2.characterIds||[]).forEach(id => { if(curAssets.characters[id]?.image) loadedRefs.characters[id] = curAssets.characters[id].image; else console.warn(`[loadEpisode] 캐릭터 "${id}" 이미지 없음 in effectiveAssets`); });
           (s2.backgroundIds||[]).forEach(id => { if(curAssets.backgrounds[id]?.image) loadedRefs.backgrounds[id] = curAssets.backgrounds[id].image; else console.warn(`[loadEpisode] 배경 "${id}" 이미지 없음 in effectiveAssets`); });
-          // 에피소드 의상 이미지 복원 (sharedAssets에 없으므로 별도 저장된 이미지 사용)
-          if (s2.episodeOutfitImages) {
-            const epImgCount = Object.keys(s2.episodeOutfitImages).length;
-            for (const [cid, img] of Object.entries(s2.episodeOutfitImages)) {
-              loadedRefs.characters[cid] = img; // 에피소드 의상 이미지로 덮어씀
-            }
-            if (epImgCount > 0) log(`  에피소드 의상 이미지 ${epImgCount}명 복원됨`, 'info');
-          }
+          // Preset images are now loaded via sharedAssets, no need for episodeOutfitImages
         }
         if (Object.keys(loadedRefs.characters || {}).length > 0 || Object.keys(loadedRefs.backgrounds || {}).length > 0) {
           setReferences(loadedRefs);
@@ -5787,50 +5946,13 @@ Rules:
         episodeDoc.completedSteps.forEach(s => detected.add(s));
       }
 
-      // Load episode outfits from Firestore episode document
-      try {
-        const db = getDb();
-        if (db && pid) {
-          const epDoc = await db.collection('webtoon_projects').doc(pid).collection('episodes').doc(String(episodeNum)).get();
-          const epData = epDoc.exists ? epDoc.data() : {};
-          if (epData.episodeOutfits && typeof epData.episodeOutfits === 'object') {
-            const loaded = epData.episodeOutfits;
-            const outfitCount = Object.values(loaded).filter(v => v.outfit).length;
-            // If no episode outfits saved but analysis has outfit data, auto-fill
-            if (outfitCount === 0 && s1?.analysis?.characters?.length > 0) {
-              for (const c of s1.analysis.characters) {
-                if (!loaded[c.id]) loaded[c.id] = {};
-                if (c.outfit && !loaded[c.id].outfit) loaded[c.id].outfit = c.outfit;
-                if (c.accessories && c.accessories !== 'none' && !loaded[c.id].accessories) loaded[c.id].accessories = c.accessories;
-              }
-              const autoFilled = Object.values(loaded).filter(v => v.outfit).length;
-              if (autoFilled > 0) log(`  에피소드 의상 ${autoFilled}명 자동 설정 (분석 결과에서)`, 'info');
-            } else if (outfitCount > 0) {
-              log(`  에피소드 의상 ${outfitCount}명 로드됨`, 'info');
-            }
-            setEpisodeOutfits(loaded);
-          } else {
-            // No episode outfits at all — auto-fill from analysis
-            const autoOutfits = {};
-            if (s1?.analysis?.characters?.length > 0) {
-              for (const c of s1.analysis.characters) {
-                if (c.outfit || c.accessories) {
-                  autoOutfits[c.id] = {};
-                  if (c.outfit) autoOutfits[c.id].outfit = c.outfit;
-                  if (c.accessories && c.accessories !== 'none') autoOutfits[c.id].accessories = c.accessories;
-                }
-              }
-              const autoCount = Object.keys(autoOutfits).length;
-              if (autoCount > 0) log(`  에피소드 의상 ${autoCount}명 자동 설정 (분석 결과에서)`, 'info');
-            }
-            setEpisodeOutfits(autoOutfits);
-          }
-        }
-      } catch(e) { console.warn('[loadEpisode] episodeOutfits load error:', e.message); setEpisodeOutfits({}); }
+      // Outfit management is now via character outfitPresets (project-level), no episode-level loading needed
 
       setCompletedSteps(detected);
-      setStep(episodeDoc?.step !== undefined ? episodeDoc.step : lastStep);
+      const restoredStep = episodeDoc?.step !== undefined ? episodeDoc.step : lastStep;
+      setStep(restoredStep === 1 ? 2 : restoredStep); // Step 1 UI 제거됨 → 2로 매핑
       setCurrentEpisode(episodeNum);
+      clearUndoHistory(); // 에피소드 로드 시 undo 히스토리 초기화
 
       if (detected.size === 0) {
         log(`${episodeNum}화 로드 완료 (저장된 데이터 없음)`, 'success');
@@ -6129,85 +6251,16 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
       parsed.characters.forEach(c => console.log(`[분석] ${c.name}(${c.id}) 기본 의상: "${(c.outfit || '없음').substring(0, 80)}"`));
     }
     setAnalysis(parsed);
-    // Auto-populate episode outfits from analysis + plotBeat outfitOverrides
-    if (currentEpisode && parsed.characters?.length > 0) {
-      setEpisodeOutfits(prev => {
-        const updated = {...prev};
-        let filled = 0;
-        // 1) 캐릭터 기본 의상에서 추출
-        for (const c of parsed.characters) {
-          if (!updated[c.id]) updated[c.id] = {};
-          if (!updated[c.id].outfit && c.outfit) {
-            updated[c.id].outfit = c.outfit;
-            filled++;
-          }
-          if (!updated[c.id].accessories && c.accessories && c.accessories !== 'none') {
-            updated[c.id].accessories = c.accessories;
-          }
-        }
-        // 2) plotBeat outfitOverrides에서 추출 — 씬 설명의 의상을 episodeOutfits에 반영
-        // 각 캐릭터의 첫 outfitOverride를 이 화의 의상으로 사용
-        if (parsed.plotBeats?.length > 0) {
-          let overrideCount = 0;
-          const alreadyOverridden = new Set(); // 이미 override된 캐릭터 추적 (첫 등장만)
-          for (const pb of parsed.plotBeats) {
-            if (!pb.outfitOverrides || typeof pb.outfitOverrides !== 'object') continue;
-            for (const [charId, outfitDesc] of Object.entries(pb.outfitOverrides)) {
-              if (!outfitDesc || typeof outfitDesc !== 'string' || outfitDesc.length < 2) {
-                console.log(`[episodeOutfit] ${charId}: plotBeat ${pb.beat} outfitOverride 스킵 (값: ${JSON.stringify(outfitDesc)})`);
-                continue;
-              }
-              if (alreadyOverridden.has(charId)) {
-                console.log(`[episodeOutfit] ${charId}: plotBeat ${pb.beat} 건너뜀 (이미 첫 의상 설정됨)`);
-                continue;
-              }
-              if (!updated[charId]) updated[charId] = {};
-              const prevOutfit = updated[charId].outfit || '(없음)';
-              updated[charId].outfit = outfitDesc;
-              alreadyOverridden.add(charId);
-              overrideCount++;
-              console.log(`[episodeOutfit] ${charId}: plotBeat ${pb.beat}의 outfitOverride 반영 — "${prevOutfit}" → "${outfitDesc}"`);
-            }
-          }
-          if (overrideCount > 0) log(`${currentEpisode}화 씬 의상 반영: ${overrideCount}명 (plotBeat outfitOverrides에서)`, 'info');
-        }
-        if (filled > 0) log(`${currentEpisode}화 의상 자동 설정: ${filled}명 (분석 결과에서 추출)`, 'info');
-        return updated;
-      });
-    }
     setCompletedSteps(prev => new Set([...prev, 0]));
-    setStep(1);
-    // Auto-save step 1 + episode outfits (episodeOutfits도 함께 저장!)
+    setStep(2); // Step 1(레퍼런스) 제거됨 → 분석 후 바로 스토리보드로
+    // Auto-save step 1 (analysis)
     if (projectId && currentEpisode) {
       try {
         const cs = [...new Set([...completedSteps, 0])];
         await fbSavePhase(projectId, currentEpisode, 'step1_analysis', {analysis: parsed, sourceText: sourceTextRef.current, inputMode: inputModeRef.current});
-        // episodeOutfits는 setEpisodeOutfits가 비동기이므로, 직접 계산해서 저장
-        const outfitsToSave = {...(episodeOutfits || {})};
-        if (parsed.characters?.length > 0) {
-          for (const c of parsed.characters) {
-            if (!outfitsToSave[c.id]) outfitsToSave[c.id] = {};
-            if (!outfitsToSave[c.id].outfit && c.outfit) outfitsToSave[c.id].outfit = c.outfit;
-            if (!outfitsToSave[c.id].accessories && c.accessories && c.accessories !== 'none') outfitsToSave[c.id].accessories = c.accessories;
-          }
-        }
-        if (parsed.plotBeats?.length > 0) {
-          const saChars = sharedAssets?.characters || {};
-          for (const pb of parsed.plotBeats) {
-            if (!pb.outfitOverrides || typeof pb.outfitOverrides !== 'object') continue;
-            for (const [charId, outfitDesc] of Object.entries(pb.outfitOverrides)) {
-              if (!outfitDesc || typeof outfitDesc !== 'string' || outfitDesc.length < 3) continue;
-              if (!outfitsToSave[charId]) outfitsToSave[charId] = {};
-              if (!outfitsToSave[charId].outfit || (saChars[charId] && outfitsToSave[charId].outfit === saChars[charId]?.outfit)) {
-                outfitsToSave[charId].outfit = outfitDesc;
-              }
-            }
-          }
-        }
-        await fbSaveEpisode(projectId, currentEpisode, {step: 1, completedSteps: cs, episodeOutfits: outfitsToSave});
-        updateEpisodeState(1, cs);
-        const savedCount = Object.values(outfitsToSave).filter(v => v.outfit).length;
-        log(`Step 1 자동 저장 완료 (에피소드 의상 ${savedCount}명 포함)`, 'info');
+        await fbSaveEpisode(projectId, currentEpisode, {step: 2, completedSteps: cs});
+        updateEpisodeState(2, cs);
+        log(`Step 1 자동 저장 완료`, 'info');
       } catch(e) { log('Step 1 자동 저장 실패: ' + e.message, 'error'); }
     }
     return parsed;
@@ -6217,8 +6270,8 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
   const runStep2 = async (analysisData) => {
     const data = analysisData || analysis;
     if (!data) throw new Error('분석 데이터 없음');
-    log('Step 2: 레퍼런스 이미지 생성 시작 (공유 에셋 활용)...', 'info');
-    setStep(1);
+    log('레퍼런스 이미지 생성 시작 (공유 에셋 활용)...', 'info');
+    // Step 1 UI 제거됨 — 에셋 라이브러리 페이지에서 생성 진행
     const refs = {characters:{}, backgrounds:{}};
     const sa = {...sharedAssets};
 
@@ -6228,47 +6281,26 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
       if (abortRef.current) throw new Error('중단됨');
       const char = data.characters[i];
       // Check shared asset first — but skip cache if episode outfit is set (needs regeneration)
-      const hasEpisodeOutfit = !!(episodeOutfits?.[char.id]?.outfit);
-      if (sa.characters[char.id]?.image && !hasEpisodeOutfit) {
+      // Check shared asset — always use it if available (outfit changes handled via presets)
+      if (sa.characters[char.id]?.image) {
         refs.characters[char.id] = sa.characters[char.id].image;
         generatedChars.push({name: char.name, appearance: char.appearance, outfit: char.outfit, distinctFeatures: char.distinctFeatures});
         log(`${char.name} — 공유 에셋에서 로드 ✓`, 'success');
         setReferences({...refs});
         continue;
       }
-      if (hasEpisodeOutfit && sa.characters[char.id]?.image) {
-        log(`${char.name} — ${currentEpisode || ''}화 의상 변경 감지 → 에피소드 전용 레퍼런스 재생성 (기본 에셋 보존)`, 'info');
-      }
       log(`캐릭터 레퍼런스 생성 (${i+1}/${data.characters.length}): ${char.name}`);
       try {
-        // Build contrast prompt: tell the AI what other characters look like so this one is distinct
-        let contrastSuffix = '';
-        if (generatedChars.length > 0) {
-          const otherDescs = generatedChars.map(oc =>
-            `${oc.name}: ${oc.appearance?.substring(0, 100)}${oc.distinctFeatures ? ' [distinct: ' + oc.distinctFeatures + ']' : ''}`
-          ).join('; ');
-          contrastSuffix = `\n\nIMPORTANT: This character must look COMPLETELY DIFFERENT from these other characters: ${otherDescs}. Ensure distinct hair color, hairstyle, face shape, and body type.`;
-        }
-        const distinctInfo = char.distinctFeatures ? `\nThis character's unique visual identity: ${char.distinctFeatures}.` : '';
-        // Apply episode outfit override (replace outfit in prompt + append strong suffix)
-        const { prompt: outfitPrompt, applied: outfitApplied } = applyEpisodeOutfitToPrompt(char.refPrompt, char.id);
-        if (outfitApplied) console.log(`[runStep2] ${char.name} 에피소드 의상 프롬프트 적용됨`);
-        const fullPrompt = outfitPrompt + distinctInfo + getCharSuffix() + contrastSuffix;
+        const fullPrompt = buildCharRefPrompt(char.id);
         const images = await callImage(fullPrompt);
         refs.characters[char.id] = images[0];
         generatedChars.push({name: char.name, appearance: char.appearance, outfit: char.outfit, distinctFeatures: char.distinctFeatures});
 
-        if (hasEpisodeOutfit && sa.characters[char.id]?.image) {
-          // 에피소드 의상 → episodeRefs에만 저장, sharedAssets(기본 캐릭터) 보존
-          log(`${char.name} — ${currentEpisode || ''}화 의상 레퍼런스 저장 (기본 에셋 유지)`, 'success');
-          console.log(`[runStep2] ${char.name}: 에피소드 의상 → episodeRefs에만 저장, sharedAssets 기본 이미지 보존`);
-        } else {
-          // 기본 의상 또는 최초 생성 → sharedAssets에 저장
-          const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', personality: char.personality, refPrompt: char.refPrompt, image: images[0]};
-          sa.characters[char.id] = {...assetData, assetId: char.id, type: 'characters'};
-          if (projectId) { await fbSaveAsset(projectId, 'characters', char.id, assetData); await new Promise(r=>setTimeout(r,500)); }
-          log(`${char.name} 레퍼런스 생성 → 공유 에셋 저장 완료`, 'success');
-        }
+        // Always save to sharedAssets (base character image)
+        const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', personality: char.personality, refPrompt: char.refPrompt, outfitPresets: char.outfitPresets || {}, image: images[0]};
+        sa.characters[char.id] = {...assetData, assetId: char.id, type: 'characters'};
+        if (projectId) { await fbSaveAsset(projectId, 'characters', char.id, assetData); await new Promise(r=>setTimeout(r,500)); }
+        log(`${char.name} 레퍼런스 생성 → 공유 에셋 저장 완료`, 'success');
       } catch(e) {
         log(`${char.name} 레퍼런스 실패: ${e.message}`, 'error');
       }
@@ -6328,22 +6360,11 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
     if (projectId && currentEpisode) {
       try {
         const cs = [...new Set([...completedSteps, 0, 1])];
-        // 에피소드 의상이 적용된 캐릭터는 이미지도 함께 저장 (sharedAssets에 없으므로)
-        const epOutfitCharImages = {};
-        for (const [cid, img] of Object.entries(refs.characters)) {
-          if (episodeOutfits?.[cid]?.outfit && sharedAssets?.characters?.[cid]?.image && img !== sharedAssets.characters[cid].image) {
-            epOutfitCharImages[cid] = img;
-          }
-        }
         const step2Data = {
           characterIds: Object.keys(refs.characters),
           backgroundIds: Object.keys(refs.backgrounds),
           hasImages: true
         };
-        if (Object.keys(epOutfitCharImages).length > 0) {
-          step2Data.episodeOutfitImages = epOutfitCharImages;
-          console.log(`[runStep2] 에피소드 의상 이미지 ${Object.keys(epOutfitCharImages).length}명 별도 저장`);
-        }
         await fbSavePhase(projectId, currentEpisode, 'step2_references', step2Data, true);
         await fbSaveEpisode(projectId, currentEpisode, {step: 2, completedSteps: cs});
         updateEpisodeState(2, cs);
@@ -6361,10 +6382,9 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
     setStep(2);
 
     const charContext = data.characters.map(c => {
-      const epO = episodeOutfits[c.id];
-      const outfitLine = epO?.outfit ? `EPISODE OUTFIT (USE THIS): ${epO.outfit}` : `DEFAULT OUTFIT: ${c.outfit}`;
-      const accLine = epO?.accessories ? ` - EPISODE ACCESSORIES: ${epO.accessories}` : (c.accessories && c.accessories !== 'none' ? ` - DEFAULT ACCESSORIES: ${c.accessories}` : '');
-      // Include outfit presets if available
+      const outfitLine = `DEFAULT OUTFIT: ${c.outfit || 'not specified'}`;
+      const accLine = c.accessories && c.accessories !== 'none' ? ` - DEFAULT ACCESSORIES: ${c.accessories}` : '';
+      // Include outfit presets — AI should pick the right preset for each scene
       const presets = c.outfitPresets || {};
       const presetLine = Object.keys(presets).length > 0
         ? ` - OUTFIT PRESETS: ${Object.entries(presets).map(([name, p]) => `"${name}"(${p.outfit}${p.accessories ? ', acc: '+p.accessories : ''})`).join(', ')}`
@@ -6609,6 +6629,10 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
     log('Step 4: 패널 이미지 생성 시작...', 'info');
     setStep(3);
 
+    // 생성 시작 전 스냅샷 한 번만 저장, 생성 중 개별 setPanels는 스냅샷 건너뛰기
+    saveSnapshot();
+    skipSnapshotRef.current = true;
+
     const newPanels = [...(panels.length === sb.length ? panels : new Array(sb.length).fill(null))];
 
     for (let i = 0; i < sb.length; i++) {
@@ -6669,11 +6693,8 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
               log(`패널 ${i+1}: ${charName} 의상 변경 감지 → 레퍼런스 자동 재생성 ("${curOutfit.substring(0, 40)}...")`, 'info');
               try {
                 const accDesc = pc.accessoriesOverride || prevState?.accessories || '';
-                const outfitRefPrompt = `Full body character reference sheet, front-facing, clean white background. ${charInfo.appearance || ''}. Outfit: ${curOutfit}.${accDesc ? ' Accessories: ' + accDesc + '.' : ''} Same face, same hair, same body as the character reference — ONLY the outfit changes.`;
-                const { prompt: appliedPrompt } = applyEpisodeOutfitToPrompt ?
-                  {prompt: getStylePrefix() + outfitRefPrompt + getCharSuffix(), applied: true} :
-                  {prompt: getStylePrefix() + outfitRefPrompt + getCharSuffix(), applied: false};
-                const outfitImages = await callImage(appliedPrompt);
+                const outfitRefPrompt = buildCharRefPrompt(cid, {outfitOverride: {outfit: curOutfit, accessories: accDesc}});
+                const outfitImages = await callImage(outfitRefPrompt);
                 if (outfitImages?.[0]) {
                   refs.characters[cid] = outfitImages[0];
                   setReferences(prev => ({...prev, characters: {...prev.characters, [cid]: outfitImages[0]}}));
@@ -6700,10 +6721,20 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
         skipStyle = true;
         log(`패널 ${i+1}: 이전 패널 이미지 + 기본 레퍼런스 병합 모드 (스타일 미적용)`, 'info');
       }
+      // Delta prompt: 이전 패널에서 이어지는 장면이면 변경사항만 설명
+      const hasPrevPanelRef = i > 0 && newPanels[i - 1] && typeof newPanels[i - 1] === 'string' && (newPanels[i - 1].startsWith('data:') || newPanels[i - 1].startsWith('http'));
+      const isDeltaTransition = ['continuous', 'cut_to_reaction', 'new_angle_same_scene'].includes(panel.sceneTransition);
+      const useDelta = hasPrevPanelRef && isDeltaTransition && panel.deltaPrompt;
+      let finalPrompt = anchoredPrompt;
+      if (useDelta) {
+        // deltaPrompt + 캐릭터 비주얼 ID는 assetDescriptions로 이미 전달됨
+        finalPrompt = panel.deltaPrompt;
+        log(`패널 ${i+1}: 델타 프롬프트 사용 (${panel.sceneTransition}) — "${panel.deltaPrompt.substring(0, 80)}..."`, 'info');
+      }
       log(`패널 ${i+1}: 레퍼런스 ${refImages.length}개, 에셋 ${assetDescriptions.length}개, 캐릭터 ${panelCharIds.length}명`);
 
       try {
-        const images = await callImage(anchoredPrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: panelAR, characterIds: panelCharIds, skipStyle});
+        const images = await callImage(finalPrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: panelAR, characterIds: panelCharIds, skipStyle});
         // callImage returns null when content filter blocks — skip this panel
         const img0 = images?.[0];
         if (!img0 || img0 === 'undefined' || img0.endsWith(',undefined')) {
@@ -6717,11 +6748,12 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
         log(`패널 ${i+1} 실패: ${e.message}`, 'error');
         // 재시도 없이 즉시 실패 처리
       }
-      setPanels([...newPanels]);
+      setPanelsRaw([...newPanels]); pnRef.current = [...newPanels];
       // Delay between panels to avoid API rate limits
       if (i < sb.length - 1) await new Promise(r => setTimeout(r, 3000));
     }
 
+    skipSnapshotRef.current = false; // 생성 완료 후 스냅샷 복원
     setCompletedSteps(prev => new Set([...prev, 3]));
     setStep(4);
     log(`패널 ${newPanels.filter(Boolean).length}개 생성 완료! Firebase 저장 버튼으로 저장하세요.`, 'success');
@@ -6853,6 +6885,7 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
   const [editingSbPanel, setEditingSbPanel] = useState(null); // index of panel being edited
   const [editingSbData, setEditingSbData] = useState({});
   const [draggingSbIdx, setDraggingSbIdx] = useState(null);
+  const [charEditTab, setCharEditTab] = useState({}); // {charId: 'basic'|'outfits'|'prompt'}
   const [dragOverIdx, setDragOverIdx] = useState(null);
 
   const runBatchPipeline = async (config) => {
@@ -7115,8 +7148,14 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       })();
       // Use short style hint when using previous panel reference — art style name is still included
       const skipStyle = refMode !== 'default';
+      // Delta prompt: 이전 패널 레퍼런스 사용 시 deltaPrompt가 있으면 변경사항만 전달
+      const hasPrevRef = refMode !== 'default' && idx > 0 && panels[idx - 1];
+      const isDeltaT = ['continuous', 'cut_to_reaction', 'new_angle_same_scene'].includes(panel.sceneTransition);
+      const useDeltaRegen = !customPrompt && hasPrevRef && isDeltaT && panel.deltaPrompt;
+      const regenPrompt = useDeltaRegen ? panel.deltaPrompt : usePrompt;
+      if (useDeltaRegen) log(`패널 ${idx+1}: 델타 프롬프트 사용 (${panel.sceneTransition})`, 'info');
       log(`패널 ${idx+1} 재생성 중... (ref ${refImages.length}개, 비율:${regenAR}${skipStyle ? ', 스타일힌트' : ', 풀스타일'})`);
-      const images = await callImage(usePrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: regenAR, characterIds: panelCharIds, skipStyle});
+      const images = await callImage(regenPrompt, {referenceImages: refImages, assetDescriptions, aspectRatio: regenAR, characterIds: panelCharIds, skipStyle});
       const newPanels = [...panels];
       newPanels[idx] = await urlToBase64(images[0]);
       setPanels(newPanels);
@@ -7126,100 +7165,67 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
   };
 
   // ======== Regenerate single character reference (updates shared asset) ========
-  // Helper: replace outfit section in refPrompt with episode outfit
-  const applyEpisodeOutfitToPrompt = (refPrompt, charId) => {
-    const epO = episodeOutfits?.[charId];
-    if (!epO?.outfit) {
-      console.log(`[EpisodeOutfit] ${charId}: 에피소드 의상 없음, 기본 프롬프트 사용`);
-      return { prompt: refPrompt, applied: false };
-    }
-    console.log(`[EpisodeOutfit] ${charId}: 에피소드 의상 감지 → "${epO.outfit}" / accessories: "${epO.accessories || '없음'}"`);
-
-    let modified = refPrompt;
-    // Try to replace Outfit section in the refPrompt directly
-    const outfitRegex = /Outfit:\s*\[?[^\].\n]*\]?\.?/i;
-    const outfitRegex2 = /Outfit:\s*[^.]*\./i;
-    const newOutfitDesc = `Outfit: ${epO.outfit}${epO.accessories ? '. Accessories: ' + epO.accessories : ''}.`;
-
-    if (outfitRegex.test(modified)) {
-      modified = modified.replace(outfitRegex, newOutfitDesc);
-      console.log(`[EpisodeOutfit] refPrompt 내 Outfit 섹션 직접 교체 완료`);
-    } else if (outfitRegex2.test(modified)) {
-      modified = modified.replace(outfitRegex2, newOutfitDesc);
-      console.log(`[EpisodeOutfit] refPrompt 내 Outfit 문장 교체 완료`);
-    } else {
-      console.log(`[EpisodeOutfit] refPrompt 내 Outfit 패턴 없음 → suffix 추가`);
-    }
-
-    // Always append strong override at the end regardless
-    modified += `\n\n[CRITICAL OUTFIT OVERRIDE] IGNORE any previously mentioned clothing. This character MUST wear EXACTLY: ${epO.outfit}.`;
-    if (epO.accessories) modified += ` Accessories MUST include: ${epO.accessories}.`;
-    modified += ` DO NOT draw any other outfit. This is the ONLY correct outfit for this character.`;
-
-    log(`${charId} — ${currentEpisode || ''}화 의상 적용: ${epO.outfit}`, 'info');
-    return { prompt: modified, applied: true };
-  };
-
   const regenerateCharRef = async (charId, customPrompt) => {
     if (!analysis) return;
     const char = analysis.characters.find(c => c.id === charId);
     if (!char) return;
     setRunning(true);
     try {
-      console.log(`[regenerateCharRef] ${char.name} (${charId}), episodeOutfits:`, JSON.stringify(episodeOutfits?.[charId] || 'none'));
-
-      let basePrompt = customPrompt || char.refPrompt;
-      // Apply episode outfit override (replace + suffix)
-      if (!customPrompt) {
-        const { prompt: outfitPrompt, applied } = applyEpisodeOutfitToPrompt(basePrompt, charId);
-        basePrompt = outfitPrompt;
-        if (applied) console.log(`[regenerateCharRef] 에피소드 의상 프롬프트 적용됨`);
-      }
-      // Add differentiation context from other characters
-      let contrastSuffix = '';
-      if (!customPrompt) {
-        const otherChars = analysis.characters.filter(c => c.id !== charId);
-        if (otherChars.length > 0) {
-          const otherDescs = otherChars.map(oc =>
-            `${oc.name}: ${oc.appearance?.substring(0, 100)}${oc.distinctFeatures ? ' [distinct: ' + oc.distinctFeatures + ']' : ''}`
-          ).join('; ');
-          contrastSuffix = `\n\nIMPORTANT: This character must look COMPLETELY DIFFERENT from: ${otherDescs}. Ensure distinct hair color, hairstyle, face shape, and body type.`;
-        }
-        const distinctInfo = char.distinctFeatures ? `\nThis character's unique visual identity: ${char.distinctFeatures}.` : '';
-        contrastSuffix = distinctInfo + contrastSuffix;
-      }
-      const finalPrompt = customPrompt ? customPrompt : (basePrompt + getCharSuffix() + contrastSuffix);
+      console.log(`[regenerateCharRef] ${char.name} (${charId})`);
+      const finalPrompt = buildCharRefPrompt(charId, {customPrompt});
       console.log(`[regenerateCharRef] 최종 프롬프트 (첫 300자):`, finalPrompt.substring(0, 300));
-      log(`${char.name} 레퍼런스 재생성 중...`);
+      log(`${char.name} 기본 레퍼런스 재생성 중...`);
       const images = await callImage(finalPrompt);
       setReferences(prev => ({...prev, characters: {...prev.characters, [charId]: images[0]}}));
 
-      const hasEpOutfit = !!(episodeOutfits?.[charId]?.outfit);
-      const hasBaseImage = !!(sharedAssets?.characters?.[charId]?.image);
-
-      if (hasEpOutfit && hasBaseImage && !customPrompt) {
-        // 에피소드 의상 재생성 → episodeRefs에만 저장, sharedAssets 기본 이미지 보존
-        console.log(`[regenerateCharRef] ${char.name}: 에피소드 의상 → episodeRefs에만 저장, sharedAssets 보존`);
-        // Firestore에도 에피소드 의상 이미지 저장
-        if (projectId && currentEpisode) {
-          try {
-            const s2 = await fbLoadPhase(projectId, currentEpisode, 'step2_references') || {};
-            const epImages = s2.episodeOutfitImages || {};
-            epImages[charId] = images[0];
-            await fbSavePhase(projectId, currentEpisode, 'step2_references', {...s2, episodeOutfitImages: epImages}, true);
-            console.log(`[regenerateCharRef] 에피소드 의상 이미지 Firestore 저장 완료`);
-          } catch(e) { console.warn('[regenerateCharRef] 에피소드 의상 이미지 저장 실패:', e.message); }
-        }
-        log(`${char.name} — ${currentEpisode || ''}화 의상 레퍼런스 재생성 완료 (기본 에셋 유지)`, 'success');
-      } else {
-        // 기본 의상 또는 커스텀 프롬프트 → sharedAssets에 저장
-        const updatedRefPrompt = customPrompt || char.refPrompt;
-        const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', personality: char.personality, refPrompt: updatedRefPrompt, image: images[0]};
-        setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: {...assetData, assetId: charId, type: 'characters'}}}));
-        if (projectId) await fbSaveAsset(projectId, 'characters', charId, assetData);
-        log(`${char.name} 레퍼런스 재생성 → 공유 에셋 업데이트 완료`, 'success');
-      }
+      // Always save to sharedAssets (base character image)
+      const updatedRefPrompt = customPrompt || char.refPrompt;
+      const assetData = {name: char.name, role: char.role, age: char.age, gender: char.gender, appearance: char.appearance, outfit: char.outfit, accessories: char.accessories || '', personality: char.personality, refPrompt: updatedRefPrompt, outfitPresets: char.outfitPresets || {}, image: images[0]};
+      setSharedAssets(prev => ({...prev, characters: {...prev.characters, [charId]: {...assetData, assetId: charId, type: 'characters'}}}));
+      if (projectId) await fbSaveAsset(projectId, 'characters', charId, assetData);
+      log(`${char.name} 레퍼런스 재생성 → 공유 에셋 업데이트 완료`, 'success');
     } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
+    finally { setRunning(false); }
+  };
+
+  // ======== Generate/regenerate outfit preset reference image ========
+  const regeneratePresetRef = async (charId, presetName) => {
+    if (!analysis) return;
+    const char = analysis.characters.find(c => c.id === charId);
+    if (!char) return;
+    const preset = char.outfitPresets?.[presetName];
+    if (!preset?.outfit) { log(`프리셋 "${presetName}"에 의상 정보가 없습니다.`, 'error'); return; }
+    setRunning(true);
+    try {
+      log(`${char.name} — "${presetName}" 의상 레퍼런스 생성 중...`);
+      const finalPrompt = buildCharRefPrompt(charId, {
+        outfitOverride: {outfit: preset.outfit, accessories: preset.accessories || ''}
+      });
+      const images = await callImage(finalPrompt);
+      const presetImage = images[0];
+
+      // Save preset image to outfitPresets (in analysis + sharedAssets + Firebase)
+      const updatedPreset = {...preset, image: presetImage};
+      const updatedPresets = {...(char.outfitPresets || {}), [presetName]: updatedPreset};
+      updateAnalysisChar(charId, 'outfitPresets', updatedPresets);
+
+      // Also update sharedAssets
+      setSharedAssets(prev => {
+        const existing = prev.characters?.[charId];
+        if (!existing) return prev;
+        return {...prev, characters: {...prev.characters, [charId]: {...existing, outfitPresets: updatedPresets}}};
+      });
+
+      // Save to Firebase shared_assets
+      if (projectId) {
+        const asset = sharedAssets.characters?.[charId];
+        if (asset) {
+          await fbSaveAsset(projectId, 'characters', charId, {...asset, outfitPresets: updatedPresets});
+        }
+      }
+
+      log(`${char.name} — "${presetName}" 의상 레퍼런스 생성 완료 ✓`, 'success');
+    } catch(e) { log(`프리셋 레퍼런스 생성 실패: ${e.message}`, 'error'); }
     finally { setRunning(false); }
   };
 
@@ -7664,24 +7670,7 @@ Return ONLY the detailed English prompt, nothing else.`,
   // ======== Save Panel Image (delegates to shared downloadDataUrl) ========
   const savePanelImage = (dataUrl, filename) => downloadDataUrl(dataUrl, filename || 'panel.png');
 
-  // 에피소드 의상 Firebase 저장
-  const saveEpisodeOutfits = async (outfits) => {
-    if (!projectId || !currentEpisode) return;
-    try {
-      const outfitsToSave = outfits || episodeOutfits;
-      await fbSaveEpisode(projectId, currentEpisode, {episodeOutfits: outfitsToSave});
-      // Update storyboard prompts for characters whose episode outfits changed
-      if (storyboard?.length > 0 && analysis?.characters) {
-        for (const [cid, epData] of Object.entries(outfitsToSave)) {
-          if (epData?.outfit) {
-            const char = analysis.characters.find(c => c.id === cid);
-            if (char) refreshPanelPromptsForChar(cid, char);
-          }
-        }
-      }
-      log('에피소드 의상 저장 완료', 'success');
-    } catch(e) { log('에피소드 의상 저장 실패: ' + e.message, 'error'); }
-  };
+  // [REMOVED] saveEpisodeOutfits — outfit management now via character outfitPresets
 
   // Firebase에 전체 패널 명시적 저장
   const savePanelsToFirebase = async () => {
@@ -7874,6 +7863,172 @@ Return ONLY the detailed English prompt, nothing else.`,
     return refPrompt;
   };
 
+  // ======== 통합 캐릭터 레퍼런스 프롬프트 빌더 ========
+  // 캐릭터 이미지 프롬프트에 영향을 주는 모든 요소를 한 곳에서 조립
+  // opts.outfitOverride: {outfit, accessories} — 의상 프리셋용 오버라이드
+  // opts.customPrompt: 사용자가 직접 입력한 프롬프트 (이 경우 suffix/contrast만 스킵)
+  const buildCharRefPrompt = (charId, opts = {}) => {
+    if (!analysis) return '';
+    const char = analysis.characters.find(c => c.id === charId);
+    if (!char) return '';
+
+    // 1) 커스텀 프롬프트가 있으면 그대로 사용 (suffix/contrast 없음)
+    if (opts.customPrompt) return opts.customPrompt;
+
+    // 2) 베이스: refPrompt
+    let base = char.refPrompt || '';
+
+    // 3) 의상 오버라이드 (프리셋 레퍼런스 생성 시)
+    if (opts.outfitOverride) {
+      const ov = opts.outfitOverride;
+      const newOutfitDesc = `Outfit: ${ov.outfit}${ov.accessories ? '. Accessories: ' + ov.accessories : ''}.`;
+      const outfitRegex = /Outfit:\s*\[?[^\].\n]*\]?\.?/i;
+      const outfitRegex2 = /Outfit:\s*[^.]*\./i;
+      if (outfitRegex.test(base)) {
+        base = base.replace(outfitRegex, newOutfitDesc);
+      } else if (outfitRegex2.test(base)) {
+        base = base.replace(outfitRegex2, newOutfitDesc);
+      }
+      base += `\n\n[CRITICAL OUTFIT OVERRIDE] This character MUST wear EXACTLY: ${ov.outfit}.`;
+      if (ov.accessories) base += ` Accessories: ${ov.accessories}.`;
+    }
+
+    // 4) 고유 시각 특성
+    const distinctInfo = char.distinctFeatures ? `\nThis character's unique visual identity: ${char.distinctFeatures}.` : '';
+
+    // 5) 스타일별 캐릭터 서픽스
+    const suffix = getCharSuffix();
+
+    // 6) 다른 캐릭터와 차별화 지시
+    const others = analysis.characters.filter(c => c.id !== charId);
+    let contrastSuffix = '';
+    if (others.length > 0) {
+      const otherDescs = others.map(oc =>
+        `${oc.name}: ${oc.appearance?.substring(0, 100)}${oc.distinctFeatures ? ' [distinct: ' + oc.distinctFeatures + ']' : ''}`
+      ).join('; ');
+      contrastSuffix = `\n\nIMPORTANT: This character must look COMPLETELY DIFFERENT from: ${otherDescs}. Ensure distinct hair color, hairstyle, face shape, and body type.`;
+    }
+
+    // 조립: refPrompt + distinctFeatures + charSuffix + contrastSuffix
+    return base + distinctInfo + suffix + contrastSuffix;
+  };
+
+  // ======== 에셋 라이브러리 공용 렌더 (Step 1 인라인 + 모달 양쪽에서 사용) ========
+  const renderAssetLibrary = (inline = false) => {
+    const charTotal = analysis?.characters?.length || 0;
+    const charDone = analysis?.characters?.filter(c => references.characters[c.id]).length || 0;
+    const bgTotal = analysis?.backgrounds?.length || 0;
+    const bgDone = analysis?.backgrounds?.filter(b => references.backgrounds[b.id]).length || 0;
+    const allDone = charDone === charTotal && bgDone === bgTotal && charTotal > 0;
+    const missingCount = (charTotal - charDone) + (bgTotal - bgDone);
+
+    return (
+      <div>
+        {/* 레퍼런스 생성 버튼 + 상태 (인라인일 때만) */}
+        {inline && analysis && (
+          <div style={{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',marginBottom:12}}>
+            <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(1)} disabled={running}>
+              {allDone ? '전체 재생성' : `미생성 레퍼런스 생성 (${missingCount}개)`}
+            </button>
+            <span style={{fontSize:13}}>캐릭터 <strong style={{color: charDone === charTotal ? 'var(--success)' : 'var(--err)'}}>{charDone}/{charTotal}</strong></span>
+            <span style={{fontSize:13}}>배경 <strong style={{color: bgDone === bgTotal ? 'var(--success)' : 'var(--err)'}}>{bgDone}/{bgTotal}</strong></span>
+            {running && <span className="status-badge running">생성 중...</span>}
+          </div>
+        )}
+
+        {/* 탭 */}
+        <div className="asset-tabs">
+          <button className={`asset-tab ${assetTab==='characters'?'active':''}`} onClick={()=>setAssetTab('characters')}>캐릭터 ({Object.keys(sharedAssets.characters).length})</button>
+          <button className={`asset-tab ${assetTab==='backgrounds'?'active':''}`} onClick={()=>setAssetTab('backgrounds')}>배경 ({Object.keys(sharedAssets.backgrounds).length})</button>
+          <button className={`asset-tab ${assetTab==='props'?'active':''}`} onClick={()=>setAssetTab('props')}>소품 ({Object.keys(sharedAssets.props).length})</button>
+        </div>
+
+        {Object.keys(sharedAssets[assetTab]).length === 0 && (
+          <div className="placeholder">등록된 {assetTab === 'characters' ? '캐릭터' : assetTab === 'backgrounds' ? '배경' : '소품'} 에셋이 없습니다.{inline ? ' 위 버튼으로 레퍼런스를 생성하세요.' : ' 스토리 분석 후 레퍼런스를 생성하면 자동으로 등록됩니다.'}</div>
+        )}
+
+        {Object.entries(sharedAssets[assetTab]).map(([id, asset]) => (
+          <div key={id} className="asset-item">
+            {asset.image ? (
+              <img className="clickable-img" src={asset.image} alt={asset.name} style={assetTab==='backgrounds'?{width:120,height:80,aspectRatio:'16/9'}:assetTab==='props'?{width:80,height:80,aspectRatio:'1/1'}:{}} onClick={() => showPreview(asset.image, asset.name)} />
+            ) : (
+              <div className="asset-placeholder">미생성</div>
+            )}
+            <div className="asset-item-info">
+              <div className="asset-item-name">
+                {asset.name}
+                {assetTab === 'characters' && asset.role && <span className="asset-badge" style={{marginLeft:6}}>{asset.role}</span>}
+                {assetTab === 'backgrounds' && <span className="asset-badge bg">{asset.bgType || 'scene'}</span>}
+                {assetTab === 'props' && <span className="asset-badge prop">소품</span>}
+              </div>
+              <div className="asset-item-desc">
+                {assetTab === 'characters' ? (
+                  <details>
+                    <summary style={{cursor:'pointer',fontSize:12}}>{(asset.appearance||'').substring(0, 60)}...</summary>
+                    <textarea style={{width:'100%',fontSize:11,marginTop:4,padding:4,border:'1px solid #ddd',borderRadius:4,minHeight:50,resize:'vertical'}}
+                      defaultValue={asset.appearance || ''}
+                      onBlur={async (e) => {
+                        const val = e.target.value.trim();
+                        if (val === asset.appearance) return;
+                        const updated = {...asset, appearance: val};
+                        setSharedAssets(prev => ({...prev, characters: {...prev.characters, [id]: updated}}));
+                        setAnalysis(prev => prev ? {...prev, characters: prev.characters.map(c => c.id === id ? {...c, appearance: val} : c)} : prev);
+                        if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
+                        log(`${asset.name} 외형 설명 업데이트됨`, 'success');
+                      }}
+                      placeholder="캐릭터 외형 설명..." />
+                  </details>
+                ) : asset.description}
+              </div>
+              {assetTab === 'characters' && (
+                <div className="asset-item-meta" style={{display:'flex',alignItems:'center',gap:4}}>
+                  <span style={{flexShrink:0,fontSize:11}}>의상:</span>
+                  <input type="text" style={{flex:1,fontSize:11,padding:'2px 6px',border:'1px solid #ddd',borderRadius:4}}
+                    defaultValue={asset.outfit || ''}
+                    onBlur={async (e) => {
+                      const val = e.target.value.trim();
+                      if (val === asset.outfit) return;
+                      const updated = {...asset, outfit: val};
+                      setSharedAssets(prev => ({...prev, characters: {...prev.characters, [id]: updated}}));
+                      setAnalysis(prev => prev ? {...prev, characters: prev.characters.map(c => c.id === id ? {...c, outfit: val} : c)} : prev);
+                      if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
+                      log(`${asset.name} 의상 업데이트: ${val}`, 'success');
+                    }}
+                    placeholder="기본 의상 설명..." />
+                </div>
+              )}
+              <div className="asset-item-meta">
+                <span>ID: {id}</span>
+                {assetTab === 'characters' && loraModels[id]?.status === 'ready' && <span style={{color:'#155724',fontWeight:600}}>LoRA 학습완료</span>}
+                {assetTab === 'characters' && loraModels[id]?.status === 'training' && <span style={{color:'#856404',fontWeight:600}}>LoRA 학습중...</span>}
+              </div>
+            </div>
+            {asset.refPrompt && (
+              <details style={{marginTop:4,gridColumn:'1/-1'}}>
+                <summary className="prompt-badge">프롬프트 보기</summary>
+                <div style={{fontSize:11,color:'var(--text2)',padding:'6px 0',lineHeight:1.5,fontFamily:'monospace',wordBreak:'break-all'}}>{getAssetFullPrompt(assetTab, asset.refPrompt)}</div>
+              </details>
+            )}
+            <div className="asset-item-actions">
+              {assetTab === 'characters' && imageProvider === 'falAI' && asset.image && !loraModels[id]?.status?.match(/ready|training/) && (
+                <button className="btn btn-sm" style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none',fontSize:11}}
+                  onClick={() => trainCharacterLora(id, asset.name, [asset.image])} disabled={running}>LoRA 학습</button>
+              )}
+              <button className="btn btn-outline btn-sm" onClick={() => openPromptEditor(assetTab, id, getAssetFullPrompt(assetTab, asset.refPrompt), asset.name, (p) => regenerateAsset(assetTab, id, p))} disabled={running}>프롬프트 수정 후 생성</button>
+              <button className="btn btn-outline btn-sm" onClick={()=>regenerateAsset(assetTab, id)} disabled={running}>재생성</button>
+              <button className="btn btn-outline btn-sm" style={{color:'var(--err)',borderColor:'var(--err)'}} onClick={async ()=>{
+                if(!confirm(`${asset.name} 에셋을 삭제하시겠습니까?`)) return;
+                if(projectId) await fbDeleteAsset(projectId, assetTab, id);
+                setSharedAssets(prev => {const n={...prev};const t={...n[assetTab]};delete t[id];n[assetTab]=t;return n;});
+                log(`${asset.name} 에셋 삭제됨`, 'success');
+              }}>삭제</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div>
       {/* Prompt Editor Modal */}
@@ -7920,7 +8075,7 @@ Return ONLY the detailed English prompt, nothing else.`,
       <div className="app-header">
         <div className="app-logo">{editorMode ? '웹툰 에디터' : '웹툰 프로덕션'}</div>
         <div style={{flex:1}}></div>
-        {!editorMode && projectId && <button className="api-key-btn" onClick={()=>setShowAssetLibrary(true)} style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',borderColor:'transparent'}}>에셋 라이브러리 ({Object.keys(sharedAssets.characters).length + Object.keys(sharedAssets.backgrounds).length + Object.keys(sharedAssets.props).length})</button>}
+        {!editorMode && projectId && <button className="api-key-btn" onClick={()=>setShowAssetPage(p=>!p)} style={{background: showAssetPage ? '#00b894' : 'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',borderColor:'transparent', boxShadow: showAssetPage ? 'inset 0 2px 4px rgba(0,0,0,.3)' : 'none'}}>📦 에셋 라이브러리 ({Object.keys(sharedAssets.characters).length + Object.keys(sharedAssets.backgrounds).length + Object.keys(sharedAssets.props).length})</button>}
         {!editorMode && <button className="api-key-btn" onClick={()=>setShowApiModal(true)}>API 설정</button>}
       </div>
 
@@ -8144,7 +8299,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                         </div>
                       ))}
                       {/* Render all objects in z-order */}
-                      {[...(page.objects||[])].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1)).map(obj => {
+                      {[...(page.objects||[])].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1)).filter(obj => !obj.hidden).map(obj => {
                         const isSelected = selectedObjectId === obj.id;
                         if (obj.type === 'panel' || obj.type === 'image') {
                           const isCropping = cropMode && cropMode.pageIdx === pageIdx && cropMode.objId === obj.id;
@@ -8686,42 +8841,52 @@ Return ONLY the detailed English prompt, nothing else.`,
                   );
                 } else {
                   return (
-                    <div key={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={() => setSelectedObjectId(obj.id)}>
+                    <div key={obj.id} className={`be-item${isSelected?' selected':''}`}
+                      onClick={() => !obj.hidden && setSelectedObjectId(obj.id)}
+                      style={{opacity: obj.hidden ? 0.45 : 1, borderLeft: obj.hidden ? '3px solid #e74c3c' : undefined}}>
                       <div className="be-item-header">
-                        <span className={`be-item-label${isSelected?' selected':''}`}>{oi+1}. {obj.type === 'panel' ? '패널' : '이미지'}</span>
-                        <button className="be-item-del" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>삭제</button>
+                        <span className={`be-item-label${isSelected?' selected':''}`} style={{textDecoration: obj.hidden ? 'line-through' : 'none'}}>
+                          {oi+1}. {obj.type === 'panel' ? '패널' : '이미지'}{obj.hidden ? ' (숨김)' : ''}
+                        </span>
+                        <button className={obj.hidden ? "be-item-del" : "be-item-del"}
+                          style={{color: obj.hidden ? '#00b894' : undefined}}
+                          onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>
+                          {obj.hidden ? '복원' : '숨기기'}
+                        </button>
                       </div>
-                      <div style={{fontSize:11,color:'#aaa',padding:6}}>크기: {Math.round(obj.w)}×{Math.round(obj.h)} | 위치: ({Math.round(obj.x)}, {Math.round(obj.y)}){obj.crop ? ` | 잘라내기: ${Math.round(obj.crop.w)}%×${Math.round(obj.crop.h)}%` : ''}</div>
-                      <div style={{display:'flex',gap:4,padding:'4px 6px',flexWrap:'wrap'}}>
-                        {cropMode && cropMode.objId === obj.id ? (
-                          <React.Fragment>
-                            <button className="be-crop-btn" onClick={(e) => {e.stopPropagation(); applyCrop();}}>✓ 잘라내기 적용</button>
-                            <button className="be-crop-btn danger" onClick={(e) => {e.stopPropagation(); cancelCrop();}}>✕ 취소</button>
-                          </React.Fragment>
-                        ) : (
-                          <React.Fragment>
-                            <button className="be-crop-btn" onClick={(e) => {e.stopPropagation(); startCrop(currentPageIdx, obj.id);}}>✂ 잘라내기</button>
-                            {obj.crop && <button className="be-crop-btn danger" onClick={(e) => {e.stopPropagation(); resetCrop(currentPageIdx, obj.id);}}>잘라내기 해제</button>}
-                          </React.Fragment>
-                        )}
-                      </div>
-                      {editorPages.length > 1 && (
-                        <div className="be-ctrl-row" style={{padding:'4px 6px'}}>
-                          <label className="be-ctrl-label" style={{flexShrink:0}}>페이지 이동</label>
-                          <select className="be-select" value="" onClick={e=>e.stopPropagation()}
-                            onChange={e => {
-                              const toPage = parseInt(e.target.value);
-                              if (!isNaN(toPage) && toPage !== currentPageIdx) {
-                                moveObjectToPage(currentPageIdx, obj.id, toPage);
-                              }
-                            }}>
-                            <option value="">선택...</option>
-                            {editorPages.map((_, pi) => pi !== currentPageIdx && (
-                              <option key={pi} value={pi}>페이지 {pi + 1}</option>
-                            ))}
-                          </select>
+                      {!obj.hidden && <>
+                        <div style={{fontSize:11,color:'#aaa',padding:6}}>크기: {Math.round(obj.w)}×{Math.round(obj.h)} | 위치: ({Math.round(obj.x)}, {Math.round(obj.y)}){obj.crop ? ` | 잘라내기: ${Math.round(obj.crop.w)}%×${Math.round(obj.crop.h)}%` : ''}</div>
+                        <div style={{display:'flex',gap:4,padding:'4px 6px',flexWrap:'wrap'}}>
+                          {cropMode && cropMode.objId === obj.id ? (
+                            <React.Fragment>
+                              <button className="be-crop-btn" onClick={(e) => {e.stopPropagation(); applyCrop();}}>✓ 잘라내기 적용</button>
+                              <button className="be-crop-btn danger" onClick={(e) => {e.stopPropagation(); cancelCrop();}}>✕ 취소</button>
+                            </React.Fragment>
+                          ) : (
+                            <React.Fragment>
+                              <button className="be-crop-btn" onClick={(e) => {e.stopPropagation(); startCrop(currentPageIdx, obj.id);}}>✂ 잘라내기</button>
+                              {obj.crop && <button className="be-crop-btn danger" onClick={(e) => {e.stopPropagation(); resetCrop(currentPageIdx, obj.id);}}>잘라내기 해제</button>}
+                            </React.Fragment>
+                          )}
                         </div>
-                      )}
+                        {editorPages.length > 1 && (
+                          <div className="be-ctrl-row" style={{padding:'4px 6px'}}>
+                            <label className="be-ctrl-label" style={{flexShrink:0}}>페이지 이동</label>
+                            <select className="be-select" value="" onClick={e=>e.stopPropagation()}
+                              onChange={e => {
+                                const toPage = parseInt(e.target.value);
+                                if (!isNaN(toPage) && toPage !== currentPageIdx) {
+                                  moveObjectToPage(currentPageIdx, obj.id, toPage);
+                                }
+                              }}>
+                              <option value="">선택...</option>
+                              {editorPages.map((_, pi) => pi !== currentPageIdx && (
+                                <option key={pi} value={pi}>페이지 {pi + 1}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </>}
                     </div>
                   );
                 }
@@ -8733,113 +8898,7 @@ Return ONLY the detailed English prompt, nothing else.`,
 
       {showApiModal && <ApiKeyModal onClose={()=>setShowApiModal(false)} />}
 
-      {/* Asset Library Modal */}
-      {showAssetLibrary && (
-        <div className="asset-overlay" onClick={()=>setShowAssetLibrary(false)}>
-          <div className="asset-panel" onClick={e=>e.stopPropagation()}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-              <div style={{fontWeight:700,fontSize:18}}>에셋 라이브러리</div>
-              <button className="btn-cancel" onClick={()=>setShowAssetLibrary(false)}>닫기</button>
-            </div>
-            <div style={{fontSize:13,color:'var(--text2)',marginBottom:16}}>프로젝트 전체에서 공유되는 캐릭터, 배경, 소품 에셋입니다. 화가 바뀌어도 동일한 이미지가 사용됩니다.</div>
-
-            <div className="asset-tabs">
-              <button className={`asset-tab ${assetTab==='characters'?'active':''}`} onClick={()=>setAssetTab('characters')}>캐릭터 ({Object.keys(sharedAssets.characters).length})</button>
-              <button className={`asset-tab ${assetTab==='backgrounds'?'active':''}`} onClick={()=>setAssetTab('backgrounds')}>배경 ({Object.keys(sharedAssets.backgrounds).length})</button>
-              <button className={`asset-tab ${assetTab==='props'?'active':''}`} onClick={()=>setAssetTab('props')}>소품 ({Object.keys(sharedAssets.props).length})</button>
-            </div>
-
-            {Object.keys(sharedAssets[assetTab]).length === 0 && (
-              <div className="placeholder">등록된 {assetTab === 'characters' ? '캐릭터' : assetTab === 'backgrounds' ? '배경' : '소품'} 에셋이 없습니다. 스토리 분석 후 레퍼런스를 생성하면 자동으로 등록됩니다.</div>
-            )}
-
-            {Object.entries(sharedAssets[assetTab]).map(([id, asset]) => (
-              <div key={id} className="asset-item">
-                {asset.image ? (
-                  <img className="clickable-img" src={asset.image} alt={asset.name} style={assetTab==='backgrounds'?{width:120,height:80,aspectRatio:'16/9'}:assetTab==='props'?{width:80,height:80,aspectRatio:'1/1'}:{}} onClick={() => showPreview(asset.image, asset.name)} />
-                ) : (
-                  <div className="asset-placeholder">미생성</div>
-                )}
-                <div className="asset-item-info">
-                  <div className="asset-item-name">
-                    {asset.name}
-                    {assetTab === 'characters' && asset.role && <span className="asset-badge" style={{marginLeft:6}}>{asset.role}</span>}
-                    {assetTab === 'backgrounds' && <span className="asset-badge bg">{asset.bgType || 'scene'}</span>}
-                    {assetTab === 'props' && <span className="asset-badge prop">소품</span>}
-                  </div>
-                  <div className="asset-item-desc">
-                    {assetTab === 'characters' ? (
-                      <details>
-                        <summary style={{cursor:'pointer',fontSize:12}}>{(asset.appearance||'').substring(0, 60)}...</summary>
-                        <textarea style={{width:'100%',fontSize:11,marginTop:4,padding:4,border:'1px solid #ddd',borderRadius:4,minHeight:50,resize:'vertical'}}
-                          defaultValue={asset.appearance || ''}
-                          onBlur={async (e) => {
-                            const val = e.target.value.trim();
-                            if (val === asset.appearance) return;
-                            const updated = {...asset, appearance: val};
-                            setSharedAssets(prev => ({...prev, characters: {...prev.characters, [id]: updated}}));
-                            // Sync to analysis
-                            setAnalysis(prev => prev ? {...prev, characters: prev.characters.map(c => c.id === id ? {...c, appearance: val} : c)} : prev);
-                            if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
-                            log(`${asset.name} 외형 설명 업데이트됨`, 'success');
-                          }}
-                          placeholder="캐릭터 외형 설명..." />
-                      </details>
-                    ) : asset.description}
-                  </div>
-                  {assetTab === 'characters' && (
-                    <div className="asset-item-meta" style={{display:'flex',alignItems:'center',gap:4}}>
-                      <span style={{flexShrink:0,fontSize:11}}>의상:</span>
-                      <input type="text" style={{flex:1,fontSize:11,padding:'2px 6px',border:'1px solid #ddd',borderRadius:4}}
-                        defaultValue={asset.outfit || ''}
-                        onBlur={async (e) => {
-                          const val = e.target.value.trim();
-                          if (val === asset.outfit) return;
-                          const updated = {...asset, outfit: val};
-                          setSharedAssets(prev => ({...prev, characters: {...prev.characters, [id]: updated}}));
-                          // Sync to analysis
-                          setAnalysis(prev => prev ? {...prev, characters: prev.characters.map(c => c.id === id ? {...c, outfit: val} : c)} : prev);
-                          if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
-                          log(`${asset.name} 의상 업데이트: ${val}`, 'success');
-                        }}
-                        placeholder="기본 의상 설명..." />
-                    </div>
-                  )}
-                  <div className="asset-item-meta">
-                    <span>ID: {id}</span>
-                    {assetTab === 'characters' && loraModels[id]?.status === 'ready' && (
-                      <span style={{color:'#155724',fontWeight:600}}>LoRA 학습완료</span>
-                    )}
-                    {assetTab === 'characters' && loraModels[id]?.status === 'training' && (
-                      <span style={{color:'#856404',fontWeight:600}}>LoRA 학습중...</span>
-                    )}
-                  </div>
-                </div>
-                {asset.refPrompt && (
-                  <details style={{marginTop:4,gridColumn:'1/-1'}}>
-                    <summary className="prompt-badge">프롬프트 보기</summary>
-                    <div style={{fontSize:11,color:'var(--text2)',padding:'6px 0',lineHeight:1.5,fontFamily:'monospace',wordBreak:'break-all'}}>{getAssetFullPrompt(assetTab, asset.refPrompt)}</div>
-                  </details>
-                )}
-                <div className="asset-item-actions">
-                  {assetTab === 'characters' && imageProvider === 'falAI' && asset.image && !loraModels[id]?.status?.match(/ready|training/) && (
-                    <button className="btn btn-sm" style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none',fontSize:11}}
-                      onClick={() => trainCharacterLora(id, asset.name, [asset.image])} disabled={running}>LoRA 학습</button>
-                  )}
-                  <button className="btn btn-outline btn-sm" onClick={() => openPromptEditor(assetTab, id, getAssetFullPrompt(assetTab, asset.refPrompt), asset.name, (p) => regenerateAsset(assetTab, id, p))} disabled={running}>프롬프트 수정 후 생성</button>
-                  <button className="btn btn-outline btn-sm" onClick={()=>regenerateAsset(assetTab, id)} disabled={running}>재생성</button>
-                  <button className="btn btn-outline btn-sm" style={{color:'var(--err)',borderColor:'var(--err)'}} onClick={async ()=>{
-                    if(!confirm(`${asset.name} 에셋을 삭제하시겠습니까?`)) return;
-                    if(projectId) await fbDeleteAsset(projectId, assetTab, id);
-                    setSharedAssets(prev => {const n={...prev};const t={...n[assetTab]};delete t[id];n[assetTab]=t;return n;});
-                    log(`${asset.name} 에셋 삭제됨`, 'success');
-                  }}>삭제</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Asset Library Modal — removed, now full-page */}
 
       <div className="main-content">
         {/* Episode Bar */}
@@ -8855,7 +8914,7 @@ Return ONLY the detailed English prompt, nothing else.`,
             <button className="btn btn-outline btn-sm" style={{fontSize:10,padding:'2px 8px',marginLeft:4}} onClick={() => {
               setProjectId(null); setProjectTitle(''); setEpisodes([]); setCurrentEpisode(null);
               setAnalysis(null); setReferences({characters:{},backgrounds:{}}); setStoryboard([]); setPanels([]);
-              setStep(0); setCompletedSteps(new Set()); setSourceText('');
+              setStep(0); setCompletedSteps(new Set()); setSourceText(''); setShowAssetPage(false);
             }}>프로젝트 목록</button>
             {episodes.filter(ep => !editorMode || ep.publishedToEditor).map(ep => {
               const isActive = ep.number === currentEpisode;
@@ -8933,18 +8992,27 @@ Return ONLY the detailed English prompt, nothing else.`,
           </div>
         )}
 
-        {/* Step Bar — hidden in editor mode */}
+        {/* Step Bar — hidden in editor mode, Step 1(레퍼런스) 숨김, 에셋 라이브러리 탭 추가 */}
         {!editorMode && (
         <div className="step-bar">
-          {STEPS.map((s, i) => (
+          {VISIBLE_STEPS.map(i => (
             <div key={i}
-              className={`step-item ${completedSteps.has(i) ? 'done' : ''} ${step === i && running ? 'current' : ''} ${step === i && !running ? 'active' : ''}`}
-              onClick={() => !running && setStep(i)}
+              className={`step-item ${completedSteps.has(i) ? 'done' : ''} ${step === i && !showAssetPage && running ? 'current' : ''} ${step === i && !showAssetPage && !running ? 'active' : ''}`}
+              onClick={() => { if (!running) { setShowAssetPage(false); setStep(i); } }}
             >
               {STEP_LABELS[i]}
               {completedSteps.has(i) && ' ✓'}
             </div>
           ))}
+          {projectId && (
+            <div
+              className={`step-item ${showAssetPage ? 'active' : ''}`}
+              onClick={() => setShowAssetPage(p => !p)}
+              style={{marginLeft:'auto', background: showAssetPage ? 'linear-gradient(135deg,#00b894,#00cec9)' : undefined, color: showAssetPage ? '#fff' : undefined, borderColor: showAssetPage ? 'transparent' : undefined}}
+            >
+              📦 에셋 라이브러리
+            </div>
+          )}
         </div>
         )}
 
@@ -8954,7 +9022,16 @@ Return ONLY the detailed English prompt, nothing else.`,
         {/* Content area */}
         <div style={{flex:1,overflow:'auto',display:'flex',flexDirection:'column',gap:16}}>
 
-          {!projectId ? (
+          {/* ===== 에셋 라이브러리 전체 페이지 ===== */}
+          {showAssetPage && projectId ? (
+            <div className="flex-col" style={{maxWidth:960,width:'100%',margin:'0 auto'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+                <h2 style={{margin:0,fontSize:20,fontWeight:700}}>📦 에셋 라이브러리 <span style={{fontSize:13,fontWeight:400,color:'var(--text2)'}}>— 프로젝트 공용</span></h2>
+                <button className="btn btn-outline btn-sm" onClick={()=>setShowAssetPage(false)}>← 작업으로 돌아가기</button>
+              </div>
+              {renderAssetLibrary(true)}
+            </div>
+          ) : !projectId ? (
             // Project selection screen
             <div className="flex-col">
               <div className="card">
@@ -9371,215 +9448,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                 </div>
               )}
 
-              {/* ===== STEP 1: Character/Background References ===== */}
-              {step === 1 && (
-                <div className="flex-col">
-                  <div className="flex-row gap-8">
-                    <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(1)} disabled={!analysis || running}>레퍼런스 생성</button>
-                    {running && <span className="status-badge running">생성 중...</span>}
-                  </div>
-
-                  {!analysis && <div className="placeholder">먼저 Step 1 (스토리 분석)을 실행하세요</div>}
-
-                  {analysis && (
-                    <div>
-                      <div className="section-title">캐릭터 레퍼런스</div>
-                      <div className="ref-grid">
-                        {analysis.characters?.map(c => (
-                          <div key={c.id} className="ref-card">
-                            {references.characters[c.id] ? (
-                              <img className="clickable-img" src={references.characters[c.id]} alt={c.name} onClick={() => showPreview(references.characters[c.id], c.name)} />
-                            ) : (
-                              <div className="panel-placeholder">미생성</div>
-                            )}
-                            <div className="ref-card-info">
-                              <div className="ref-card-name">{c.name} <span className="tag tag-char" style={{fontSize:10}}>{c.role}</span>
-                                {loraModels[c.id]?.status === 'ready' && <span className="tag" style={{fontSize:9,background:'#d4edda',color:'#155724',marginLeft:4}}>LoRA</span>}
-                                {loraModels[c.id]?.status === 'training' && <span className="tag" style={{fontSize:9,background:'#fff3cd',color:'#856404',marginLeft:4,animation:'pulse 1.5s infinite'}}>학습중</span>}
-                                {loraModels[c.id]?.status === 'failed' && <span className="tag" style={{fontSize:9,background:'#f8d7da',color:'#721c24',marginLeft:4}}>실패</span>}
-                              </div>
-                              <details style={{marginTop:4}} open={!references.characters[c.id]}>
-                                <summary style={{fontSize:11,color:'var(--accent)',cursor:'pointer',fontWeight:600}}>외형 (appearance)</summary>
-                                <textarea className="form-input" style={{width:'100%',minHeight:60,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
-                                  value={c.appearance || ''} onChange={e => updateAnalysisChar(c.id, 'appearance', e.target.value)} />
-                              </details>
-                              <details style={{marginTop:4}} open={!references.characters[c.id]}>
-                                <summary style={{fontSize:11,color:'var(--accent)',cursor:'pointer',fontWeight:600}}>의상 (outfit) — 기본</summary>
-                                <textarea className="form-input" style={{width:'100%',minHeight:50,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
-                                  value={c.outfit || ''} onChange={e => updateAnalysisChar(c.id, 'outfit', e.target.value)} />
-                              </details>
-                              <details style={{marginTop:4}} open={!references.characters[c.id]}>
-                                <summary style={{fontSize:11,color:'#6c5ce7',cursor:'pointer',fontWeight:600}}>악세서리 (accessories) — 기본</summary>
-                                <textarea className="form-input" style={{width:'100%',minHeight:40,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
-                                  value={c.accessories || ''} placeholder="안경, 시계, 목걸이, 가방 등"
-                                  onChange={e => updateAnalysisChar(c.id, 'accessories', e.target.value)} />
-                              </details>
-                              {/* Outfit Presets */}
-                              <details style={{marginTop:4}}>
-                                <summary style={{fontSize:11,color:'#00b894',cursor:'pointer',fontWeight:600}}>👔 의상 프리셋 ({Object.keys(c.outfitPresets || {}).length}개)</summary>
-                                <div style={{marginTop:4,display:'flex',flexDirection:'column',gap:4}}>
-                                  {Object.entries(c.outfitPresets || {}).map(([presetName, presetData]) => (
-                                    <div key={presetName} style={{padding:'4px 6px',background:'var(--surface2)',borderRadius:4,border:'1px solid var(--border)'}}>
-                                      <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2}}>
-                                        <span style={{fontSize:11,fontWeight:600,color:'#00b894'}}>{presetName}</span>
-                                        <button style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',fontSize:10,color:'var(--err)',padding:0}} onClick={() => {
-                                          const presets = {...(c.outfitPresets || {})};
-                                          delete presets[presetName];
-                                          updateAnalysisChar(c.id, 'outfitPresets', presets);
-                                        }}>✕</button>
-                                      </div>
-                                      <input style={{width:'100%',fontSize:10,padding:'2px 4px',borderRadius:3,border:'1px solid var(--border)',background:'var(--bg)',marginBottom:2}}
-                                        value={presetData.outfit || ''} placeholder="의상 설명 (영어)"
-                                        onChange={e => {
-                                          const presets = {...(c.outfitPresets || {}), [presetName]: {...presetData, outfit: e.target.value}};
-                                          updateAnalysisChar(c.id, 'outfitPresets', presets);
-                                        }} />
-                                      <input style={{width:'100%',fontSize:10,padding:'2px 4px',borderRadius:3,border:'1px solid var(--border)',background:'var(--bg)'}}
-                                        value={presetData.accessories || ''} placeholder="악세서리 (선택)"
-                                        onChange={e => {
-                                          const presets = {...(c.outfitPresets || {}), [presetName]: {...presetData, accessories: e.target.value}};
-                                          updateAnalysisChar(c.id, 'outfitPresets', presets);
-                                        }} />
-                                    </div>
-                                  ))}
-                                  <div style={{display:'flex',gap:4,alignItems:'center'}}>
-                                    <input id={`newPreset_${c.id}`} style={{flex:1,fontSize:10,padding:'3px 6px',borderRadius:4,border:'1px solid var(--border)',background:'var(--bg)'}}
-                                      placeholder="프리셋 이름 (예: 교복, 사복, 잠옷)" onKeyDown={e => {
-                                        if (e.key === 'Enter' && e.target.value.trim()) {
-                                          const name = e.target.value.trim();
-                                          const presets = {...(c.outfitPresets || {}), [name]: {outfit: '', accessories: ''}};
-                                          updateAnalysisChar(c.id, 'outfitPresets', presets);
-                                          e.target.value = '';
-                                        }
-                                      }} />
-                                    <button className="btn btn-xs" style={{fontSize:10,padding:'2px 8px',background:'#00b894',color:'#fff',border:'none'}}
-                                      onClick={() => {
-                                        const inp = document.getElementById(`newPreset_${c.id}`);
-                                        if (inp?.value.trim()) {
-                                          const name = inp.value.trim();
-                                          const presets = {...(c.outfitPresets || {}), [name]: {outfit: '', accessories: ''}};
-                                          updateAnalysisChar(c.id, 'outfitPresets', presets);
-                                          inp.value = '';
-                                        }
-                                      }}>+ 추가</button>
-                                  </div>
-                                  {c.outfit && !Object.values(c.outfitPresets || {}).some(p => p.outfit === c.outfit) && (
-                                    <button className="btn btn-xs" style={{fontSize:10,color:'#00b894',border:'1px solid #00b894',background:'transparent'}}
-                                      onClick={() => {
-                                        const presets = {...(c.outfitPresets || {}), ['기본']: {outfit: c.outfit, accessories: c.accessories || ''}};
-                                        updateAnalysisChar(c.id, 'outfitPresets', presets);
-                                      }}>↑ 현재 기본 의상을 "기본" 프리셋으로 등록</button>
-                                  )}
-                                </div>
-                              </details>
-                              {/* Episode outfit inline */}
-                              {currentEpisode && (
-                                <div style={{marginTop:4,padding:'6px 8px',background:'linear-gradient(135deg,#ffeaa7,#fdcb6e22)',borderRadius:6,border:'1px solid #f9ca24'}}>
-                                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
-                                    <div style={{fontSize:11,fontWeight:600,color:'#d35400'}}>👔 {currentEpisode}화 의상</div>
-                                    {c.outfit && (
-                                      <button className="btn btn-xs" style={{fontSize:9,padding:'1px 5px',color:'#d35400',border:'1px solid #f9ca24',background:'transparent'}}
-                                        onClick={() => {
-                                          const epData = {...(episodeOutfits[c.id]||{})};
-                                          if (c.outfit) epData.outfit = c.outfit;
-                                          if (c.accessories && c.accessories !== 'none') epData.accessories = c.accessories;
-                                          const updated = {...episodeOutfits, [c.id]: epData};
-                                          setEpisodeOutfits(updated);
-                                          if (projectId && currentEpisode) saveEpisodeOutfits(updated);
-                                          log(`${c.name} 분석 의상+악세서리 → ${currentEpisode}화로 동기화`, 'success');
-                                        }}>↓ 분석에서 가져오기</button>
-                                    )}
-                                  </div>
-                                  <input
-                                    style={{width:'100%',fontSize:11,padding:'3px 6px',borderRadius:4,border:'1px solid var(--border)',background:'var(--bg)',marginBottom:3}}
-                                    value={episodeOutfits[c.id]?.outfit || ''}
-                                    placeholder="이번 화 의상 (비우면 기본 의상 적용)"
-                                    onChange={e => {
-                                      const updated = {...episodeOutfits, [c.id]: {...(episodeOutfits[c.id]||{}), outfit: e.target.value}};
-                                      setEpisodeOutfits(updated);
-                                    }}
-                                    onBlur={() => { if (projectId && currentEpisode) saveEpisodeOutfits(); }}
-                                  />
-                                  <input
-                                    style={{width:'100%',fontSize:11,padding:'3px 6px',borderRadius:4,border:'1px solid var(--border)',background:'var(--bg)'}}
-                                    value={episodeOutfits[c.id]?.accessories || ''}
-                                    placeholder="악세서리/소품 (예: 안경, 가방, 머플러)"
-                                    onChange={e => {
-                                      const updated = {...episodeOutfits, [c.id]: {...(episodeOutfits[c.id]||{}), accessories: e.target.value}};
-                                      setEpisodeOutfits(updated);
-                                    }}
-                                    onBlur={() => { if (projectId && currentEpisode) saveEpisodeOutfits(); }}
-                                  />
-                                </div>
-                              )}
-                              <details style={{marginTop:4}}>
-                                <summary style={{fontSize:11,color:'#e17055',cursor:'pointer',fontWeight:600}}>레퍼런스 프롬프트 (refPrompt)</summary>
-                                <textarea className="form-input" style={{width:'100%',minHeight:70,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
-                                  value={c.refPrompt || ''} onChange={e => updateAnalysisChar(c.id, 'refPrompt', e.target.value)} />
-                              </details>
-                              <div className="action-bar" style={{marginTop:6,flexWrap:'wrap'}}>
-                                <button className="btn btn-primary btn-xs"
-                                  onClick={() => saveCharEdits(c.id)}>💾 저장</button>
-                                <button className="btn btn-outline btn-xs"
-                                  onClick={() => openPromptEditor('charRef', c.id, c.refPrompt + getCharSuffix(), c.name, (p) => regenerateCharRef(c.id, p))} disabled={running}>프롬프트 편집 후 생성</button>
-                                <button className="btn btn-outline btn-xs"
-                                  onClick={()=>regenerateCharRef(c.id)} disabled={running}>
-                                  {episodeOutfits[c.id]?.outfit ? `👔 ${currentEpisode}화 의상 재생성` : '재생성'}
-                                </button>
-                                {episodeOutfits[c.id]?.outfit && (
-                                  <span style={{fontSize:10,color:'#e17055',fontWeight:600,display:'block',width:'100%',marginTop:2}}>
-                                    ⚡ 에피소드 의상 적용됨: {episodeOutfits[c.id].outfit.substring(0, 30)}{episodeOutfits[c.id].outfit.length > 30 ? '...' : ''}
-                                  </span>
-                                )}
-                              </div>
-                              {/* LoRA Training Button */}
-                              {imageProvider === 'falAI' && references.characters[c.id] && !loraModels[c.id]?.status?.match(/ready|training|preparing/) && (
-                                <button className="btn btn-sm mt-8" style={{width:'100%',justifyContent:'center',background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none'}}
-                                  onClick={() => trainCharacterLora(c.id, c.name, [references.characters[c.id]])}
-                                  disabled={running}>
-                                  LoRA 학습
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div style={{marginTop:20}} className="section-title">배경 레퍼런스</div>
-                      <div className="ref-grid" style={{gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))'}}>
-                        {analysis.backgrounds?.map(b => (
-                          <div key={b.id} className="ref-card">
-                            {references.backgrounds[b.id] ? (
-                              <img className="clickable-img" src={references.backgrounds[b.id]} alt={b.name} style={{aspectRatio:'16/9'}} onClick={() => showPreview(references.backgrounds[b.id], b.name)} />
-                            ) : (
-                              <div className="panel-placeholder" style={{aspectRatio:'16/9'}}>미생성</div>
-                            )}
-                            <div className="ref-card-info">
-                              <div className="ref-card-name">{b.name}</div>
-                              <details style={{marginTop:4}} open={!references.backgrounds[b.id]}>
-                                <summary style={{fontSize:11,color:'var(--accent)',cursor:'pointer',fontWeight:600}}>설명 (description)</summary>
-                                <textarea className="form-input" style={{width:'100%',minHeight:50,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
-                                  value={b.description || ''} onChange={e => updateAnalysisBg(b.id, 'description', e.target.value)} />
-                              </details>
-                              <details style={{marginTop:4}}>
-                                <summary style={{fontSize:11,color:'#e17055',cursor:'pointer',fontWeight:600}}>레퍼런스 프롬프트 (refPrompt)</summary>
-                                <textarea className="form-input" style={{width:'100%',minHeight:50,fontSize:11,lineHeight:1.4,fontFamily:'monospace',marginTop:4,resize:'vertical'}}
-                                  value={b.refPrompt || ''} onChange={e => updateAnalysisBg(b.id, 'refPrompt', e.target.value)} />
-                              </details>
-                              <div className="action-bar mt-8">
-                                <button className="btn btn-outline btn-xs"
-                                  onClick={() => openPromptEditor('bgRef', b.id, b.refPrompt + getBgSuffix(), b.name, (p) => regenerateAsset('backgrounds', b.id, p))} disabled={running}>프롬프트 편집 후 생성</button>
-                                <button className="btn btn-outline btn-xs"
-                                  onClick={()=>regenerateAsset('backgrounds', b.id)} disabled={running}>재생성</button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Step 1 UI 제거됨 — 에셋 라이브러리는 전체 페이지로 접근 */}
 
               {/* ===== STEP 2: Storyboard ===== */}
               {/* ===== STEP 2+3: Storyboard & Panel Generation (Unified) ===== */}
@@ -9589,6 +9458,13 @@ Return ONLY the detailed English prompt, nothing else.`,
                   <div className="flex-row gap-8 flex-wrap" style={{alignItems:'center'}}>
                     <button className="btn btn-primary btn-sm" onClick={()=>runSingleStep(2)} disabled={!analysis || running}>스토리보드 생성</button>
                     <button className="btn btn-sm" style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none'}} onClick={()=>runSingleStep(3)} disabled={storyboard.length===0 || running}>패널 이미지 생성</button>
+                    {/* Undo / Redo */}
+                    <div style={{display:'flex',gap:2,marginLeft:4}}>
+                      <button className="btn btn-outline btn-xs" onClick={undo} disabled={undoCount === 0}
+                        title="되돌리기 (Ctrl+Z)" style={{padding:'2px 7px',fontSize:13,opacity:undoCount?1:0.35}}>↩</button>
+                      <button className="btn btn-outline btn-xs" onClick={redo} disabled={redoCount === 0}
+                        title="다시 실행 (Ctrl+Shift+Z)" style={{padding:'2px 7px',fontSize:13,opacity:redoCount?1:0.35}}>↪</button>
+                    </div>
                     {storyboard.length > 0 && <span className="text-muted">{storyboard.length}개 패널</span>}
                     {panels.filter(Boolean).length > 0 && <span className="text-muted" style={{color:'var(--success)'}}>이미지 {panels.filter(Boolean).length}/{storyboard.length}</span>}
                     {panels.filter(Boolean).length > 0 && <>
@@ -9700,6 +9576,29 @@ Return ONLY the detailed English prompt, nothing else.`,
                                       </select>
                                     </div>
                                     <div className="sb-edit-row">
+                                      <label>장면 전환</label>
+                                      <select value={editingSbData.sceneTransition || 'new_scene'} onChange={e => {
+                                        const val = e.target.value;
+                                        setEditingSbData(prev => ({...prev, sceneTransition: val}));
+                                        // 새 장면/시간경과 전환이면 deltaPrompt 클리어
+                                        if (val === 'new_scene' || val === 'time_skip') {
+                                          setEditingSbData(prev => ({...prev, deltaPrompt: ''}));
+                                        }
+                                      }}>
+                                        <option value="new_scene">🆕 새 장면</option>
+                                        <option value="continuous">▶️ 연속 (이전 이미지 기반)</option>
+                                        <option value="cut_to_reaction">🔄 리액션 컷 (이전 이미지 기반)</option>
+                                        <option value="new_angle_same_scene">📐 같은 장면, 다른 앵글 (이전 이미지 기반)</option>
+                                        <option value="time_skip">⏩ 시간 경과</option>
+                                      </select>
+                                    </div>
+                                    {['continuous','cut_to_reaction','new_angle_same_scene'].includes(editingSbData.sceneTransition) && (
+                                      <div className="sb-edit-row">
+                                        <label>델타 프롬프트<br/><span style={{fontSize:9,color:'var(--text-muted)',fontWeight:'normal'}}>변경사항만</span></label>
+                                        <textarea value={editingSbData.deltaPrompt || ''} onChange={e => setEditingSbData(prev => ({...prev, deltaPrompt: e.target.value}))} rows={2} placeholder="CHANGES: [변경된 부분]. KEEP: same background, same lighting..." style={{fontFamily:'monospace',fontSize:11}} />
+                                      </div>
+                                    )}
+                                    <div className="sb-edit-row">
                                       <label>설명</label>
                                       <textarea value={editingSbData.description || ''} onChange={e => setEditingSbData(prev => ({...prev, description: e.target.value}))} rows={3} />
                                     </div>
@@ -9789,6 +9688,16 @@ Return ONLY the detailed English prompt, nothing else.`,
                                       <span className="tag" style={{background:'#dfe6e9',color:'#636e72'}}>{panel.cameraAngle}</span>
                                       <span className="tag tag-mood">{panel.mood}</span>
                                       <span className="tag" style={{background:'#a29bfe',color:'#fff',fontSize:9}}>{panel.imageSize ? (panel.imageSize === '16:9' ? '가로' : panel.imageSize === '9:16' ? '세로' : '정사각') : '자동'}</span>
+                                      {panel.sceneTransition && panel.sceneTransition !== 'new_scene' && (
+                                        <span className="tag" style={{
+                                          background: ['continuous','cut_to_reaction','new_angle_same_scene'].includes(panel.sceneTransition) ? '#00b894' : '#fdcb6e',
+                                          color: ['continuous','cut_to_reaction','new_angle_same_scene'].includes(panel.sceneTransition) ? '#fff' : '#636e72',
+                                          fontSize: 9
+                                        }} title={panel.deltaPrompt || ''}>
+                                          {({continuous:'▶️연속', cut_to_reaction:'🔄리액션', new_angle_same_scene:'📐앵글변경', time_skip:'⏩시간경과'})[panel.sceneTransition] || panel.sceneTransition}
+                                          {panel.deltaPrompt ? ' Δ' : ''}
+                                        </span>
+                                      )}
                                       {/* State change badges */}
                                       {panel.characters?.some(pc => pc.outfitOverride) && <span className="outfit-tag" style={{cursor:'pointer'}} title="클릭하면 의상 변경을 취소합니다" onClick={(e) => {
                                         e.stopPropagation();
@@ -9857,7 +9766,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                                 else log(`패널 ${i+1} ${charInfo.name} → 기본 의상 복원`, 'success');
                                               }}>
                                               <option value="">{charInfo.name}: 기본</option>
-                                              {Object.keys(presets).map(pn => <option key={pn} value={pn}>{charInfo.name}: {pn}</option>)}
+                                              {Object.keys(presets).map(pn => <option key={pn} value={pn}>{charInfo.name}: {pn}{presets[pn].image ? ' 📷' : ''}</option>)}
                                             </select>
                                           );
                                         })}
@@ -9989,9 +9898,15 @@ Return ONLY the detailed English prompt, nothing else.`,
               {/* ===== STEP 4: Webtoon Preview ===== */}
               {step === 4 && (
                 <div className="flex-col">
-                  <div className="flex-row gap-8">
+                  <div className="flex-row gap-8" style={{alignItems:'center',flexWrap:'wrap'}}>
                     <span style={{fontWeight:700,fontSize:15}}>웹툰 미리보기: {analysis?.title || ''}</span>
                     <span className="text-muted">({panels.filter(Boolean).length}개 패널)</span>
+                    <div style={{display:'flex',gap:2}}>
+                      <button className="btn btn-outline btn-xs" onClick={undo} disabled={undoCount === 0}
+                        title="되돌리기 (Ctrl+Z)" style={{padding:'2px 7px',fontSize:13,opacity:undoCount?1:0.35}}>↩</button>
+                      <button className="btn btn-outline btn-xs" onClick={redo} disabled={redoCount === 0}
+                        title="다시 실행 (Ctrl+Shift+Z)" style={{padding:'2px 7px',fontSize:13,opacity:redoCount?1:0.35}}>↪</button>
+                    </div>
                     {panels.filter(Boolean).length > 0 && <>
                       <button className="btn btn-success btn-sm" onClick={savePanelsToFirebase} disabled={running} style={{display:'flex',alignItems:'center',gap:4}}>💾 Firebase 저장</button>
                       <button className="btn btn-primary btn-sm" onClick={openBubbleEditor} style={{display:'flex',alignItems:'center',gap:4}}>💬 웹툰 에디터</button>
@@ -10213,7 +10128,7 @@ Return ONLY the detailed English prompt, nothing else.`,
               {/* Per-step config */}
               {[
                 {num: 1, label: 'Step 1: 스토리 분석', provKey: 'step1Provider', artKey: 'step1ArtStyle', defProv: 'ninjaChat'},
-                {num: 2, label: 'Step 2: 레퍼런스 생성', provKey: 'step2Provider', artKey: 'step2ArtStyle', defProv: 'ninjaChat'},
+                {num: 2, label: 'Step 2: 에셋 생성', provKey: 'step2Provider', artKey: 'step2ArtStyle', defProv: 'ninjaChat'},
                 {num: 3, label: 'Step 3: 스토리보드', provKey: 'step3Provider', artKey: 'step3ArtStyle', defProv: 'ninjaChat'},
                 {num: 4, label: 'Step 4: 패널 이미지', provKey: 'step4Provider', artKey: 'step4ArtStyle', defProv: 'ninjaChat'},
               ].map(st => (
