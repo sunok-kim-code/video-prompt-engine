@@ -7695,6 +7695,61 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
     finally { setRunning(false); }
   };
 
+  // ======== Upload image as asset reference ========
+  const uploadAssetImage = (assetType, assetId, presetName) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const asset = sharedAssets[assetType]?.[assetId];
+        if (!asset) return;
+
+        if (presetName) {
+          // 의상 프리셋 이미지 업로드
+          const char = analysis?.characters?.find(c => c.id === assetId);
+          const presets = char?.outfitPresets || asset.outfitPresets || {};
+          const preset = presets[presetName];
+          if (!preset) return;
+          const updatedPreset = {...preset, image: dataUrl};
+          const updatedPresets = {...presets, [presetName]: updatedPreset};
+          updateAnalysisChar(assetId, 'outfitPresets', updatedPresets);
+          setSharedAssets(prev => {
+            const existing = prev.characters?.[assetId];
+            if (!existing) return prev;
+            return {...prev, characters: {...prev.characters, [assetId]: {...existing, outfitPresets: updatedPresets}}};
+          });
+          if (projectId) {
+            await fbSaveAsset(projectId, 'characters', assetId, {...asset, outfitPresets: updatedPresets});
+          }
+          log(`${asset.name} — "${presetName}" 이미지 업로드 완료 ✓`, 'success');
+        } else {
+          // 기본 에셋 이미지 업로드
+          const updated = {...asset, image: dataUrl};
+          setSharedAssets(prev => ({...prev, [assetType]: {...prev[assetType], [assetId]: updated}}));
+          if (assetType === 'characters') {
+            setReferences(prev => ({...prev, characters: {...prev.characters, [assetId]: dataUrl}}));
+          } else if (assetType === 'backgrounds') {
+            setReferences(prev => ({...prev, backgrounds: {...prev.backgrounds, [assetId]: dataUrl}}));
+          }
+          if (projectId) await fbSaveAsset(projectId, assetType, assetId, updated);
+          log(`${asset.name} 이미지 업로드 완료 ✓`, 'success');
+        }
+      } catch(err) {
+        log(`이미지 업로드 실패: ${err.message}`, 'error');
+      }
+    };
+    input.click();
+  };
+
   // Save Project & Episodes
   const saveProject = async () => {
     try {
@@ -8530,6 +8585,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                 </div>
                 <div style={{display:'flex',flexDirection:'column',gap:3,flexShrink:0}}>
                   <button className="btn btn-outline btn-xs" onClick={()=>regenerateAsset(assetTab, id)} disabled={running}>재생성</button>
+                  <button className="btn btn-outline btn-xs" onClick={()=>uploadAssetImage(assetTab, id)} title="이미지 파일 업로드">📤 업로드</button>
                   <button className="btn btn-outline btn-xs" style={{color:'var(--err)',borderColor:'var(--err)'}} onClick={async ()=>{
                     if(!confirm(`${asset.name} 에셋을 삭제하시겠습니까?`)) return;
                     if(projectId) await fbDeleteAsset(projectId, assetTab, id);
@@ -8687,6 +8743,8 @@ Return ONLY the detailed English prompt, nothing else.`,
                           onClick={() => o.isDefault ? regenerateAsset(assetTab, id) : regeneratePresetRef(id, o.key)}>
                           {!o.isDefault && !o.outfit ? '설명 입력 필요' : (o.image ? '재생성' : '생성')}
                         </button>
+                        <button className="btn btn-outline btn-xs" style={{fontSize:10}} title="이미지 업로드"
+                          onClick={() => uploadAssetImage('characters', id, o.isDefault ? null : o.key)}>📤</button>
                         {!o.isDefault && <>
                           <button className="btn btn-outline btn-xs" style={{fontSize:10}} onClick={() => {
                             const newOutfit = prompt(`"${o.name}" 의상 설명:`, o.outfit);
