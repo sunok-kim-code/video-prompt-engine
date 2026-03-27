@@ -3088,40 +3088,40 @@ Rules:
       textArea: {top:'22%', left:'18%', width:'64%', height:'50%'},
       path: () => `M100,2 L118,28 L148,5 L142,35 L175,22 L158,50 L198,48 L170,68 L195,90 L160,82 L165,115 L130,95 L110,128 L95,95 L60,118 L68,85 L25,98 L48,70 L5,60 L40,48 L15,25 L55,38 L50,8 L80,30 Z`
     },
-    // 이중 말풍선 — 두 타원이 겹쳐진 8자형 + 하단 꼬리
+    // 이중 말풍선 — 기본 말풍선(아래) + 원형(위) 겹침 + 하단 꼬리
     gourd: {
-      viewBox: '0 0 200 270', baseW:200, baseH:270,
-      textArea: {top:'4%', left:'12%', width:'76%', height:'88%'},
+      viewBox: '0 0 200 260', baseW:200, baseH:260,
+      textArea: {top:'3%', left:'10%', width:'80%', height:'88%'},
       path: (sw, sc, fc, flip) => {
         if (flip) return [
-          'M 95,8',
-          'C 40,8 10,38 10,75',       // upper-left arc
-          'C 10,107 25,124 45,134',    // left going to indent
-          'C 63,142 63,156 45,168',    // left concave indent
-          'C 22,182 12,205 18,228',    // lower-left arc
-          'C 25,250 55,266 95,266',    // bottom going right
-          'L 148,276',                  // tail tip (right)
-          'C 140,266 135,258 132,250', // tail return
-          'C 168,244 188,222 188,195', // lower-right arc
-          'C 188,172 175,157 155,148', // right going to indent
-          'C 138,140 138,126 155,116', // right concave indent
-          'C 178,104 190,82 190,60',   // upper-right arc
-          'C 190,30 160,8 95,8 Z'      // top back
+          'M 100,8',
+          'C 55,8 38,30 38,58',         // upper-left arc (small circle)
+          'C 38,80 48,96 62,106',        // left upper going to indent
+          'C 78,116 78,128 58,136',      // left concave indent
+          'C 28,148 8,168 8,192',        // lower-left arc (wide bubble)
+          'C 8,222 30,245 68,250',       // bottom-left going right
+          'L 155,258',                    // tail tip (right)
+          'C 145,250 138,242 135,235',   // tail return
+          'C 170,228 192,210 192,185',   // lower-right arc (wide bubble)
+          'C 192,160 172,142 145,134',   // right going to indent
+          'C 125,126 125,114 142,104',   // right concave indent
+          'C 158,94 165,78 165,58',      // upper-right arc (small circle)
+          'C 165,30 148,8 100,8 Z'       // back to top
         ].join(' ');
         return [
-          'M 105,8',
-          'C 160,8 190,38 190,75',     // upper-right arc
-          'C 190,107 175,124 155,134',  // right going to indent
-          'C 138,142 138,156 155,168',  // right concave indent
-          'C 178,182 188,205 182,228',  // lower-right arc
-          'C 175,250 145,266 105,266',  // bottom going left
-          'L 52,276',                    // tail tip (left)
-          'C 60,266 65,258 68,250',     // tail return
-          'C 32,244 12,222 12,195',     // lower-left arc
-          'C 12,172 25,157 45,148',     // left going to indent
-          'C 62,140 62,126 45,116',     // left concave indent
-          'C 22,104 10,82 10,60',       // upper-left arc
-          'C 10,30 40,8 105,8 Z'        // top back
+          'M 100,8',
+          'C 148,8 165,30 165,58',       // upper-right arc (small circle)
+          'C 165,78 158,94 142,104',      // right upper going to indent
+          'C 125,114 125,126 145,134',    // right concave indent
+          'C 172,142 192,160 192,185',    // lower-right arc (wide bubble)
+          'C 192,210 170,235 135,242',    // bottom-right
+          'L 48,258',                      // tail tip (left)
+          'C 55,248 60,240 65,235',       // tail return
+          'C 30,228 8,208 8,185',         // lower-left arc (wide bubble)
+          'C 8,162 28,145 58,136',        // left going to indent
+          'C 78,128 78,116 62,106',       // left concave indent
+          'C 48,96 38,80 38,58',          // upper-left arc (small circle)
+          'C 38,30 55,8 100,8 Z'          // back to top
         ].join(' ');
       }
     },
