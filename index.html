@@ -3100,6 +3100,7 @@ Rules:
     cloud: {name:'구름', tail:true, bg:'#fff', border:'#888', borderWidth:2, cloudShape:true, fontWeight:400, shadow:true},
     box: {name:'사각형', tail:true, bg:'#fff', border:'#222', borderWidth:3, boxShape:true, radius:10, fontWeight:500, shadow:true},
     wave: {name:'물결', tail:true, bg:'#fff', border:'#5555cc', borderWidth:2, waveShape:true, fontWeight:400, shadow:true, color:'#333'},
+    concentration:{name:'집중선', tail:false, bg:'#fff', border:'#000', borderWidth:1.5, fontWeight:700, shadow:false, concentrationLines:true},
     narration:{name:'나레이션', tail:false, bg:'transparent', border:'none', borderWidth:0, radius:0, fontWeight:500, color:'#000', shadow:false},
     whisper:{name:'속삭임', tail:true, bg:'#f0f0f0', border:'#aaa', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, color:'#555', shadow:true},
     text:{name:'텍스트', tail:false, bg:'#ffffff', border:'none', borderWidth:0, radius:2, fontWeight:500, color:'#111', shadow:false, plainText:true},
@@ -3992,6 +3993,47 @@ Rules:
     return pts.join(' ');
   };
 
+  // Build concentration lines (집중선) — radiating spikes from an elliptical center
+  // Returns an array of path strings: [centerEllipse, ...rays]
+  const buildConcentrationLines = (w, h, rayCount) => {
+    const cx = w / 2, cy = h / 2;
+    // Inner ellipse where text goes (~55% of total size)
+    const innerRx = w * 0.28, innerRy = h * 0.28;
+    // Outer boundary for ray tips (~95% of total size)
+    const outerRx = w * 0.48, outerRy = h * 0.48;
+    const count = rayCount || 60;
+    const rays = [];
+    // Use seeded pseudo-random for consistent look
+    const seed = 42;
+    const rand = (i, offset) => {
+      const x = Math.sin(seed + i * 127.1 + offset * 311.7) * 43758.5453;
+      return x - Math.floor(x);
+    };
+    for (let i = 0; i < count; i++) {
+      const baseAngle = (Math.PI * 2 * i) / count;
+      // Slight angle jitter for natural look
+      const angle = baseAngle + (rand(i, 0) - 0.5) * (Math.PI * 2 / count) * 0.5;
+      // Ray start: on the inner ellipse edge (with small gap)
+      const gapFactor = 1.0 + rand(i, 1) * 0.08;
+      const sx = cx + Math.cos(angle) * innerRx * gapFactor;
+      const sy = cy + Math.sin(angle) * innerRy * gapFactor;
+      // Ray end: varying distance outward
+      const lenFactor = 0.6 + rand(i, 2) * 0.4; // 60%-100% of max
+      const ex = cx + Math.cos(angle) * outerRx * (1 + lenFactor * 0.3);
+      const ey = cy + Math.sin(angle) * outerRy * (1 + lenFactor * 0.3);
+      // Width: thin wedge shape — wider at base, pointed at tip
+      const halfW = (0.8 + rand(i, 3) * 1.8) * (w / 200);
+      const perpAngle = angle + Math.PI / 2;
+      const dx = Math.cos(perpAngle) * halfW;
+      const dy = Math.sin(perpAngle) * halfW;
+      rays.push(`M ${sx + dx} ${sy + dy} L ${ex} ${ey} L ${sx - dx} ${sy - dy} Z`);
+    }
+    // Ellipse approximation path for center
+    const k = 0.5523;
+    const ellipse = `M ${cx - innerRx} ${cy} C ${cx - innerRx} ${cy - innerRy * k} ${cx - innerRx * k} ${cy - innerRy} ${cx} ${cy - innerRy} C ${cx + innerRx * k} ${cy - innerRy} ${cx + innerRx} ${cy - innerRy * k} ${cx + innerRx} ${cy} C ${cx + innerRx} ${cy + innerRy * k} ${cx + innerRx * k} ${cy + innerRy} ${cx} ${cy + innerRy} C ${cx - innerRx * k} ${cy + innerRy} ${cx - innerRx} ${cy + innerRy * k} ${cx - innerRx} ${cy} Z`;
+    return {ellipse, rays, innerRx, innerRy};
+  };
+
   // Enhanced bubble drawing with shadows and seamless ellipse+tail
   const drawBubbleOnCanvas = (ctx, b, bx, by, bw, bh, scale) => {
     const bt = BUBBLE_TYPES[b.bubbleStyle || b.type] || BUBBLE_TYPES.speech;
@@ -4056,6 +4098,23 @@ Rules:
         ctx.lineCap = 'round';
         ctx.stroke(p2d);
       }
+      ctx.restore();
+    } else if (bt.concentrationLines) {
+      // 집중선 — radiating manga-style concentration lines
+      ctx.save();
+      ctx.translate(bx, by);
+      const cl = buildConcentrationLines(bw, bh, 60);
+      // Draw rays (black thin wedges)
+      ctx.fillStyle = bt.border || '#000';
+      cl.rays.forEach(rayPath => {
+        const p2d = new Path2D(rayPath);
+        ctx.fill(p2d);
+      });
+      // Draw white center ellipse on top
+      const ep = new Path2D(cl.ellipse);
+      ctx.fillStyle = bt.bg || '#fff';
+      ctx.fill(ep);
+      ctx.shadowColor = 'transparent';
       ctx.restore();
     } else if (bt.spiky || bt.cloudShape || bt.boxShape || bt.waveShape) {
       // Path-based shapes: spiky, cloud, box, wave
@@ -4160,7 +4219,10 @@ Rules:
       let textCenterX = bx + bw / 2 + txOff;
       let textCenterY = by + bh / 2 + tyOff;
       let maxTextW = bw - 16 * scale;
-      if (ta) {
+      if (bt.concentrationLines) {
+        // 집중선: constrain text to inner ellipse (~50%)
+        maxTextW = bw * 0.45;
+      } else if (ta) {
         const taLeft = parseFloat(ta.left) / 100;
         const taTop = parseFloat(ta.top) / 100;
         const taW = parseFloat(ta.width) / 100;
@@ -8622,6 +8684,12 @@ Return ONLY the detailed English prompt, nothing else.`,
                                   } else if (bt.waveShape) {
                                     const pathD = buildWavePath(W, H, tailPos, tailLen, tailWid, scale);
                                     return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeLinejoin="round"/>;
+                                  } else if (bt.concentrationLines) {
+                                    const cl = buildConcentrationLines(W, H, 60);
+                                    return <g>
+                                      {cl.rays.map((rp, ri) => <path key={ri} d={rp} fill={strokeColor} stroke="none"/>)}
+                                      <path d={cl.ellipse} fill={fillColor} stroke="none"/>
+                                    </g>;
                                   } else if (bt.ellipse) {
                                     const cx2 = W/2, cy2 = H/2, rx2 = W/2 - 2, ry2 = H/2 - 2;
                                     const rn2 = obj.roundness ?? 100;
@@ -8656,6 +8724,20 @@ Return ONLY the detailed English prompt, nothing else.`,
                                   return {
                                     position:'absolute',
                                     top: ta.top, left: ta.left, width: ta.width, height: ta.height,
+                                    fontWeight:obj.fontWeight||bt.fontWeight, fontSize:fs,
+                                    color:obj.customColor||bt.color||'#111',
+                                    fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
+                                    paddingTop: padTop,
+                                    transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
+                                  };
+                                })() : bt.concentrationLines ? (() => {
+                                  // 집중선: text area confined to inner ellipse (~50% centered)
+                                  const W2 = obj.w * scale, H2 = obj.h * scale;
+                                  const areaW = W2 * 0.50, areaH2 = H2 * 0.50;
+                                  const padTop = Math.max(0, (areaH2 - textTotalH) / 2);
+                                  return {
+                                    position:'absolute', top: (H2 - areaH2) / 2, left: (W2 - areaW) / 2,
+                                    width: areaW, height: areaH2,
                                     fontWeight:obj.fontWeight||bt.fontWeight, fontSize:fs,
                                     color:obj.customColor||bt.color||'#111',
                                     fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
