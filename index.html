@@ -324,10 +324,13 @@ div:hover > .panel-ctrl{opacity:1 !important;}
 // ============================================================
 // Firebase / Firestore Project Management (Enhanced for Episodes)
 // ============================================================
+// Suppress noisy Firestore internal warnings (Listen stream 404 etc.)
+try { firebase.firestore.setLogLevel && firebase.firestore.setLogLevel('error'); } catch(e) {}
+
 let _db = null;
 function getFirebaseConfig() { try { const raw = localStorage.getItem('firebase_config'); if (raw) return JSON.parse(raw); } catch(e) {} return null; }
 function saveFirebaseConfig(cfg) { localStorage.setItem('firebase_config', JSON.stringify(cfg)); _db = null; initFirebase(); }
-function initFirebase() { const cfg = getFirebaseConfig(); if (!cfg || !cfg.apiKey || !cfg.projectId) return null; try { if (!firebase.apps.length) firebase.initializeApp(cfg); _db = firebase.firestore(); return _db; } catch(e) { return null; } }
+function initFirebase() { const cfg = getFirebaseConfig(); if (!cfg || !cfg.apiKey || !cfg.projectId) return null; try { if (!firebase.apps.length) firebase.initializeApp(cfg); _db = firebase.firestore(); _db.settings({ experimentalAutoDetectLongPolling: false, experimentalForceLongPolling: false, merge: true }); return _db; } catch(e) { return null; } }
 function getDb() { if (_db) return _db; return initFirebase(); }
 
 async function fbListProjects() { const db = getDb(); if (!db) throw new Error('Firebase not configured'); const snap = await db.collection('webtoon_projects').orderBy('updatedAt','desc').get(); return snap.docs.map(d => ({id: d.id, ...d.data()})); }
@@ -3071,7 +3074,7 @@ Rules:
       viewBox: '0 0 200 200', baseW:200, baseH:200,
       textArea: {top:'8%', left:'12%', width:'76%', height:'62%'},
       path: (sw,sc,fc,flip) => {
-        if (flip === 'center' || flip === 'c') return `M 100,10 C 155,10 185,40 185,80 C 185,120 155,150 100,150 C 108,150 112,148 110,142 C 112,150 108,165 100,178 C 92,165 88,150 90,142 C 88,148 92,150 100,150 C 45,150 15,120 15,80 C 15,40 45,10 100,10 Z`;
+        if (flip === 'center' || flip === 'c') return `M 100,10 C 155,10 185,40 185,80 C 185,125 150,150 118,150 C 110,150 105,165 100,178 C 95,165 90,150 82,150 C 50,150 15,125 15,80 C 15,40 45,10 100,10 Z`;
         if (flip === true || flip === 'flip') return `M 100,10 C 45,10 15,40 15,80 C 15,120 45,150 100,150 C 120,150 135,147 145,142 C 150,148 158,162 170,178 C 166,162 164,150 162,140 C 180,130 185,115 185,80 C 185,40 155,10 100,10 Z`;
         return `M 100,10 C 155,10 185,40 185,80 C 185,120 155,150 100,150 C 80,150 65,147 55,142 C 50,148 42,162 30,178 C 34,162 36,150 38,140 C 20,130 15,115 15,80 C 15,40 45,10 100,10 Z`;
       }
@@ -3081,7 +3084,7 @@ Rules:
       viewBox: '0 0 240 160', baseW:240, baseH:160,
       textArea: {top:'6%', left:'8%', width:'80%', height:'70%'},
       path: (sw,sc,fc,flip) => {
-        if (flip === 'center' || flip === 'c') return `M 120,8 C 200,8 232,35 232,68 C 232,105 200,136 120,136 C 128,136 132,134 130,128 C 132,136 128,148 120,158 C 112,148 108,136 110,128 C 108,134 112,136 120,136 C 40,136 8,105 8,68 C 8,35 40,8 120,8 Z`;
+        if (flip === 'center' || flip === 'c') return `M 120,8 C 200,8 232,35 232,68 C 232,105 195,136 138,136 C 130,136 125,148 120,158 C 115,148 110,136 102,136 C 45,136 8,105 8,68 C 8,35 40,8 120,8 Z`;
         if (flip === true || flip === 'flip') return `M 120,8 C 40,8 8,35 8,68 C 8,95 30,118 65,126 C 60,135 45,148 22,155 C 50,150 68,140 78,132 C 90,135 104,136 120,136 C 200,136 232,105 232,68 C 232,35 200,8 120,8 Z`;
         return `M 120,8 C 200,8 232,35 232,68 C 232,95 210,118 175,126 C 180,135 195,148 218,155 C 190,150 172,140 162,132 C 150,135 136,136 120,136 C 40,136 8,105 8,68 C 8,35 40,8 120,8 Z`;
       }
@@ -3091,7 +3094,7 @@ Rules:
       viewBox: '0 0 180 180', baseW:180, baseH:180,
       textArea: {top:'8%', left:'6%', width:'78%', height:'70%'},
       path: (sw,sc,fc,flip) => {
-        if (flip === 'center' || flip === 'c') return `M 90,8 C 140,8 172,30 172,75 C 172,112 140,142 90,142 C 97,142 100,140 98,134 C 100,142 96,155 90,165 C 84,155 80,142 82,134 C 80,140 83,142 90,142 C 35,142 4,112 4,75 C 4,38 35,8 90,8 Z`;
+        if (flip === 'center' || flip === 'c') return `M 90,8 C 140,8 172,30 172,75 C 172,115 138,142 108,142 C 100,142 95,155 90,165 C 85,155 80,142 72,142 C 38,142 4,115 4,75 C 4,38 35,8 90,8 Z`;
         if (flip === true || flip === 'flip') return `M 95,8 C 45,8 12,30 12,75 C 12,90 18,102 28,112 C 22,116 12,122 2,125 C 14,124 25,122 32,118 C 45,132 68,142 95,142 C 150,142 176,112 176,75 C 176,38 150,8 95,8 Z`;
         return `M 85,8 C 135,8 168,30 168,75 C 168,90 162,102 152,112 C 158,116 168,122 178,125 C 166,124 155,122 148,118 C 135,132 112,142 85,142 C 30,142 4,112 4,75 C 4,38 30,8 85,8 Z`;
       }
@@ -3101,7 +3104,7 @@ Rules:
       viewBox: '0 0 180 180', baseW:180, baseH:180,
       textArea: {top:'8%', left:'5%', width:'78%', height:'70%'},
       path: (sw,sc,fc,flip) => {
-        if (flip === 'center' || flip === 'c') return `M 90,8 C 140,8 170,32 170,75 C 170,110 140,142 90,142 C 97,142 100,140 98,134 C 100,140 97,152 90,162 C 83,152 80,140 82,134 C 80,140 83,142 90,142 C 36,142 6,110 6,75 C 6,32 36,8 90,8 Z`;
+        if (flip === 'center' || flip === 'c') return `M 90,8 C 140,8 170,32 170,75 C 170,112 138,142 108,142 C 100,142 95,152 90,162 C 85,152 80,142 72,142 C 38,142 6,112 6,75 C 6,32 36,8 90,8 Z`;
         if (flip === true || flip === 'flip') return `M 98,8 C 48,8 18,32 18,75 C 18,95 28,110 40,120 C 32,125 18,132 5,135 C 22,132 34,128 42,124 C 55,136 74,142 98,142 C 152,142 178,110 178,75 C 178,32 148,8 98,8 Z`;
         return `M 82,8 C 132,8 162,32 162,75 C 162,95 152,110 140,120 C 148,125 162,132 175,135 C 158,132 146,128 138,124 C 125,136 106,142 82,142 C 28,142 2,110 2,75 C 2,32 32,8 82,8 Z`;
       }
@@ -3124,9 +3127,9 @@ Rules:
           'C 158,78 152,92 138,102',
           'C 126,108 128,114 142,118',
           'C 168,128 188,148 188,175',
-          'C 188,210 155,235 108,235',    // 하단 우측
-          'C 112,237 110,248 100,263',    // 꼬리 끝 (가운데)
-          'C 90,248 88,237 92,235',       // 꼬리 복귀
+          'C 188,210 155,235 115,235',    // 하단 우측
+          'C 108,235 104,250 100,263',    // 꼬리 끝 (가운데)
+          'C 96,250 92,235 85,235',       // 꼬리 복귀
           'C 45,235 12,210 12,175',       // 하단 좌측
           'C 12,148 32,128 58,118',
           'C 72,114 74,108 62,102',
@@ -3182,7 +3185,7 @@ Rules:
     cloud: {name:'구름', tail:true, bg:'#fff', border:'#888', borderWidth:2, cloudShape:true, fontWeight:400, shadow:true},
     box: {name:'사각형', tail:true, bg:'#fff', border:'#222', borderWidth:3, boxShape:true, radius:10, fontWeight:500, shadow:true},
     wave: {name:'물결', tail:true, bg:'#fff', border:'#5555cc', borderWidth:2, waveShape:true, fontWeight:400, shadow:true, color:'#333'},
-    concentration:{name:'집중선', tail:false, bg:'#fff', border:'#000', borderWidth:1.5, fontWeight:700, shadow:false, concentrationLines:true},
+    concentration:{name:'집중선', tail:false, bg:'transparent', border:'#000', borderWidth:1.5, fontWeight:700, shadow:false, concentrationLines:true},
     narration:{name:'나레이션', tail:false, bg:'transparent', border:'none', borderWidth:0, radius:0, fontWeight:500, color:'#000', shadow:false},
     whisper:{name:'속삭임', tail:true, bg:'#f0f0f0', border:'#aaa', borderWidth:2, ellipse:true, fontWeight:400, dashed:true, color:'#555', shadow:true},
     text:{name:'텍스트', tail:false, bg:'#ffffff', border:'none', borderWidth:0, radius:2, fontWeight:500, color:'#111', shadow:false, plainText:true},
@@ -4321,6 +4324,9 @@ Rules:
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         ctx.stroke(p2d);
+        // Re-fill interior to cover any internal stroke artifacts at tail junctions
+        ctx.fillStyle = bFillC;
+        ctx.fill(p2d);
       }
       ctx.restore();
     } else if (bt.concentrationLines) {
@@ -4338,9 +4344,9 @@ Rules:
         ctx.lineTo(ln.ex, ln.ey);
         ctx.stroke();
       });
-      // Draw white center ellipse on top
+      // Center ellipse — transparent (text floats over lines)
       const ep = new Path2D(cl.ellipse);
-      ctx.fillStyle = bt.bg || '#fff';
+      ctx.fillStyle = 'transparent';
       ctx.fill(ep);
       ctx.shadowColor = 'transparent';
       ctx.restore();
@@ -7051,7 +7057,11 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
     skipSnapshotRef.current = false; // 생성 완료 후 스냅샷 복원
     setCompletedSteps(prev => new Set([...prev, 3]));
     setStep(4);
-    log(`패널 ${newPanels.filter(Boolean).length}개 생성 완료! Firebase 저장 버튼으로 저장하세요.`, 'success');
+    // Auto-save panels to Firebase
+    if (projectId && currentEpisode) {
+      fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(e => log('패널 자동저장 실패: ' + e.message, 'error'));
+    }
+    log(`패널 ${newPanels.filter(Boolean).length}개 생성 완료!`, 'success');
     return newPanels;
   };
 
@@ -7463,6 +7473,10 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       const newPanels = [...panels];
       newPanels[idx] = await urlToBase64(images[0]);
       setPanels(newPanels);
+      // Auto-save to Firebase so editor reload can pick up the new image
+      if (projectId && currentEpisode) {
+        fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays}).catch(() => {});
+      }
       log(`패널 ${idx+1} 재생성 완료`, 'success');
     } catch(e) { log(`재생성 실패: ${e.message}`, 'error'); }
     finally { setRunning(false); }
@@ -8017,18 +8031,33 @@ Return ONLY the detailed English prompt, nothing else.`,
 
   // 패널 이미지 재로딩 (Firebase에서 최신 이미지만 가져오기)
   const reloadPanelImage = async (panelIndex, editorPageIdx, objId) => {
-    if (!projectId || !currentEpisode) { log('Firebase 미연결 상태입니다.', 'error'); return; }
     try {
       log(`패널 ${panelIndex + 1} 이미지 새로고침 중...`, 'info');
-      const s4 = await fbLoadPhase(projectId, currentEpisode, 'step4_panels');
-      if (!s4?.panels?.[panelIndex]) {
-        log(`패널 ${panelIndex + 1} 이미지가 Firebase에 없습니다.`, 'error');
+      let newSrc = null;
+      // 1) Try current panels React state first (most up-to-date after regeneration)
+      if (panels[panelIndex] && typeof panels[panelIndex] === 'string' && panels[panelIndex].startsWith('data:')) {
+        // Check if it's different from current editor object src
+        const currentObj = editorPages[editorPageIdx]?.objects?.find(o => o.id === objId);
+        if (currentObj && currentObj.src !== panels[panelIndex]) {
+          newSrc = panels[panelIndex];
+          log(`패널 ${panelIndex + 1}: 현재 상태에서 새 이미지 발견`, 'info');
+        }
+      }
+      // 2) Fallback: load from Firebase
+      if (!newSrc && projectId && currentEpisode) {
+        const s4 = await fbLoadPhase(projectId, currentEpisode, 'step4_panels');
+        if (s4?.panels?.[panelIndex] && typeof s4.panels[panelIndex] === 'string' && s4.panels[panelIndex].startsWith('data:')) {
+          newSrc = s4.panels[panelIndex];
+          log(`패널 ${panelIndex + 1}: Firebase에서 이미지 로드`, 'info');
+        }
+      }
+      if (!newSrc) {
+        log(`패널 ${panelIndex + 1} 새로고침할 이미지를 찾을 수 없습니다.`, 'error');
         return;
       }
-      const newSrc = s4.panels[panelIndex];
-      // 1) 에디터 객체 src 업데이트
+      // Update editor object src
       updatePageObject(editorPageIdx, objId, {src: newSrc});
-      // 2) panels 배열 업데이트
+      // Update panels array
       const newPanels = [...panels];
       newPanels[panelIndex] = newSrc;
       setPanels(newPanels);
@@ -8952,7 +8981,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     const isFlipped = obj.flipBalloon || 'default';
                                     const pathD = sb.path(bw2, strokeColor, fillColor, isFlipped);
                                     return <path d={pathD} fill={fillColor} stroke={strokeColor} strokeWidth={bw2}
-                                      strokeLinejoin="round" strokeLinecap="round"/>;
+                                      strokeLinejoin="round" strokeLinecap="round" paintOrder="stroke fill"/>;
                                   } else if (bt.plainText && !bt.ellipse) {
                                     return <rect x="0" y="0" width={W} height={H} rx={(bt.radius||2)*scale} ry={(bt.radius||2)*scale} fill={effBg} stroke="none"/>;
                                   } else if (bt.plainText && bt.ellipse) {
@@ -8973,7 +9002,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     const cl = buildConcentrationLines(W, H);
                                     return <g>
                                       {cl.lines.map((ln, li) => <line key={li} x1={ln.sx} y1={ln.sy} x2={ln.ex} y2={ln.ey} stroke={strokeColor} strokeWidth={ln.sw} strokeLinecap="round"/>)}
-                                      <path d={cl.ellipse} fill={fillColor} stroke="none"/>
+                                      <path d={cl.ellipse} fill="transparent" stroke="none"/>
                                     </g>;
                                   } else if (bt.ellipse) {
                                     const cx2 = W/2, cy2 = H/2, rx2 = W/2 - 2, ry2 = H/2 - 2;
