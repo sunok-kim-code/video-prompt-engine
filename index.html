@@ -8002,6 +8002,77 @@ Return ONLY the detailed English prompt, nothing else.`,
                 {assetTab === 'characters' && loraModels[id]?.status === 'ready' && <span style={{color:'#155724',fontWeight:600}}>LoRA 학습완료</span>}
                 {assetTab === 'characters' && loraModels[id]?.status === 'training' && <span style={{color:'#856404',fontWeight:600}}>LoRA 학습중...</span>}
               </div>
+              {/* 의상 프리셋 관리 */}
+              {assetTab === 'characters' && (() => {
+                const char = analysis?.characters?.find(c => c.id === id);
+                const presets = char?.outfitPresets || asset.outfitPresets || {};
+                const presetEntries = Object.entries(presets);
+                return (
+                  <div style={{marginTop:6,padding:8,background:'var(--surface2)',borderRadius:6,width:'100%'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:presetEntries.length > 0 ? 6 : 0}}>
+                      <span style={{fontSize:11,fontWeight:700,color:'var(--text2)'}}>👗 의상 프리셋 ({presetEntries.length})</span>
+                      <button className="btn btn-outline btn-xs" style={{fontSize:10,padding:'1px 6px'}} onClick={() => {
+                        const name = prompt('새 의상 프리셋 이름 (예: 교복, 잠옷, 운동복)');
+                        if (!name?.trim()) return;
+                        const outfit = prompt(`"${name.trim()}" 의상 설명:`);
+                        if (!outfit?.trim()) return;
+                        const accessories = prompt(`"${name.trim()}" 악세서리 (없으면 빈칸):`) || '';
+                        const newPreset = {outfit: outfit.trim(), accessories: accessories.trim(), image: null};
+                        const updatedPresets = {...presets, [name.trim()]: newPreset};
+                        updateAnalysisChar(id, 'outfitPresets', updatedPresets);
+                        if (projectId) {
+                          const a = sharedAssets.characters?.[id];
+                          if (a) fbSaveAsset(projectId, 'characters', id, {...a, outfitPresets: updatedPresets});
+                        }
+                        log(`${asset.name} — "${name.trim()}" 프리셋 추가됨`, 'success');
+                      }}>+ 추가</button>
+                    </div>
+                    {presetEntries.length > 0 && (
+                      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                        {presetEntries.map(([pName, pData]) => (
+                          <div key={pName} style={{display:'flex',alignItems:'center',gap:6,padding:'4px 6px',background:'var(--surface)',borderRadius:4,fontSize:11}}>
+                            {pData.image ? (
+                              <img src={pData.image} alt={pName} style={{width:36,height:36,borderRadius:4,objectFit:'cover',cursor:'pointer',flexShrink:0}} onClick={() => showPreview(pData.image, `${asset.name} — ${pName}`)} />
+                            ) : (
+                              <div style={{width:36,height:36,borderRadius:4,background:'#eee',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#999',flexShrink:0}}>없음</div>
+                            )}
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontWeight:600}}>{pName}</div>
+                              <div style={{color:'var(--text2)',fontSize:10,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{pData.outfit}{pData.accessories ? ` + ${pData.accessories}` : ''}</div>
+                            </div>
+                            <div style={{display:'flex',gap:2,flexShrink:0}}>
+                              <button className="btn btn-outline btn-xs" style={{fontSize:9,padding:'1px 4px'}} onClick={()=>regeneratePresetRef(id, pName)} disabled={running} title="이미지 생성">🎨</button>
+                              <button className="btn btn-outline btn-xs" style={{fontSize:9,padding:'1px 4px'}} onClick={() => {
+                                const newOutfit = prompt(`"${pName}" 의상 설명:`, pData.outfit);
+                                if (!newOutfit?.trim()) return;
+                                const newAcc = prompt(`"${pName}" 악세서리:`, pData.accessories || '');
+                                const updatedPresets = {...presets, [pName]: {...pData, outfit: newOutfit.trim(), accessories: (newAcc||'').trim()}};
+                                updateAnalysisChar(id, 'outfitPresets', updatedPresets);
+                                if (projectId) {
+                                  const a = sharedAssets.characters?.[id];
+                                  if (a) fbSaveAsset(projectId, 'characters', id, {...a, outfitPresets: updatedPresets});
+                                }
+                                log(`${asset.name} — "${pName}" 프리셋 수정됨`, 'success');
+                              }} title="수정">✏️</button>
+                              <button className="btn btn-outline btn-xs" style={{fontSize:9,padding:'1px 4px',color:'var(--err)',borderColor:'var(--err)'}} onClick={() => {
+                                if (!confirm(`"${pName}" 프리셋을 삭제하시겠습니까?`)) return;
+                                const updatedPresets = {...presets};
+                                delete updatedPresets[pName];
+                                updateAnalysisChar(id, 'outfitPresets', updatedPresets);
+                                if (projectId) {
+                                  const a = sharedAssets.characters?.[id];
+                                  if (a) fbSaveAsset(projectId, 'characters', id, {...a, outfitPresets: updatedPresets});
+                                }
+                                log(`${asset.name} — "${pName}" 프리셋 삭제됨`, 'success');
+                              }} title="삭제">🗑</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             {asset.refPrompt && (
               <details style={{marginTop:4,gridColumn:'1/-1'}}>
