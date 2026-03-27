@@ -3230,7 +3230,7 @@ Rules:
       const next = [...prev];
       const pi = Math.min(currentPageIdx, next.length - 1);
       if (!next[pi]) return prev;
-      next[pi] = {...next[pi], objects: [...(next[pi].objects || []), newSfx]};
+      next[pi] = {...next[pi], objects: insertObjectAfterSelected(next[pi].objects || [], newSfx)};
       return next;
     });
     setSfxPanelOpen(false);
@@ -3576,7 +3576,7 @@ Rules:
       const next = [...prev];
       const pi = Math.min(currentPageIdx, next.length - 1);
       if (!next[pi]) return prev;
-      next[pi] = {...next[pi], objects: [...(next[pi].objects || []), newBubble]};
+      next[pi] = {...next[pi], objects: insertObjectAfterSelected(next[pi].objects || [], newBubble)};
       return next;
     });
   };
@@ -3601,10 +3601,20 @@ Rules:
         zIndex: Math.max(...page.objects.map(o => o.zIndex || 1), 5) + 1
       };
       const next = [...prev];
-      next[pi] = {...next[pi], objects: [...(next[pi].objects || []), newImage]};
+      next[pi] = {...next[pi], objects: insertObjectAfterSelected(next[pi].objects || [], newImage)};
       return next;
     });
     log('이미지가 현재 페이지에 추가되었습니다.', 'success');
+  };
+
+  // 선택된 객체 바로 뒤에 새 객체를 삽입하는 헬퍼
+  const insertObjectAfterSelected = (objects, newObj) => {
+    if (!selectedObjectId) return [...objects, newObj];
+    const idx = objects.findIndex(o => o.id === selectedObjectId);
+    if (idx === -1) return [...objects, newObj];
+    const result = [...objects];
+    result.splice(idx + 1, 0, newObj);
+    return result;
   };
 
   const updatePageObject = (pageIdx, objId, updates) => {
