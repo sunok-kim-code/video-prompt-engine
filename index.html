@@ -14,7 +14,7 @@
 <script src="https://cdn.jsdelivr.net/npm/ag-psd@20.0.0/dist/bundle.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gaegu:wght@400;700&family=Gasoek+One&family=Gothic+A1:wght@400;700&family=Gugi&family=Jua&family=Nanum+Brush+Script&family=Nanum+Pen+Script&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Single+Day&family=Sunflower:wght@300;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gaegu:wght@400;700&family=Gasoek+One&family=Gothic+A1:wght@400;700&family=Gugi&family=Jua&family=Nanum+Brush+Script&family=Nanum+Pen+Script&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Single+Day&family=Sunflower:wght@300;500;700&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@400;700&family=Shippori+Mincho:wght@400;700&family=Shippori+Antique&family=Mochiy+Pop+One&family=Mochiy+Pop+P+One&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -2902,6 +2902,12 @@ Rules:
     return obj.text || '';
   };
 
+  // Helper: get display font for current language
+  const getObjFont = (obj, fallback) => {
+    if (editorLanguage === 'ja' && obj.fontFamilyJa) return obj.fontFamilyJa;
+    return obj.fontFamily || fallback;
+  };
+
   // Crop mode state
   const [cropMode, setCropMode] = useState(null); // {pageIdx, objId} or null
   const [cropRect, setCropRect] = useState(null); // {x, y, w, h} in % of image (0-100)
@@ -3158,7 +3164,7 @@ Rules:
     text:{name:'텍스트', tail:false, bg:'#ffffff', border:'none', borderWidth:0, radius:2, fontWeight:500, color:'#111', shadow:false, plainText:true},
     textCircle:{name:'텍스트원형', tail:false, bg:'#ffffff', border:'none', borderWidth:0, ellipse:true, fontWeight:500, color:'#111', shadow:false, plainText:true},
   };
-  const FONT_LIST = [
+  const FONT_LIST_KR = [
     {value:"'Noto Sans KR',sans-serif", label:'기본 (Noto Sans)'},
     {value:"'Gothic A1',sans-serif", label:'고딕'},
     {value:"'Nanum Myeongjo',serif", label:'나눔명조'},
@@ -3171,6 +3177,15 @@ Rules:
     {value:"'Nanum Pen Script',cursive", label:'나눔펜체'},
     {value:"monospace", label:'모노스페이스'},
   ];
+  const FONT_LIST_JP = [
+    {value:"'Noto Sans JP',sans-serif", label:'🇯🇵 기본 (Noto Sans JP)'},
+    {value:"'Noto Serif JP',serif", label:'🇯🇵 명조 (Noto Serif JP)'},
+    {value:"'Shippori Mincho',serif", label:'🇯🇵 시포리 명조 (나레이션용)'},
+    {value:"'Shippori Antique',sans-serif", label:'🇯🇵 시포리 안틱 (만화풍)'},
+    {value:"'Mochiy Pop One',sans-serif", label:'🇯🇵 모찌팝 (효과음/강조)'},
+    {value:"'Mochiy Pop P One',sans-serif", label:'🇯🇵 모찌팝P (효과음/강조)'},
+  ];
+  const FONT_LIST = [...FONT_LIST_KR, ...FONT_LIST_JP];
 
   const PAGE_W = 720;
   const PAGE_H = 4000; // Page height for JPG export splitting
@@ -3595,6 +3610,19 @@ Rules:
               const obj = page.objects.find(o => o.id === item.objId);
               if (obj) {
                 obj.translations = { ...(obj.translations || {}), ja: translations[i] };
+                // Set default JP font if not already set
+                if (!obj.fontFamilyJa) {
+                  if (item.type === 'sfx') {
+                    obj.fontFamilyJa = "'Mochiy Pop One',sans-serif";
+                  } else {
+                    const bt = BUBBLE_TYPES[obj.bubbleStyle];
+                    if (bt && (bt.name === '나레이션' || bt.plainText)) {
+                      obj.fontFamilyJa = "'Shippori Mincho',serif";
+                    } else {
+                      obj.fontFamilyJa = "'Noto Sans JP',sans-serif";
+                    }
+                  }
+                }
               }
             }
           }
@@ -4382,7 +4410,7 @@ Rules:
     const displayText = getObjText(b);
     if (displayText) {
       const fs = Math.max(12, (b.fontSize || 25)) * scale;
-      const ff = b.fontFamily || "'Noto Sans KR',sans-serif";
+      const ff = getObjFont(b, "'Noto Sans KR',sans-serif");
       ctx.font = `${b.fontWeight || bt.fontWeight} ${fs}px ${ff}`;
       ctx.fillStyle = b.customColor || bt.color || '#111';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -4427,7 +4455,7 @@ Rules:
       ctx.transform(1, 0, skewRad, 1, 0, 0);
     }
     const fs = (obj.fontSize || 48) * scale;
-    const ff = obj.fontFamily || "'Nanum Brush Script',cursive";
+    const ff = getObjFont(obj, "'Nanum Brush Script',cursive");
     ctx.font = `900 ${fs}px ${ff}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -8928,7 +8956,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     top: ta.top, left: ta.left, width: ta.width, height: ta.height,
                                     fontWeight:obj.fontWeight||bt.fontWeight, fontSize:fs,
                                     color:obj.customColor||bt.color||'#111',
-                                    fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
+                                    fontFamily:getObjFont(obj,"'Noto Sans KR',sans-serif"),
                                     paddingTop: padTop,
                                     transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
                                   };
@@ -8942,7 +8970,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     width: areaW, height: areaH2,
                                     fontWeight:obj.fontWeight||bt.fontWeight, fontSize:fs,
                                     color:obj.customColor||bt.color||'#111',
-                                    fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
+                                    fontFamily:getObjFont(obj,"'Noto Sans KR',sans-serif"),
                                     paddingTop: padTop,
                                     transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
                                   };
@@ -8954,7 +8982,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     width:obj.w*scale-12, height:areaH,
                                     fontWeight:obj.fontWeight||bt.fontWeight, fontSize:fs,
                                     color:obj.customColor||bt.color||'#111',
-                                    fontFamily:obj.fontFamily||"'Noto Sans KR',sans-serif",
+                                    fontFamily:getObjFont(obj,"'Noto Sans KR',sans-serif"),
                                     paddingTop: padTop,
                                     transform:`translate(${(obj.textOffsetX||0)*scale}px, ${(obj.textOffsetY||0)*scale}px)`
                                   };
@@ -9017,7 +9045,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                               <div className="be-sfx-text" style={{
                                 transform: `rotate(${rot}deg) skewX(${skw}deg)`,
                                 fontSize: fs,
-                                fontFamily: obj.fontFamily || "'Nanum Brush Script',cursive",
+                                fontFamily: getObjFont(obj, "'Nanum Brush Script',cursive"),
                                 fontWeight: 900,
                                 color: obj.color || '#cc2200',
                                 WebkitTextStroke: `${(obj.strokeWidth||1.5)*scale}px ${obj.stroke||'#5c0000'}`,
@@ -9096,6 +9124,16 @@ Return ONLY the detailed English prompt, nothing else.`,
                           {FONT_LIST.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                         </select>
                       </div>
+                      {obj.fontFamilyJa !== undefined && (
+                        <div className="be-ctrl-row">
+                          <label className="be-ctrl-label" style={{flexShrink:0,color:'#ef4444'}}>🇯🇵 폰트</label>
+                          <select className="be-select" value={obj.fontFamilyJa || "'Noto Sans JP',sans-serif"} onClick={e=>e.stopPropagation()}
+                            style={{borderColor:'#ef4444'}}
+                            onChange={e => updatePageObject(currentPageIdx, obj.id, {fontFamilyJa: e.target.value})}>
+                            {FONT_LIST.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                          </select>
+                        </div>
+                      )}
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label">크기</label>
                         <input type="range" min="8" max="48" value={obj.fontSize||25} onChange={e => updatePageObject(currentPageIdx, obj.id, {fontSize: parseInt(e.target.value)})} style={{flex:1,height:4}}/>
@@ -9282,6 +9320,16 @@ Return ONLY the detailed English prompt, nothing else.`,
                           {FONT_LIST.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                         </select>
                       </div>
+                      {obj.fontFamilyJa !== undefined && (
+                        <div className="be-ctrl-row">
+                          <label className="be-ctrl-label" style={{flexShrink:0,color:'#ef4444'}}>🇯🇵 폰트</label>
+                          <select className="be-select" value={obj.fontFamilyJa || "'Mochiy Pop One',sans-serif"} onClick={e=>e.stopPropagation()}
+                            style={{borderColor:'#ef4444'}}
+                            onChange={e => updatePageObject(currentPageIdx, obj.id, {fontFamilyJa: e.target.value})}>
+                            {FONT_LIST.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                          </select>
+                        </div>
+                      )}
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label">기울기</label>
                         <input type="range" min="-30" max="30" value={obj.skew||0} onClick={e=>e.stopPropagation()}
