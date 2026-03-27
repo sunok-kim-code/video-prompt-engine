@@ -3071,7 +3071,8 @@ Rules:
       viewBox: '0 0 200 200', baseW:200, baseH:200,
       textArea: {top:'8%', left:'12%', width:'76%', height:'62%'},
       path: (sw,sc,fc,flip) => {
-        if (flip) return `M 100,10 C 45,10 15,40 15,80 C 15,120 45,150 100,150 C 120,150 135,147 145,142 C 150,148 158,162 170,178 C 166,162 164,150 162,140 C 180,130 185,115 185,80 C 185,40 155,10 100,10 Z`;
+        if (flip === 'center' || flip === 'c') return `M 100,10 C 155,10 185,40 185,80 C 185,120 155,150 100,150 C 108,150 112,148 110,142 C 112,150 108,165 100,178 C 92,165 88,150 90,142 C 88,148 92,150 100,150 C 45,150 15,120 15,80 C 15,40 45,10 100,10 Z`;
+        if (flip === true || flip === 'flip') return `M 100,10 C 45,10 15,40 15,80 C 15,120 45,150 100,150 C 120,150 135,147 145,142 C 150,148 158,162 170,178 C 166,162 164,150 162,140 C 180,130 185,115 185,80 C 185,40 155,10 100,10 Z`;
         return `M 100,10 C 155,10 185,40 185,80 C 185,120 155,150 100,150 C 80,150 65,147 55,142 C 50,148 42,162 30,178 C 34,162 36,150 38,140 C 20,130 15,115 15,80 C 15,40 45,10 100,10 Z`;
       }
     },
@@ -3080,7 +3081,8 @@ Rules:
       viewBox: '0 0 240 160', baseW:240, baseH:160,
       textArea: {top:'6%', left:'8%', width:'80%', height:'70%'},
       path: (sw,sc,fc,flip) => {
-        if (flip) return `M 120,8 C 40,8 8,35 8,68 C 8,95 30,118 65,126 C 60,135 45,148 22,155 C 50,150 68,140 78,132 C 90,135 104,136 120,136 C 200,136 232,105 232,68 C 232,35 200,8 120,8 Z`;
+        if (flip === 'center' || flip === 'c') return `M 120,8 C 200,8 232,35 232,68 C 232,105 200,136 120,136 C 128,136 132,134 130,128 C 132,136 128,148 120,158 C 112,148 108,136 110,128 C 108,134 112,136 120,136 C 40,136 8,105 8,68 C 8,35 40,8 120,8 Z`;
+        if (flip === true || flip === 'flip') return `M 120,8 C 40,8 8,35 8,68 C 8,95 30,118 65,126 C 60,135 45,148 22,155 C 50,150 68,140 78,132 C 90,135 104,136 120,136 C 200,136 232,105 232,68 C 232,35 200,8 120,8 Z`;
         return `M 120,8 C 200,8 232,35 232,68 C 232,95 210,118 175,126 C 180,135 195,148 218,155 C 190,150 172,140 162,132 C 150,135 136,136 120,136 C 40,136 8,105 8,68 C 8,35 40,8 120,8 Z`;
       }
     },
@@ -3089,7 +3091,8 @@ Rules:
       viewBox: '0 0 180 180', baseW:180, baseH:180,
       textArea: {top:'8%', left:'6%', width:'78%', height:'70%'},
       path: (sw,sc,fc,flip) => {
-        if (flip) return `M 95,8 C 45,8 12,30 12,75 C 12,90 18,102 28,112 C 22,116 12,122 2,125 C 14,124 25,122 32,118 C 45,132 68,142 95,142 C 150,142 176,112 176,75 C 176,38 150,8 95,8 Z`;
+        if (flip === 'center' || flip === 'c') return `M 90,8 C 140,8 172,30 172,75 C 172,112 140,142 90,142 C 97,142 100,140 98,134 C 100,142 96,155 90,165 C 84,155 80,142 82,134 C 80,140 83,142 90,142 C 35,142 4,112 4,75 C 4,38 35,8 90,8 Z`;
+        if (flip === true || flip === 'flip') return `M 95,8 C 45,8 12,30 12,75 C 12,90 18,102 28,112 C 22,116 12,122 2,125 C 14,124 25,122 32,118 C 45,132 68,142 95,142 C 150,142 176,112 176,75 C 176,38 150,8 95,8 Z`;
         return `M 85,8 C 135,8 168,30 168,75 C 168,90 162,102 152,112 C 158,116 168,122 178,125 C 166,124 155,122 148,118 C 135,132 112,142 85,142 C 30,142 4,112 4,75 C 4,38 30,8 85,8 Z`;
       }
     },
@@ -3098,7 +3101,8 @@ Rules:
       viewBox: '0 0 180 180', baseW:180, baseH:180,
       textArea: {top:'8%', left:'5%', width:'78%', height:'70%'},
       path: (sw,sc,fc,flip) => {
-        if (flip) return `M 98,8 C 48,8 18,32 18,75 C 18,95 28,110 40,120 C 32,125 18,132 5,135 C 22,132 34,128 42,124 C 55,136 74,142 98,142 C 152,142 178,110 178,75 C 178,32 148,8 98,8 Z`;
+        if (flip === 'center' || flip === 'c') return `M 90,8 C 140,8 170,32 170,75 C 170,110 140,142 90,142 C 97,142 100,140 98,134 C 100,140 97,152 90,162 C 83,152 80,140 82,134 C 80,140 83,142 90,142 C 36,142 6,110 6,75 C 6,32 36,8 90,8 Z`;
+        if (flip === true || flip === 'flip') return `M 98,8 C 48,8 18,32 18,75 C 18,95 28,110 40,120 C 32,125 18,132 5,135 C 22,132 34,128 42,124 C 55,136 74,142 98,142 C 152,142 178,110 178,75 C 178,32 148,8 98,8 Z`;
         return `M 82,8 C 132,8 162,32 162,75 C 162,95 152,110 140,120 C 148,125 162,132 175,135 C 158,132 146,128 138,124 C 125,136 106,142 82,142 C 28,142 2,110 2,75 C 2,32 32,8 82,8 Z`;
       }
     },
@@ -3113,7 +3117,23 @@ Rules:
       viewBox: '0 0 200 255', baseW:200, baseH:255,
       textArea: {top:'3%', left:'14%', width:'72%', height:'84%'},
       path: (sw, sc, fc, flip) => {
-        if (flip) return [
+        if (flip === 'center' || flip === 'c') return [
+          // 위 원형 → 인덴트 → 아래 기본타원(꼬리 가운데 하단)
+          'M 100,12',
+          'C 142,12 158,32 158,58',
+          'C 158,78 152,92 138,102',
+          'C 126,108 128,114 142,118',
+          'C 168,128 188,148 188,175',
+          'C 188,210 155,235 108,235',    // 하단 우측
+          'C 112,237 110,248 100,263',    // 꼬리 끝 (가운데)
+          'C 90,248 88,237 92,235',       // 꼬리 복귀
+          'C 45,235 12,210 12,175',       // 하단 좌측
+          'C 12,148 32,128 58,118',
+          'C 72,114 74,108 62,102',
+          'C 48,92 42,78 42,58',
+          'C 42,32 58,12 100,12 Z'
+        ].join(' ');
+        if (flip === true || flip === 'flip') return [
           // 위 원형(더 겹침) → 얕은 인덴트 → 아래 기본타원(꼬리 우하단)
           'M 100,12',
           'C 58,12 42,32 42,58',          // 원형 좌상
@@ -3694,7 +3714,7 @@ Rules:
       tailSize: 1.0,
       tailStyle: bt.defaultTailStyle || 'normal',
       textOffsetX: 0, textOffsetY: 0,
-      flipBalloon: false,
+      flipBalloon: 'default',
       zIndex: Math.max(...page.objects.map(o => o.zIndex || 1), 10) + 1
     };
     setEditorPages(prev => {
@@ -4277,7 +4297,7 @@ Rules:
     } else if (bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon]) {
       // SVG path-based balloons — use per-bubble properties
       const sb = SVG_BALLOONS[bt.svgBalloon];
-      const isFlipped = b.flipBalloon || false;
+      const isFlipped = b.flipBalloon || 'default';
       const bStrokeW = b.strokeWidth ?? bt.borderWidth ?? 2.5;
       const bStrokeC = b.strokeColor || bt.border || '#333';
       const bFillC = b.fillColor || bt.bg || '#fff';
@@ -8928,7 +8948,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                   const W = obj.w*scale, H = obj.h*scale;
                                   if (bt.svgBalloon && SVG_BALLOONS[bt.svgBalloon]) {
                                     const sb = SVG_BALLOONS[bt.svgBalloon];
-                                    const isFlipped = obj.flipBalloon || false;
+                                    const isFlipped = obj.flipBalloon || 'default';
                                     const pathD = sb.path(bw2, strokeColor, fillColor, isFlipped);
                                     return <path d={pathD} fill={fillColor} stroke={strokeColor} strokeWidth={bw2}
                                       strokeLinejoin="round" strokeLinecap="round"/>;
@@ -9231,10 +9251,11 @@ Return ONLY the detailed English prompt, nothing else.`,
                       </div>}
                       {bt.svgBalloon && <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>꼬리 방향</label>
-                        <select className="be-select" value={obj.flipBalloon ? 'true' : 'false'} onClick={e=>e.stopPropagation()}
-                          onChange={e => updatePageObject(currentPageIdx, obj.id, {flipBalloon: e.target.value === 'true'})}>
-                          <option value="false">기본</option>
-                          <option value="true">반전</option>
+                        <select className="be-select" value={obj.flipBalloon === true ? 'flip' : (obj.flipBalloon || 'default')} onClick={e=>e.stopPropagation()}
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {flipBalloon: e.target.value})}>
+                          <option value="default">기본 (←)</option>
+                          <option value="center">가운데 (↓)</option>
+                          <option value="flip">반전 (→)</option>
                         </select>
                       </div>}
                       {bt.svgBalloon && <div className="be-ctrl-row">
