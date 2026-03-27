@@ -7947,26 +7947,38 @@ Return ONLY the detailed English prompt, nothing else.`,
           <div className="placeholder">등록된 {assetTab === 'characters' ? '캐릭터' : assetTab === 'backgrounds' ? '배경' : '소품'} 에셋이 없습니다.{inline ? ' 위 버튼으로 레퍼런스를 생성하세요.' : ' 스토리 분석 후 레퍼런스를 생성하면 자동으로 등록됩니다.'}</div>
         )}
 
-        {Object.entries(sharedAssets[assetTab]).map(([id, asset]) => (
-          <div key={id} className="asset-item">
-            {asset.image ? (
-              <img className="clickable-img" src={asset.image} alt={asset.name} style={assetTab==='backgrounds'?{width:120,height:80,aspectRatio:'16/9'}:assetTab==='props'?{width:80,height:80,aspectRatio:'1/1'}:{}} onClick={() => showPreview(asset.image, asset.name)} />
-            ) : (
-              <div className="asset-placeholder">미생성</div>
-            )}
-            <div className="asset-item-info">
-              <div className="asset-item-name">
-                {asset.name}
-                {assetTab === 'characters' && asset.role && <span className="asset-badge" style={{marginLeft:6}}>{asset.role}</span>}
-                {assetTab === 'backgrounds' && <span className="asset-badge bg">{asset.bgType || 'scene'}</span>}
-                {assetTab === 'props' && <span className="asset-badge prop">소품</span>}
-              </div>
-              <div className="asset-item-desc">
-                {assetTab === 'characters' ? (
-                  <details>
-                    <summary style={{cursor:'pointer',fontSize:12}}>{(asset.appearance||'').substring(0, 60)}...</summary>
-                    <textarea style={{width:'100%',fontSize:11,marginTop:4,padding:4,border:'1px solid #ddd',borderRadius:4,minHeight:50,resize:'vertical'}}
-                      defaultValue={asset.appearance || ''}
+        {Object.entries(sharedAssets[assetTab]).map(([id, asset]) => {
+          const isChar = assetTab === 'characters';
+          const isBg = assetTab === 'backgrounds';
+          const char = isChar ? analysis?.characters?.find(c => c.id === id) : null;
+          const presets = isChar ? (char?.outfitPresets || asset.outfitPresets || {}) : {};
+          const presetEntries = Object.entries(presets);
+          const ROLE_KR = {protagonist:'주인공',supporting:'조연',antagonist:'적대',extra:'엑스트라',narrator:'나레이터'};
+          return (
+          <div key={id} style={{border:'1px solid var(--border)',borderRadius:12,marginBottom:10,overflow:'hidden',transition:'all .2s'}}>
+            {/* 상단: 이미지 + 기본 정보 */}
+            <div style={{display:'flex',gap:12,padding:12,alignItems:'flex-start'}}>
+              {asset.image ? (
+                <img className="clickable-img" src={asset.image} alt={asset.name}
+                  style={isBg?{width:120,height:80,borderRadius:8,objectFit:'cover',flexShrink:0}:{width:80,height:80,borderRadius:8,objectFit:'cover',flexShrink:0}}
+                  onClick={() => showPreview(asset.image, asset.name)} />
+              ) : (
+                <div className="asset-placeholder">미생성</div>
+              )}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+                  <span style={{fontWeight:700,fontSize:14}}>{asset.name}</span>
+                  {isChar && asset.role && <span className="asset-badge" style={{fontSize:10}}>{ROLE_KR[asset.role] || asset.role}</span>}
+                  {isBg && <span className="asset-badge bg">{asset.bgType || 'scene'}</span>}
+                  {assetTab === 'props' && <span className="asset-badge prop">소품</span>}
+                  <span style={{fontSize:10,color:'var(--text2)',marginLeft:'auto'}}>{id}</span>
+                  {isChar && loraModels[id]?.status === 'ready' && <span style={{fontSize:10,color:'#155724',fontWeight:600}}>LoRA ✓</span>}
+                  {isChar && loraModels[id]?.status === 'training' && <span style={{fontSize:10,color:'#856404',fontWeight:600}}>LoRA 학습중</span>}
+                </div>
+                {isChar ? (
+                  <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.4}}>
+                    <textarea style={{width:'100%',fontSize:11,padding:4,border:'1px solid #eee',borderRadius:4,minHeight:36,resize:'vertical',background:'var(--surface2)'}}
+                      defaultValue={asset.appearance || ''} placeholder="캐릭터 외형 설명..."
                       onBlur={async (e) => {
                         const val = e.target.value.trim();
                         if (val === asset.appearance) return;
@@ -7975,138 +7987,133 @@ Return ONLY the detailed English prompt, nothing else.`,
                         setAnalysis(prev => prev ? {...prev, characters: prev.characters.map(c => c.id === id ? {...c, appearance: val} : c)} : prev);
                         if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
                         log(`${asset.name} 외형 설명 업데이트됨`, 'success');
-                      }}
-                      placeholder="캐릭터 외형 설명..." />
-                  </details>
-                ) : asset.description}
-              </div>
-              {assetTab === 'characters' && (
-                <div className="asset-item-meta" style={{display:'flex',alignItems:'center',gap:4}}>
-                  <span style={{flexShrink:0,fontSize:11}}>의상:</span>
-                  <input type="text" style={{flex:1,fontSize:11,padding:'2px 6px',border:'1px solid #ddd',borderRadius:4}}
-                    defaultValue={asset.outfit || ''}
-                    onBlur={async (e) => {
-                      const val = e.target.value.trim();
-                      if (val === asset.outfit) return;
-                      const updated = {...asset, outfit: val};
-                      setSharedAssets(prev => ({...prev, characters: {...prev.characters, [id]: updated}}));
-                      setAnalysis(prev => prev ? {...prev, characters: prev.characters.map(c => c.id === id ? {...c, outfit: val} : c)} : prev);
-                      if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
-                      log(`${asset.name} 의상 업데이트: ${val}`, 'success');
-                    }}
-                    placeholder="기본 의상 설명..." />
-                </div>
-              )}
-              <div className="asset-item-meta">
-                <span>ID: {id}</span>
-                {assetTab === 'characters' && loraModels[id]?.status === 'ready' && <span style={{color:'#155724',fontWeight:600}}>LoRA 학습완료</span>}
-                {assetTab === 'characters' && loraModels[id]?.status === 'training' && <span style={{color:'#856404',fontWeight:600}}>LoRA 학습중...</span>}
-              </div>
-              {/* 의상 프리셋 관리 */}
-              {assetTab === 'characters' && (() => {
-                const char = analysis?.characters?.find(c => c.id === id);
-                const presets = char?.outfitPresets || asset.outfitPresets || {};
-                const presetEntries = Object.entries(presets);
-                return (
-                  <div style={{marginTop:6,padding:8,background:'var(--surface2)',borderRadius:6,width:'100%'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:presetEntries.length > 0 ? 6 : 0}}>
-                      <span style={{fontSize:11,fontWeight:700,color:'var(--text2)'}}>👗 의상 프리셋 ({presetEntries.length})</span>
-                      <button className="btn btn-outline btn-xs" style={{fontSize:10,padding:'1px 6px'}} onClick={() => {
-                        const name = prompt('새 의상 프리셋 이름 (예: 교복, 잠옷, 운동복)');
-                        if (!name?.trim()) return;
-                        const outfit = prompt(`"${name.trim()}" 의상 설명:`);
-                        if (!outfit?.trim()) return;
-                        const accessories = prompt(`"${name.trim()}" 악세서리 (없으면 빈칸):`) || '';
-                        const newPreset = {outfit: outfit.trim(), accessories: accessories.trim(), image: null};
-                        const updatedPresets = {...presets, [name.trim()]: newPreset};
-                        updateAnalysisChar(id, 'outfitPresets', updatedPresets);
-                        if (projectId) {
-                          const a = sharedAssets.characters?.[id];
-                          if (a) fbSaveAsset(projectId, 'characters', id, {...a, outfitPresets: updatedPresets});
-                        }
-                        log(`${asset.name} — "${name.trim()}" 프리셋 추가됨`, 'success');
-                      }}>+ 추가</button>
-                    </div>
-                    {presetEntries.length > 0 && (
-                      <div style={{display:'flex',flexDirection:'column',gap:4}}>
-                        {presetEntries.map(([pName, pData]) => (
-                          <div key={pName} style={{display:'flex',alignItems:'center',gap:6,padding:'4px 6px',background:'var(--surface)',borderRadius:4,fontSize:11}}>
-                            {pData.image ? (
-                              <img src={pData.image} alt={pName} style={{width:36,height:36,borderRadius:4,objectFit:'cover',cursor:'pointer',flexShrink:0}} onClick={() => showPreview(pData.image, `${asset.name} — ${pName}`)} />
-                            ) : (
-                              <div style={{width:36,height:36,borderRadius:4,background:'#eee',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#999',flexShrink:0}}>없음</div>
-                            )}
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontWeight:600}}>{pName}</div>
-                              <div style={{color:'var(--text2)',fontSize:10,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{pData.outfit}{pData.accessories ? ` + ${pData.accessories}` : ''}</div>
-                            </div>
-                            <div style={{display:'flex',gap:2,flexShrink:0}}>
-                              <button className="btn btn-outline btn-xs" style={{fontSize:9,padding:'1px 4px'}} onClick={()=>regeneratePresetRef(id, pName)} disabled={running} title="이미지 생성">🎨</button>
-                              <button className="btn btn-outline btn-xs" style={{fontSize:9,padding:'1px 4px'}} onClick={() => {
-                                const newOutfit = prompt(`"${pName}" 의상 설명:`, pData.outfit);
-                                if (!newOutfit?.trim()) return;
-                                const newAcc = prompt(`"${pName}" 악세서리:`, pData.accessories || '');
-                                const updatedPresets = {...presets, [pName]: {...pData, outfit: newOutfit.trim(), accessories: (newAcc||'').trim()}};
-                                updateAnalysisChar(id, 'outfitPresets', updatedPresets);
-                                if (projectId) {
-                                  const a = sharedAssets.characters?.[id];
-                                  if (a) fbSaveAsset(projectId, 'characters', id, {...a, outfitPresets: updatedPresets});
-                                }
-                                log(`${asset.name} — "${pName}" 프리셋 수정됨`, 'success');
-                              }} title="수정">✏️</button>
-                              <button className="btn btn-outline btn-xs" style={{fontSize:9,padding:'1px 4px',color:'var(--err)',borderColor:'var(--err)'}} onClick={() => {
-                                if (!confirm(`"${pName}" 프리셋을 삭제하시겠습니까?`)) return;
-                                const updatedPresets = {...presets};
-                                delete updatedPresets[pName];
-                                updateAnalysisChar(id, 'outfitPresets', updatedPresets);
-                                if (projectId) {
-                                  const a = sharedAssets.characters?.[id];
-                                  if (a) fbSaveAsset(projectId, 'characters', id, {...a, outfitPresets: updatedPresets});
-                                }
-                                log(`${asset.name} — "${pName}" 프리셋 삭제됨`, 'success');
-                              }} title="삭제">🗑</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                      }} />
                   </div>
-                );
-              })()}
+                ) : (
+                  <div style={{fontSize:12,color:'var(--text2)',lineHeight:1.4}}>{asset.description}</div>
+                )}
+                {isChar && (
+                  <div style={{display:'flex',alignItems:'center',gap:4,marginTop:4}}>
+                    <span style={{flexShrink:0,fontSize:11,fontWeight:600}}>기본 의상:</span>
+                    <input type="text" style={{flex:1,fontSize:11,padding:'2px 6px',border:'1px solid #eee',borderRadius:4,background:'var(--surface2)'}}
+                      defaultValue={asset.outfit || ''} placeholder="기본 의상 설명..."
+                      onBlur={async (e) => {
+                        const val = e.target.value.trim();
+                        if (val === asset.outfit) return;
+                        const updated = {...asset, outfit: val};
+                        setSharedAssets(prev => ({...prev, characters: {...prev.characters, [id]: updated}}));
+                        setAnalysis(prev => prev ? {...prev, characters: prev.characters.map(c => c.id === id ? {...c, outfit: val} : c)} : prev);
+                        if (projectId) await fbSaveAsset(projectId, 'characters', id, updated);
+                        log(`${asset.name} 의상 업데이트: ${val}`, 'success');
+                      }} />
+                  </div>
+                )}
+              </div>
+              {/* 액션 버튼 — 우측 정렬 */}
+              <div style={{display:'flex',flexDirection:'column',gap:3,flexShrink:0}}>
+                <button className="btn btn-outline btn-xs" onClick={()=>regenerateAsset(assetTab, id)} disabled={running}>재생성</button>
+                {isChar && imageProvider === 'falAI' && asset.image && !loraModels[id]?.status?.match(/ready|training/) && (
+                  <button className="btn btn-xs" style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none',fontSize:10}}
+                    onClick={() => trainCharacterLora(id, asset.name, [asset.image])} disabled={running}>LoRA</button>
+                )}
+                <button className="btn btn-outline btn-xs" style={{color:'var(--err)',borderColor:'var(--err)'}} onClick={async ()=>{
+                  if(!confirm(`${asset.name} 에셋을 삭제하시겠습니까?`)) return;
+                  if(projectId) await fbDeleteAsset(projectId, assetTab, id);
+                  setSharedAssets(prev => {const n={...prev};const t={...n[assetTab]};delete t[id];n[assetTab]=t;return n;});
+                  log(`${asset.name} 에셋 삭제됨`, 'success');
+                }}>삭제</button>
+              </div>
             </div>
+
+            {/* 캐릭터 전용: 의상 프리셋 */}
+            {isChar && (
+              <div style={{padding:'0 12px 8px',borderTop:'1px solid var(--border)'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0 4px'}}>
+                  <span style={{fontSize:12,fontWeight:700}}>👗 의상 프리셋 {presetEntries.length > 0 && <span style={{color:'var(--text2)',fontWeight:400}}>({presetEntries.length})</span>}</span>
+                  <button className="btn btn-outline btn-xs" style={{fontSize:10,padding:'1px 6px'}} onClick={() => {
+                    const name = prompt('새 의상 프리셋 이름 (예: 교복, 잠옷, 운동복)');
+                    if (!name?.trim()) return;
+                    const outfit = prompt(`"${name.trim()}" 의상 설명:`);
+                    if (!outfit?.trim()) return;
+                    const accessories = prompt(`"${name.trim()}" 악세서리 (없으면 빈칸):`) || '';
+                    const newPreset = {outfit: outfit.trim(), accessories: accessories.trim(), image: null};
+                    const updatedPresets = {...presets, [name.trim()]: newPreset};
+                    updateAnalysisChar(id, 'outfitPresets', updatedPresets);
+                    if (projectId) {
+                      const a = sharedAssets.characters?.[id];
+                      if (a) fbSaveAsset(projectId, 'characters', id, {...a, outfitPresets: updatedPresets});
+                    }
+                    log(`${asset.name} — "${name.trim()}" 프리셋 추가됨`, 'success');
+                  }}>+ 추가</button>
+                </div>
+                {presetEntries.length === 0 ? (
+                  <div style={{fontSize:11,color:'var(--text2)',padding:'2px 0'}}>등록된 의상 프리셋이 없습니다. 장면별 의상을 추가해보세요.</div>
+                ) : (
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                    {presetEntries.map(([pName, pData]) => (
+                      <div key={pName} style={{display:'flex',alignItems:'center',gap:6,padding:'6px 8px',background:'var(--surface2)',borderRadius:6,fontSize:11,minWidth:180}}>
+                        {pData.image ? (
+                          <img src={pData.image} alt={pName} style={{width:40,height:40,borderRadius:6,objectFit:'cover',cursor:'pointer',flexShrink:0}} onClick={() => showPreview(pData.image, `${asset.name} — ${pName}`)} />
+                        ) : (
+                          <div style={{width:40,height:40,borderRadius:6,background:'#e0e0e0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#999',flexShrink:0}}>미생성</div>
+                        )}
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:600,marginBottom:1}}>{pName}</div>
+                          <div style={{color:'var(--text2)',fontSize:10,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{pData.outfit}{pData.accessories ? ` + ${pData.accessories}` : ''}</div>
+                        </div>
+                        <div style={{display:'flex',flexDirection:'column',gap:2,flexShrink:0}}>
+                          <button className="btn btn-outline btn-xs" style={{fontSize:9,padding:'1px 5px'}} onClick={()=>regeneratePresetRef(id, pName)} disabled={running} title="이미지 생성">🎨</button>
+                          <button className="btn btn-outline btn-xs" style={{fontSize:9,padding:'1px 5px'}} onClick={() => {
+                            const newOutfit = prompt(`"${pName}" 의상 설명:`, pData.outfit);
+                            if (!newOutfit?.trim()) return;
+                            const newAcc = prompt(`"${pName}" 악세서리:`, pData.accessories || '');
+                            const updatedPresets = {...presets, [pName]: {...pData, outfit: newOutfit.trim(), accessories: (newAcc||'').trim()}};
+                            updateAnalysisChar(id, 'outfitPresets', updatedPresets);
+                            if (projectId) {
+                              const a = sharedAssets.characters?.[id];
+                              if (a) fbSaveAsset(projectId, 'characters', id, {...a, outfitPresets: updatedPresets});
+                            }
+                            log(`${asset.name} — "${pName}" 프리셋 수정됨`, 'success');
+                          }} title="수정">✏️</button>
+                          <button className="btn btn-outline btn-xs" style={{fontSize:9,padding:'1px 5px',color:'var(--err)',borderColor:'var(--err)'}} onClick={() => {
+                            if (!confirm(`"${pName}" 프리셋을 삭제하시겠습니까?`)) return;
+                            const updatedPresets = {...presets};
+                            delete updatedPresets[pName];
+                            updateAnalysisChar(id, 'outfitPresets', updatedPresets);
+                            if (projectId) {
+                              const a = sharedAssets.characters?.[id];
+                              if (a) fbSaveAsset(projectId, 'characters', id, {...a, outfitPresets: updatedPresets});
+                            }
+                            log(`${asset.name} — "${pName}" 프리셋 삭제됨`, 'success');
+                          }} title="삭제">🗑</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 프롬프트 보기/수정 */}
             {asset.refPrompt && (
-              <details style={{marginTop:4,gridColumn:'1/-1'}}>
-                <summary className="prompt-badge">프롬프트 보기/수정</summary>
-                <div style={{display:'flex',flexDirection:'column',gap:4,padding:'6px 0'}}>
-                  <textarea style={{width:'100%',fontSize:11,fontFamily:'monospace',lineHeight:1.5,padding:6,border:'1px solid #ddd',borderRadius:4,minHeight:80,resize:'vertical',wordBreak:'break-all'}}
+              <details style={{borderTop:'1px solid var(--border)'}}>
+                <summary style={{padding:'6px 12px',fontSize:11,fontWeight:600,cursor:'pointer',color:'var(--text2)'}}>프롬프트 보기/수정</summary>
+                <div style={{padding:'0 12px 10px',display:'flex',flexDirection:'column',gap:4}}>
+                  <textarea style={{width:'100%',fontSize:11,fontFamily:'monospace',lineHeight:1.5,padding:6,border:'1px solid #eee',borderRadius:4,minHeight:70,resize:'vertical',wordBreak:'break-all'}}
                     defaultValue={getAssetFullPrompt(assetTab, asset.refPrompt)}
                     id={`prompt-edit-${assetTab}-${id}`} />
-                  <div style={{display:'flex',gap:4}}>
-                    <button className="btn btn-primary btn-xs" disabled={running} onClick={() => {
-                      const el = document.getElementById(`prompt-edit-${assetTab}-${id}`);
-                      const p = el?.value?.trim();
-                      if (!p) return;
-                      regenerateAsset(assetTab, id, p);
-                    }}>프롬프트로 생성</button>
-                  </div>
+                  <button className="btn btn-primary btn-xs" style={{alignSelf:'flex-start'}} disabled={running} onClick={() => {
+                    const el = document.getElementById(`prompt-edit-${assetTab}-${id}`);
+                    const p = el?.value?.trim();
+                    if (!p) return;
+                    regenerateAsset(assetTab, id, p);
+                  }}>프롬프트로 생성</button>
                 </div>
               </details>
             )}
-            <div className="asset-item-actions">
-              {assetTab === 'characters' && imageProvider === 'falAI' && asset.image && !loraModels[id]?.status?.match(/ready|training/) && (
-                <button className="btn btn-sm" style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none',fontSize:11}}
-                  onClick={() => trainCharacterLora(id, asset.name, [asset.image])} disabled={running}>LoRA 학습</button>
-              )}
-              <button className="btn btn-outline btn-sm" onClick={()=>regenerateAsset(assetTab, id)} disabled={running}>재생성</button>
-              <button className="btn btn-outline btn-sm" style={{color:'var(--err)',borderColor:'var(--err)'}} onClick={async ()=>{
-                if(!confirm(`${asset.name} 에셋을 삭제하시겠습니까?`)) return;
-                if(projectId) await fbDeleteAsset(projectId, assetTab, id);
-                setSharedAssets(prev => {const n={...prev};const t={...n[assetTab]};delete t[id];n[assetTab]=t;return n;});
-                log(`${asset.name} 에셋 삭제됨`, 'success');
-              }}>삭제</button>
-            </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
