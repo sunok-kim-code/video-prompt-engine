@@ -7672,6 +7672,45 @@ Return ONLY the detailed English prompt, nothing else.`,
   // ======== Save Panel Image (delegates to shared downloadDataUrl) ========
   const savePanelImage = (dataUrl, filename) => downloadDataUrl(dataUrl, filename || 'panel.png');
 
+  // ======== Replace Panel Image (에디터에서 패널 이미지 교체 → panels 배열 + Firebase 동기 저장) ========
+  const replacePanelImage = (panelIndex, editorPageIdx, objId) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        log(`패널 ${panelIndex + 1} 이미지 교체 중...`, 'info');
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        // 1) 에디터 객체의 src 업데이트
+        updatePageObject(editorPageIdx, objId, {src: dataUrl});
+
+        // 2) panels 배열 업데이트
+        const newPanels = [...panels];
+        newPanels[panelIndex] = dataUrl;
+        setPanels(newPanels);
+
+        // 3) Firebase에 저장 (패널 이미지 생성 단계와 동일 효과)
+        if (projectId && currentEpisode) {
+          await fbSavePhase(projectId, currentEpisode, 'step4_panels', {panels: newPanels, bubbleOverlays});
+          log(`✓ 패널 ${panelIndex + 1} 이미지 교체 및 Firebase 저장 완료`, 'success');
+        } else {
+          log(`✓ 패널 ${panelIndex + 1} 이미지 교체 완료 (Firebase 미연결)`, 'success');
+        }
+      } catch(err) {
+        log(`패널 이미지 교체 실패: ${err.message}`, 'error');
+      }
+    };
+    input.click();
+  };
+
   // [REMOVED] saveEpisodeOutfits — outfit management now via character outfitPresets
 
   // Firebase에 전체 패널 명시적 저장
@@ -8977,6 +9016,9 @@ Return ONLY the detailed English prompt, nothing else.`,
                               {obj.crop && <button className="be-crop-btn danger" onClick={(e) => {e.stopPropagation(); resetCrop(currentPageIdx, obj.id);}}>잘라내기 해제</button>}
                               {obj.src && !obj.src.startsWith('[img:') && (
                                 <button className="be-crop-btn" style={{background:'#27ae60'}} onClick={(e) => {e.stopPropagation(); savePanelImage(obj.src, `panel_${obj.panelIndex !== undefined ? obj.panelIndex + 1 : oi + 1}.png`);}}>💾 다운로드</button>
+                              )}
+                              {obj.panelIndex !== undefined && (
+                                <button className="be-crop-btn" style={{background:'#e67e22'}} onClick={(e) => {e.stopPropagation(); replacePanelImage(obj.panelIndex, currentPageIdx, obj.id);}}>🔄 이미지 교체</button>
                               )}
                             </React.Fragment>
                           )}
