@@ -3719,16 +3719,31 @@ Rules:
   const getInsertPosition = () => {
     const page = editorPages[currentPageIdx];
     if (!page?.objects) return {x: 100, y: 30};
-    // 선택된 패널 이미지의 상단에 배치
+    const scale = editorPanelScale / 100;
+
+    // 1) 선택된 패널 이미지의 상단에 배치
     const sel = selectedObjectId && page.objects.find(o => o.id === selectedObjectId);
     if (sel && (sel.type === 'panel' || sel.type === 'image')) {
       return {x: sel.x + sel.w / 2 - 100, y: sel.y + 20};
     }
-    // 선택된 객체가 패널이 아니면, 현재 페이지의 첫 번째 패널 상단
-    const firstPanel = page.objects.find(o => o.type === 'panel' || o.type === 'image');
-    if (firstPanel) {
-      return {x: firstPanel.x + firstPanel.w / 2 - 100, y: firstPanel.y + 20};
+
+    // 2) 스크롤 위치 기반으로 가장 가까운(화면에 보이는) 패널 찾기
+    const panels = page.objects.filter(o => (o.type === 'panel' || o.type === 'image') && !o.hidden);
+    if (panels.length > 0 && editorCanvasRef.current) {
+      const container = editorCanvasRef.current;
+      const scrollTop = container.scrollTop;
+      const viewCenter = scrollTop + container.clientHeight / 2; // 화면 중앙의 스크롤 위치
+      let closest = panels[0];
+      let minDist = Infinity;
+      panels.forEach(p => {
+        const panelCenter = (p.y + p.h / 2) * scale;
+        const dist = Math.abs(panelCenter - viewCenter);
+        if (dist < minDist) { minDist = dist; closest = p; }
+      });
+      return {x: closest.x + closest.w / 2 - 100, y: closest.y + 20};
     }
+
+    // 3) 패널이 없으면 기본 위치
     return {x: 100, y: 30};
   };
 
