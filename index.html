@@ -2007,6 +2007,10 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "accessories": "ALL accessories and props the character wears/carries, in English. Include: glasses (frame shape and color), watch, necklace, earrings, rings, bracelets, bag/purse (type and color), belt, hat, scarf, hair accessories, phone, etc. Be specific about style and color for each item. If none, write 'none'.",
       "personality": "brief personality in Korean",
       "distinctFeatures": "English list of 3-5 MOST distinctive visual traits that differentiate this character from every other character (e.g. 'only character with red hair, tallest character, always wears round glasses, has a visible scar on left cheek')",
+      "outfitPresets": {
+        "교복": {"outfit": "white dress shirt with navy blue blazer, gray pleated skirt, black knee-high socks", "accessories": "red ribbon necktie, silver badge pin on blazer"},
+        "잠옷": {"outfit": "oversized pastel pink T-shirt, light gray cotton shorts", "accessories": "none"}
+      },
       "refPrompt": "EXTREMELY detailed English prompt for generating a DISTINCTIVE character reference sheet. MUST follow this structure: 'Full body character reference sheet, front-facing T-pose, clean white background. [CHARACTER NAME] is a [age] [gender] [height/build]. Face: [face shape, specific jawline/cheekbones/chin, eyebrow shape and thickness, eye color+shape+eyelid type, nose shape, lip shape and fullness]. Hair: [exact color with shade, exact length in descriptive terms, exact style — straight/wavy/curly, parting direction, bangs type and length, any layers or volume details, any hair accessories]. Outfit: [complete top garment with color+material, bottom with color+length+style, outer layer if any, footwear with color+style, every accessory with color and style]. Unique traits: [features making this character visually distinct from all others]. This character must be INSTANTLY recognizable and look IDENTICAL across all panels. Maintain strong visual identity.'",
       "isExisting": false
     }
@@ -2059,6 +2063,16 @@ OUTFIT EXTRACTION RULES:
 - Even brief mentions count: "그녀는 빨간 원피스를 입고", "교복 차림의 민수", "캐주얼한 옷차림" — ALL should be captured.
 - Describe outfits in detailed English: garment type, color, material, style.
 - Once an outfitOverride is set, it PERSISTS for all subsequent beats until another override changes it — so only set it at the FIRST beat where the outfit appears.
+
+OUTFIT PRESETS (outfitPresets) — AUTOMATIC EXTRACTION:
+- For EACH character, analyze the ENTIRE story and extract ALL distinct outfits they wear into the "outfitPresets" field.
+- Each preset should have a short Korean name as key (e.g. "교복", "잠옷", "운동복", "드레스", "수영복", "외출복", "캐주얼").
+- Each preset value: {"outfit": "detailed clothing description in English", "accessories": "accessories for THIS outfit in English, or 'none'"}
+- The character's "outfit" field = the DEFAULT outfit (most frequently worn). outfitPresets = ALL OTHER outfits detected in the story.
+- Separate ACCESSORIES per outfit: if a character wears glasses only with their school uniform, or carries a bag only when going out, put those accessories in the specific preset — NOT in the main "accessories" field.
+- The main "accessories" field = accessories worn with ALL/most outfits (e.g. always wears a watch). Outfit-specific accessories go in the preset's "accessories" field.
+- Even if a character only has ONE outfit in the story, still check if scene context implies other outfits (sleeping → pajamas, exercising → workout clothes).
+- For EXISTING characters: preserve their existing outfitPresets and ADD any new ones found in this episode. Do NOT overwrite or remove existing presets.
 
 === MASTER PRODUCER SCENE ENRICHMENT RULES ===
 You are not just an analyst — you are a MASTER PRODUCER who bridges the gap between the story writer and the illustration artist. The story writer may leave things implicit, but the artist needs EXPLICIT visual direction for every scene. You MUST fill in these gaps:
@@ -2277,6 +2291,10 @@ Return ONLY a valid JSON object (no markdown, no explanation):
       "accessories": "ALL accessories/props in English: glasses, watch, jewelry, bag, belt, hat, scarf, hair accessories — each with style and color. If none, write 'none'.",
       "personality": "brief personality in Korean",
       "distinctFeatures": "English list of 3-5 MOST distinctive visual traits",
+      "outfitPresets": {
+        "교복": {"outfit": "white shirt with navy blazer, gray pleated skirt", "accessories": "red necktie, school badge"},
+        "잠옷": {"outfit": "oversized pink T-shirt, gray shorts", "accessories": "none"}
+      },
       "refPrompt": "EXTREMELY detailed English prompt for character reference sheet. Structure: 'Full body character reference sheet, front-facing T-pose, clean white background. [NAME] is a [age] [gender] [height/build]. Face: [shape, jawline, eyebrows, eye color+shape+eyelid, nose, lips]. Hair: [exact color+shade, length, style, parting, bangs type, accessories]. Outfit: [top with color+material, bottom with color+style, outer layer, footwear with color, every accessory]. Unique traits: [...]. Must look IDENTICAL across all panels.'",
       "isExisting": false
     }
@@ -2327,6 +2345,14 @@ OUTFIT EXTRACTION RULES:
 - Even brief mentions count: "그녀는 빨간 원피스를 입고", "교복 차림의 민수", "속옷 차림" — ALL should be captured.
 - Describe outfits in detailed English: garment type, color, material, style, state (unbuttoned, rolled sleeves, etc.).
 - Once set, outfit PERSISTS for subsequent beats until another override changes it.
+
+OUTFIT PRESETS (outfitPresets) — AUTOMATIC EXTRACTION:
+- For EACH character, extract ALL distinct outfits from the scenes into "outfitPresets".
+- Each preset: Korean name key (e.g. "교복", "잠옷", "운동복"), value: {"outfit": "English clothing desc", "accessories": "outfit-specific accessories or 'none'"}
+- The character's "outfit" field = default outfit. outfitPresets = ALL OTHER outfits.
+- Separate ACCESSORIES per outfit: glasses only with school uniform → put in that preset, not main "accessories" field.
+- Main "accessories" field = accessories worn across ALL outfits.
+- For EXISTING characters: preserve existing outfitPresets, ADD new ones.
 
 === MASTER PRODUCER SCENE ENRICHMENT RULES ===
 You are a MASTER PRODUCER who bridges the gap between the story writer and the illustration artist. Scene descriptions may be sparse — you MUST fill in the visual gaps the artist needs:
@@ -6560,9 +6586,15 @@ Rules:
       existingAssetsContext = '\n\n--- EXISTING PROJECT ASSETS (YOU MUST REUSE THESE EXACT IDs FOR MATCHING CHARACTERS/BACKGROUNDS/PROPS) ---\n';
       existingAssetsContext += 'IMPORTANT: Match existing assets BY NAME. If a character named "민수" exists as "char_1", ALL references to "민수" in the new story MUST use id "char_1". Do NOT create duplicate IDs.\n\n';
       if (existingChars.length > 0) {
-        existingAssetsContext += 'EXISTING Characters (MUST reuse these IDs if same character appears):\n' + existingChars.map(c =>
-          `  ID="${c.assetId}" NAME="${c.name}" (${c.role}) — appearance: ${c.appearance} — outfit: ${c.outfit}`
-        ).join('\n') + '\n\n';
+        existingAssetsContext += 'EXISTING Characters (MUST reuse these IDs if same character appears):\n' + existingChars.map(c => {
+          let line = `  ID="${c.assetId}" NAME="${c.name}" (${c.role}) — appearance: ${c.appearance} — outfit: ${c.outfit} — accessories: ${c.accessories || 'none'}`;
+          const presets = c.outfitPresets || {};
+          const presetKeys = Object.keys(presets);
+          if (presetKeys.length > 0) {
+            line += `\n    EXISTING outfitPresets: ${presetKeys.map(k => `"${k}" (outfit: ${presets[k].outfit?.substring(0,60) || '빈값'}, accessories: ${presets[k].accessories || 'none'})`).join(', ')}`;
+          }
+          return line;
+        }).join('\n') + '\n\n';
       }
       if (existingBgs.length > 0) {
         existingAssetsContext += 'EXISTING Backgrounds (MUST reuse these IDs if same location appears):\n' + existingBgs.map(b =>
@@ -6749,6 +6781,70 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
     // 캐릭터 기본 의상 로깅
     if (parsed.characters?.length > 0) {
       parsed.characters.forEach(c => console.log(`[분석] ${c.name}(${c.id}) 기본 의상: "${(c.outfit || '없음').substring(0, 80)}"`));
+    }
+
+    // ======== Auto outfitPresets: merge AI-extracted + fallback from outfitOverrides ========
+    if (parsed.characters?.length > 0 && parsed.plotBeats?.length > 0) {
+      for (const char of parsed.characters) {
+        // 1) Start with existing presets (from shared assets) if character already exists
+        const existingPresets = char.isExisting ? (sa.characters[char.id]?.outfitPresets || {}) : {};
+        const aiPresets = char.outfitPresets || {};
+        // Merge: existing + AI extracted (AI wins on conflict)
+        const merged = {...existingPresets, ...aiPresets};
+
+        // 2) Fallback: extract unique outfits from plotBeats outfitOverrides
+        const defaultOutfit = (char.outfit || '').toLowerCase().trim();
+        const seenOutfits = new Set(Object.values(merged).map(p => (p.outfit || '').toLowerCase().trim()));
+        seenOutfits.add(defaultOutfit);
+
+        parsed.plotBeats.forEach(pb => {
+          const override = pb.outfitOverrides?.[char.id];
+          if (!override || typeof override !== 'string' || override.length < 3) return;
+          const overrideLower = override.toLowerCase().trim();
+          // Skip if same as default or already captured
+          if (seenOutfits.has(overrideLower)) return;
+          // Check similarity (avoid near-duplicates)
+          const isDuplicate = [...seenOutfits].some(existing => {
+            if (!existing) return false;
+            // Simple overlap check: if >70% of words match, consider duplicate
+            const wordsA = new Set(overrideLower.split(/\s+/));
+            const wordsB = new Set(existing.split(/\s+/));
+            const overlap = [...wordsA].filter(w => wordsB.has(w)).length;
+            return overlap / Math.max(wordsA.size, wordsB.size) > 0.7;
+          });
+          if (isDuplicate) return;
+
+          seenOutfits.add(overrideLower);
+          // Auto-name: try to detect context from beat
+          let presetName = `의상_${Object.keys(merged).length + 1}`;
+          // Try smart naming from outfit description keywords
+          const kwMap = [
+            [/school|uniform|교복/i, '교복'], [/pajama|nightwear|잠옷/i, '잠옷'],
+            [/workout|gym|sport|운동/i, '운동복'], [/swim|수영/i, '수영복'],
+            [/dress|드레스|원피스/i, '드레스'], [/suit|정장|tuxedo/i, '정장'],
+            [/casual|캐주얼/i, '캐주얼'], [/coat|jacket|외투|자켓/i, '외출복'],
+            [/apron|앞치마/i, '앞치마'], [/hospital|gown|환자복/i, '환자복'],
+          ];
+          for (const [re, name] of kwMap) {
+            if (re.test(override) && !merged[name]) { presetName = name; break; }
+          }
+          // Extract accessories if present (after "accessories:" or "with accessories")
+          let outfitText = override, accText = 'none';
+          const accMatch = override.match(/(?:accessories?|악세서리)\s*[:：]\s*(.+)/i);
+          if (accMatch) {
+            accText = accMatch[1].trim();
+            outfitText = override.substring(0, accMatch.index).trim().replace(/[,;]\s*$/, '');
+          }
+          merged[presetName] = {outfit: outfitText, accessories: accText, image: null};
+          console.log(`[분석] ${char.name} 자동 의상 프리셋 추가: "${presetName}" ← outfitOverride (beat ${pb.beat})`);
+        });
+
+        char.outfitPresets = merged;
+        const presetCount = Object.keys(merged).length;
+        if (presetCount > 0) {
+          log(`${char.name} — 의상 프리셋 ${presetCount}개 (${Object.keys(merged).join(', ')})`, 'info');
+        }
+      }
     }
     setAnalysis(parsed);
     setCompletedSteps(prev => new Set([...prev, 0]));
