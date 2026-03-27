@@ -8454,7 +8454,7 @@ Return ONLY the detailed English prompt, nothing else.`,
 
           {/* Header */}
           <div className="be-header">
-            <span className="be-title">페이지 기반 웹툰 에디터</span>
+            <span className="be-title">웹툰 에디터 — {(() => { const ep = episodes.find(e => e.number === currentEpisode); return (ep?.title && ep.title !== `${currentEpisode}화`) ? ep.title : `${currentEpisode}화`; })()}</span>
             <div className="be-divider" />
             {Object.entries(BUBBLE_TYPES).filter(([,bt]) => bt.svgBalloon).map(([key, bt]) => {
               const sb = SVG_BALLOONS[bt.svgBalloon];
@@ -8944,7 +8944,13 @@ Return ONLY the detailed English prompt, nothing else.`,
             <div className="be-sidebar">
               <div className="be-sidebar-title">페이지 {currentPageIdx + 1} 객체</div>
               {(editorPages[currentPageIdx]?.objects?.length || 0) === 0 && <div className="be-sidebar-empty">상단 버튼으로 말풍선이나 이미지를 추가하세요.</div>}
-              {(editorPages[currentPageIdx]?.objects || []).map((obj, oi) => {
+              {(() => {
+                const allObjs = editorPages[currentPageIdx]?.objects || [];
+                let pc = 0;
+                const panelNumMap = {};
+                allObjs.forEach(o => { if (o.type === 'panel' || o.type === 'image') { pc++; panelNumMap[o.id] = pc; } });
+                return allObjs.map((obj, oi) => ({obj, oi, panelNum: panelNumMap[obj.id] || 0}));
+              })().map(({obj, oi, panelNum}) => {
                 const isSelected = selectedObjectId === obj.id;
                 if (obj.type === 'bubble') {
                   const bt = BUBBLE_TYPES[obj.bubbleStyle] || BUBBLE_TYPES.speech;
@@ -9184,7 +9190,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                       style={{opacity: obj.hidden ? 0.45 : 1, borderLeft: obj.hidden ? '3px solid #e74c3c' : undefined}}>
                       <div className="be-item-header">
                         <span className={`be-item-label${isSelected?' selected':''}`} style={{textDecoration: obj.hidden ? 'line-through' : 'none'}}>
-                          {oi+1}. {obj.type === 'panel' ? '패널' : '이미지'}{obj.hidden ? ' (숨김)' : ''}
+                          패널 {panelNum}{obj.hidden ? ' (숨김)' : ''}
                         </span>
                         <button className={obj.hidden ? "be-item-del" : "be-item-del"}
                           style={{color: obj.hidden ? '#00b894' : undefined}}
