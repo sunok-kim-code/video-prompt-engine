@@ -8081,22 +8081,16 @@ Return ONLY the detailed English prompt, nothing else.`,
     try {
       log(`패널 ${panelIndex + 1} 이미지 새로고침 중...`, 'info');
       let newSrc = null;
-      // 1) Try current panels React state first (most up-to-date after regeneration)
-      if (panels[panelIndex] && typeof panels[panelIndex] === 'string' && panels[panelIndex].startsWith('data:')) {
-        // Check if it's different from current editor object src
-        const currentObj = editorPages[editorPageIdx]?.objects?.find(o => o.id === objId);
-        if (currentObj && currentObj.src !== panels[panelIndex]) {
-          newSrc = panels[panelIndex];
-          log(`패널 ${panelIndex + 1}: 현재 상태에서 새 이미지 발견`, 'info');
-        }
-      }
-      // 2) Fallback: load from Firebase (bypass cache for fresh data)
-      if (!newSrc && projectId && currentEpisode) {
+      // 1) Always load fresh from Firebase first (bypass cache)
+      if (projectId && currentEpisode) {
         const s4 = await fbLoadPhase(projectId, currentEpisode, 'step4_panels', false, false);
         if (s4?.panels?.[panelIndex] && typeof s4.panels[panelIndex] === 'string' && s4.panels[panelIndex].startsWith('data:')) {
           newSrc = s4.panels[panelIndex];
-          log(`패널 ${panelIndex + 1}: Firebase에서 이미지 로드`, 'info');
         }
+      }
+      // 2) Fallback: try current panels React state
+      if (!newSrc && panels[panelIndex] && typeof panels[panelIndex] === 'string' && panels[panelIndex].startsWith('data:')) {
+        newSrc = panels[panelIndex];
       }
       if (!newSrc) {
         log(`패널 ${panelIndex + 1} 새로고침할 이미지를 찾을 수 없습니다.`, 'error');
