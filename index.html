@@ -446,19 +446,45 @@ async function fbLoadPhase(projectId, episodeNum, phaseName, metadataOnly, useCa
   if (!doc.exists) return null;
   const d = doc.data();
   if (metadataOnly) { _phaseCache[cacheKey] = d; return d; }
-  const map={}, cmeta={}, cdata={};
+  const map={}, cmeta={}, cdata={}, keyMap={};
   if (snap && snap.docs) {
-    snap.docs.forEach(s=>{const sd=s.data();if(s.id.includes('_c')){const pid=s.id.split('_c')[0];if(!cdata[pid])cdata[pid]={};cdata[pid][sd.idx]=sd.data;}else if(sd.chunks)cmeta[s.id]=sd;else if(sd.data)map[s.id]=sd.data;});
-    for(const [id,m] of Object.entries(cmeta)){let a='';for(let i=0;i<m.chunks;i++)a+=(cdata[id]?.[i]||'');if(a)map[id]=a;}
+    snap.docs.forEach(s=>{const sd=s.data();if(s.id.includes('_c')){const pid=s.id.split('_c')[0];if(!cdata[pid])cdata[pid]={};cdata[pid][sd.idx]=sd.data;}else if(sd.chunks)cmeta[s.id]=sd;else{if(sd.data)map[s.id]=sd.data;if(sd.key)keyMap[sd.key]=s.id;}});
+    for(const [id,m] of Object.entries(cmeta)){let a='';for(let i=0;i<m.chunks;i++)a+=(cdata[id]?.[i]||'');if(a)map[id]=a;const km=snap.docs.find(s=>s.id===id)?.data()?.key;if(km)keyMap[km]=id;}
   }
   const imgCount = d.imageCount || 0;
   const mapSize = Object.keys(map).length;
   if (imgCount > 0 && mapSize === 0) {
     console.error(`[fbLoadPhase] ${phaseName}: 이미지 ${imgCount}개 예상, images 서브컬렉션 0개 — 이미지 복원 불가!`);
   } else if (imgCount > 0) {
-    console.log(`[fbLoadPhase] ${phaseName}: 이미지 map ${mapSize}개 로드 (doc.imageCount=${imgCount})`);
+    console.log(`[fbLoadPhase] ${phaseName}: 이미지 map ${mapSize}개 로드 (doc.imageCount=${imgCount}, keyMap=${Object.keys(keyMap).length}개)`);
   }
+  // 1차: ID 기반 복원
   const result = restoreBase64(d, map);
+  // 2차: 토큰 복원 실패 시 key 기반 fallback (동시 저장으로 ID 불일치 복구)
+  if (mapSize > 0 && result && typeof result === 'object') {
+    const tryKeyFallback = (obj, parentKey) => {
+      if (!obj || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map((item, i) => {
+        // null = restoreBase64에서 복원 실패한 항목
+        if (item === null) {
+          const key = (parentKey || 'arr') + '_' + i;
+          const imgId = keyMap[key];
+          if (imgId && map[imgId]) {
+            console.log(`[fbLoadPhase] key fallback 복구: ${key} → ${imgId}`);
+            return map[imgId];
+          }
+        }
+        if (item && typeof item === 'object') return tryKeyFallback(item, (parentKey || 'arr') + '_' + i);
+        return item;
+      });
+      const out = {};
+      for (const [k, v] of Object.entries(obj)) out[k] = tryKeyFallback(v, k);
+      return out;
+    };
+    const recovered = tryKeyFallback(result, null);
+    if (useCache !== false) _phaseCache[cacheKey] = recovered;
+    return recovered;
+  }
   if (useCache !== false) _phaseCache[cacheKey] = result;
   return result;
 }
