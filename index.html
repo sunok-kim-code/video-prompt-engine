@@ -361,6 +361,8 @@ async function fbDeleteEpisode(projectId, episodeNum) { const db = getDb(); if (
 // onProgress(current, total, message) — optional callback for progress tracking
 async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImages, onProgress) {
   const db = getDb(); if (!db) return;
+  // Invalidate cache for this phase
+  clearPhaseCache(projectId, episodeNum, phaseName);
   const ref = db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).collection('phases').doc(phaseName);
   const imgs = []; const safe = stripBase64(phaseData, imgs);
   const retryWrite = async (fn, attempts) => {
@@ -417,15 +419,35 @@ async function fbSavePhase(projectId, episodeNum, phaseName, phaseData, skipImag
   }
 }
 
-async function fbLoadPhase(projectId, episodeNum, phaseName) {
+// In-memory cache for fbLoadPhase (cleared on save)
+const _phaseCache = {};
+function _phaseCacheKey(pid, ep, phase) { return `${pid}/${ep}/${phase}`; }
+function clearPhaseCache(pid, ep, phase) {
+  if (phase) { delete _phaseCache[_phaseCacheKey(pid, ep, phase)]; }
+  else { Object.keys(_phaseCache).forEach(k => { if (k.startsWith(`${pid}/${ep}/`)) delete _phaseCache[k]; }); }
+}
+
+// metadataOnly: skip loading images subcollection (fast, for status checks)
+// useCache: use in-memory cache (default true)
+async function fbLoadPhase(projectId, episodeNum, phaseName, metadataOnly, useCache) {
   const db = getDb(); if (!db) return null;
+  const cacheKey = _phaseCacheKey(projectId, episodeNum, phaseName) + (metadataOnly ? ':meta' : '');
+  if (useCache !== false && _phaseCache[cacheKey]) return _phaseCache[cacheKey];
   const ref = db.collection('webtoon_projects').doc(projectId).collection('episodes').doc(String(episodeNum)).collection('phases').doc(phaseName);
-  const doc = await ref.get(); if (!doc.exists) return null;
-  const d = doc.data(); const snap = await ref.collection('images').get();
+  // Parallel: load doc and images subcollection at the same time
+  const [doc, snap] = await Promise.all([
+    ref.get(),
+    metadataOnly ? Promise.resolve(null) : ref.collection('images').get()
+  ]);
+  if (!doc.exists) return null;
+  const d = doc.data();
+  if (metadataOnly) { _phaseCache[cacheKey] = d; return d; }
   const map={}, cmeta={}, cdata={};
   snap.docs.forEach(s=>{const sd=s.data();if(s.id.includes('_c')){const pid=s.id.split('_c')[0];if(!cdata[pid])cdata[pid]={};cdata[pid][sd.idx]=sd.data;}else if(sd.chunks)cmeta[s.id]=sd;else if(sd.data)map[s.id]=sd.data;});
   for(const [id,m] of Object.entries(cmeta)){let a='';for(let i=0;i<m.chunks;i++)a+=(cdata[id]?.[i]||'');if(a)map[id]=a;}
-  return restoreBase64(d, map);
+  const result = restoreBase64(d, map);
+  if (useCache !== false) _phaseCache[cacheKey] = result;
+  return result;
 }
 
 function stripBase64(obj, imgs, parentKey) {
@@ -469,16 +491,19 @@ async function fbLoadAllAssets(projectId) {
   const db = getDb(); if (!db) return {characters:{}, backgrounds:{}, props:{}};
   const snap = await db.collection('webtoon_projects').doc(projectId).collection('shared_assets').get();
   const result = {characters:{}, backgrounds:{}, props:{}};
-  for (const doc of snap.docs) {
+  // Load all asset images in parallel
+  const assetResults = await Promise.all(snap.docs.map(async (doc) => {
     const d = doc.data();
     const imgSnap = await doc.ref.collection('images').get();
     const map={}, cmeta={}, cdata={};
     imgSnap.docs.forEach(s=>{const sd=s.data();if(s.id.includes('_c')){const pid=s.id.split('_c')[0];if(!cdata[pid])cdata[pid]={};cdata[pid][sd.idx]=sd.data;}else if(sd.chunks)cmeta[s.id]=sd;else if(sd.data)map[s.id]=sd.data;});
     for(const [id,m] of Object.entries(cmeta)){let a='';for(let i=0;i<m.chunks;i++)a+=(cdata[id]?.[i]||'');if(a)map[id]=a;}
-    const restored = restoreBase64(d, map);
+    return restoreBase64(d, map);
+  }));
+  assetResults.forEach(restored => {
     const t = restored.type || 'characters';
     if (result[t]) result[t][restored.assetId] = restored;
-  }
+  });
   return result;
 }
 
@@ -7358,9 +7383,9 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
     const epResults = await Promise.all(episodes.map(async (ep) => {
       try {
         const [s1, s4, s3] = await Promise.all([
-          fbLoadPhase(projectId, ep.number, 'step1_analysis'),
-          fbLoadPhase(projectId, ep.number, 'step4_panels'),
-          fbLoadPhase(projectId, ep.number, 'step3_storyboard'),
+          fbLoadPhase(projectId, ep.number, 'step1_analysis', true),
+          fbLoadPhase(projectId, ep.number, 'step4_panels', true),
+          fbLoadPhase(projectId, ep.number, 'step3_storyboard', true),
         ]);
         return {ep, s1, s3, s4};
       } catch(e) { return {ep, error: e}; }
@@ -8065,9 +8090,9 @@ Return ONLY the detailed English prompt, nothing else.`,
           log(`패널 ${panelIndex + 1}: 현재 상태에서 새 이미지 발견`, 'info');
         }
       }
-      // 2) Fallback: load from Firebase
+      // 2) Fallback: load from Firebase (bypass cache for fresh data)
       if (!newSrc && projectId && currentEpisode) {
-        const s4 = await fbLoadPhase(projectId, currentEpisode, 'step4_panels');
+        const s4 = await fbLoadPhase(projectId, currentEpisode, 'step4_panels', false, false);
         if (s4?.panels?.[panelIndex] && typeof s4.panels[panelIndex] === 'string' && s4.panels[panelIndex].startsWith('data:')) {
           newSrc = s4.panels[panelIndex];
           log(`패널 ${panelIndex + 1}: Firebase에서 이미지 로드`, 'info');
