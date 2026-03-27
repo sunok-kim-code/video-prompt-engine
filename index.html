@@ -2903,6 +2903,13 @@ Rules:
   const [editorLanguage, setEditorLanguage] = useState('ko'); // 'ko' | 'ja'
   const [isTranslating, setIsTranslating] = useState(false);
 
+  // Auto-scroll sidebar to selected object
+  React.useEffect(() => {
+    if (!selectedObjectId) return;
+    const el = document.querySelector(`.be-sidebar [data-obj-id="${selectedObjectId}"]`);
+    if (el) el.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }, [selectedObjectId]);
+
   // Helper: get display text for current language
   const getObjText = (obj) => {
     if (editorLanguage === 'ja' && obj.translations?.ja) return obj.translations.ja;
@@ -9173,7 +9180,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                 if (obj.type === 'bubble') {
                   const bt = BUBBLE_TYPES[obj.bubbleStyle] || BUBBLE_TYPES.speech;
                   return (
-                    <div key={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={() => setSelectedObjectId(obj.id)}>
+                    <div key={obj.id} data-obj-id={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={() => setSelectedObjectId(obj.id)}>
                       <div className="be-item-header">
                         <span className={`be-item-label${isSelected?' selected':''}`}>{oi+1}. 말풍선 ({bt.name})</span>
                         <button className="be-item-del" onClick={(e) => {e.stopPropagation(); deletePageObject(currentPageIdx, obj.id);}}>삭제</button>
@@ -9336,7 +9343,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                 } else if (obj.type === 'sfx') {
                   // [WebtoonSFX 추가] SFX 사이드바 컨트롤
                   return (
-                    <div key={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={() => setSelectedObjectId(obj.id)}
+                    <div key={obj.id} data-obj-id={obj.id} className={`be-item${isSelected?' selected':''}`} onClick={() => setSelectedObjectId(obj.id)}
                       style={{borderLeft: isSelected ? '3px solid #ff6b6b' : '3px solid transparent'}}>
                       <div className="be-item-header">
                         <span className={`be-item-label${isSelected?' selected':''}`} style={{color: isSelected?'#ff6b6b':'#ccc'}}>{oi+1}. 효과음 ({getObjText(obj)})</span>
@@ -9436,7 +9443,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                   );
                 } else {
                   return (
-                    <div key={obj.id} className={`be-item${isSelected?' selected':''}`}
+                    <div key={obj.id} data-obj-id={obj.id} className={`be-item${isSelected?' selected':''}`}
                       onClick={() => !obj.hidden && setSelectedObjectId(obj.id)}
                       style={{opacity: obj.hidden ? 0.45 : 1, borderLeft: obj.hidden ? '3px solid #e74c3c' : undefined}}>
                       <div className="be-item-header">
