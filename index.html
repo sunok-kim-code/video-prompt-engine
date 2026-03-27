@@ -8543,6 +8543,7 @@ Return ONLY the detailed English prompt, nothing else.`,
             }}>전체 JPG 내보내기</button>
             <button className="btn btn-outline btn-sm be-btn-export" style={{background:'linear-gradient(135deg,#667eea,#764ba2)',color:'#fff',borderColor:'transparent'}} onClick={exportAsPsd}>PSD 내보내기</button>
             <button className="btn btn-success btn-sm" onClick={() => { saveEditorLayout(); closeBubbleEditor(); }} style={{fontSize:12}}>저장 후 완료</button>
+            <button className="btn btn-outline btn-sm" onClick={() => { if (window.confirm('저장하지 않고 나가시겠습니까? 변경사항이 사라집니다.')) closeBubbleEditor(); }} style={{fontSize:12,color:'var(--text2)'}}>저장없이 나가기</button>
           </div>
 
           <div className="be-body">
