@@ -8076,8 +8076,20 @@ Return ONLY the detailed English prompt, nothing else.`,
             </div>
             {asset.refPrompt && (
               <details style={{marginTop:4,gridColumn:'1/-1'}}>
-                <summary className="prompt-badge">프롬프트 보기</summary>
-                <div style={{fontSize:11,color:'var(--text2)',padding:'6px 0',lineHeight:1.5,fontFamily:'monospace',wordBreak:'break-all'}}>{getAssetFullPrompt(assetTab, asset.refPrompt)}</div>
+                <summary className="prompt-badge">프롬프트 보기/수정</summary>
+                <div style={{display:'flex',flexDirection:'column',gap:4,padding:'6px 0'}}>
+                  <textarea style={{width:'100%',fontSize:11,fontFamily:'monospace',lineHeight:1.5,padding:6,border:'1px solid #ddd',borderRadius:4,minHeight:80,resize:'vertical',wordBreak:'break-all'}}
+                    defaultValue={getAssetFullPrompt(assetTab, asset.refPrompt)}
+                    id={`prompt-edit-${assetTab}-${id}`} />
+                  <div style={{display:'flex',gap:4}}>
+                    <button className="btn btn-primary btn-xs" disabled={running} onClick={() => {
+                      const el = document.getElementById(`prompt-edit-${assetTab}-${id}`);
+                      const p = el?.value?.trim();
+                      if (!p) return;
+                      regenerateAsset(assetTab, id, p);
+                    }}>프롬프트로 생성</button>
+                  </div>
+                </div>
               </details>
             )}
             <div className="asset-item-actions">
@@ -8085,7 +8097,6 @@ Return ONLY the detailed English prompt, nothing else.`,
                 <button className="btn btn-sm" style={{background:'linear-gradient(135deg,#00b894,#00cec9)',color:'#fff',border:'none',fontSize:11}}
                   onClick={() => trainCharacterLora(id, asset.name, [asset.image])} disabled={running}>LoRA 학습</button>
               )}
-              <button className="btn btn-outline btn-sm" onClick={() => openPromptEditor(assetTab, id, getAssetFullPrompt(assetTab, asset.refPrompt), asset.name, (p) => regenerateAsset(assetTab, id, p))} disabled={running}>프롬프트 수정 후 생성</button>
               <button className="btn btn-outline btn-sm" onClick={()=>regenerateAsset(assetTab, id)} disabled={running}>재생성</button>
               <button className="btn btn-outline btn-sm" style={{color:'var(--err)',borderColor:'var(--err)'}} onClick={async ()=>{
                 if(!confirm(`${asset.name} 에셋을 삭제하시겠습니까?`)) return;
