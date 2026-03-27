@@ -8662,8 +8662,13 @@ Return ONLY the detailed English prompt, nothing else.`,
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
                 <span style={{fontSize:12,fontWeight:700}}>👗 의상별 레퍼런스 ({allOutfits.length})</span>
                 <button className="btn btn-outline btn-xs" style={{fontSize:10,padding:'2px 8px'}} onClick={() => {
-                  const name = prompt('새 의상 이름 (예: 교복, 잠옷, 운동복)');
-                  if (!name?.trim()) return;
+                  let name = prompt('새 의상 이름 (예: 교복, 잠옷, 운동복)\n빈칸이면 자동 생성됩니다.');
+                  if (name === null) return; // 취소 누른 경우
+                  if (!name?.trim()) {
+                    let idx = 1;
+                    while (presets[`의상_${idx}`]) idx++;
+                    name = `의상_${idx}`;
+                  }
                   const newPreset = {outfit: '', accessories: '', image: null};
                   const updatedPresets = {...presets, [name.trim()]: newPreset};
                   updateAnalysisChar(id, 'outfitPresets', updatedPresets);
