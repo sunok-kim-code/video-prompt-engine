@@ -4617,13 +4617,13 @@ Rules:
         // End — varied length, scaled by outerScale (outerMargin)
         const lenType = rand(c * 10 + li, 5);
         let lenMult;
-        if (lenType < 0.25) lenMult = 0.25 + rand(c * 10 + li, 6) * 0.15;
-        else if (lenType < 0.65) lenMult = 0.45 + rand(c * 10 + li, 6) * 0.2;
-        else lenMult = 0.65 + rand(c * 10 + li, 6) * 0.3;
+        if (lenType < 0.3) lenMult = 0.15 + rand(c * 10 + li, 6) * 0.1;       // 짧은 선 30%
+        else if (lenType < 0.7) lenMult = 0.25 + rand(c * 10 + li, 6) * 0.15;  // 중간 선 40%
+        else lenMult = 0.4 + rand(c * 10 + li, 6) * 0.2;                        // 긴 선 30%
         const maxReachX = (cx - innerRx) * outerScale;
         const maxReachY = (cy - innerRy) * outerScale;
-        const outerDist = innerRx + maxReachX * (0.3 + lenMult * 0.7);
-        const outerDistY = innerRy + maxReachY * (0.3 + lenMult * 0.7);
+        const outerDist = innerRx + maxReachX * (0.2 + lenMult * 0.55);
+        const outerDistY = innerRy + maxReachY * (0.2 + lenMult * 0.55);
         const ex = cx + cosA * outerDist;
         const ey = cy + sinA * outerDistY;
 
