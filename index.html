@@ -5201,12 +5201,16 @@ Rules:
             const th = Math.round(obj.h * psdScale);
             const tLeft = Math.round(obj.x * psdScale);
             const tTop = Math.round(obj.y * psdScale);
-            // Text layer needs a dummy canvas for ag-psd
+            const isBold = (obj.fontWeight || bt.fontWeight || 500) >= 700;
+            const leading = Math.round(fs * 1.3);
+            // PSD 텍스트 문자열: 줄바꿈은 \r, 마지막에 \r 추가 (포토샵 텍스트 엔진 요구)
+            const psdText = displayText.replace(/\n/g, '\r') + '\r';
+            // Text layer needs a dummy canvas for ag-psd (래스터 미리보기)
             const tCanvas = document.createElement('canvas');
             tCanvas.width = tw;
             tCanvas.height = th;
             const tCtx = tCanvas.getContext('2d');
-            tCtx.font = `${obj.fontWeight || bt.fontWeight || 500} ${fs}px ${ff}`;
+            tCtx.font = `${isBold ? 'bold' : 'normal'} ${fs}px ${ff}`;
             tCtx.fillStyle = textColor;
             tCtx.textAlign = 'center'; tCtx.textBaseline = 'middle';
             const lines = displayText.split('\n');
@@ -5223,21 +5227,27 @@ Rules:
               blendMode: 'normal',
               opacity: 1,
               text: {
-                text: displayText,
-                // transform tx,ty = 텍스트 레이어의 실제 위치 (포토샵 텍스트 엔진이 이 좌표 사용)
+                text: psdText,
                 transform: [1, 0, 0, 1, tLeft, tTop],
                 antiAlias: 'smooth',
                 shapeType: 'box',
-                boxBounds: [tTop, tLeft, tTop + th, tLeft + tw],
-                style: {
-                  font: { name: fontName },
-                  fontSize: fs,
-                  fillColor: { r, g, b: b2 },
-                  fauxBold: (obj.fontWeight || bt.fontWeight || 500) >= 700,
-                  autoLeading: false,
-                  leading: Math.round(fs * 1.3),
-                },
-                paragraphStyle: { justification: 'center' },
+                boxBounds: [0, 0, th, tw],
+                styleRuns: [{
+                  length: psdText.length,
+                  style: {
+                    font: { name: fontName },
+                    fontSize: fs,
+                    fillColor: { r, g, b: b2 },
+                    fauxBold: isBold,
+                    autoLeading: false,
+                    leading: leading,
+                    tracking: 0,
+                  }
+                }],
+                paragraphStyleRuns: [{
+                  length: psdText.length,
+                  style: { justification: 'center' }
+                }],
               }
             });
           }
@@ -5272,8 +5282,10 @@ Rules:
             const sb2 = parseInt(sfxColor.slice(5,7),16) || 0;
             const sfxTw = Math.round(obj.w * psdScale);
             const sfxTh = Math.round(obj.h * psdScale);
-            const sfxLeft = Math.round(obj.x * psdScale);
+            const sfxLeft2 = Math.round(obj.x * psdScale);
             const sfxTextTop = Math.round(obj.y * psdScale);
+            const sfxPsdText = sfxText.replace(/\n/g, '\r') + '\r';
+            const sfxLeading = Math.round(sfxFs * 1.2);
             const tCanvas = document.createElement('canvas');
             tCanvas.width = sfxTw;
             tCanvas.height = sfxTh;
@@ -5284,25 +5296,32 @@ Rules:
             tCtx.fillText(sfxText, sfxTw / 2, sfxTh / 2);
             children.push({
               name: `SFX ${idx+1} (text)`,
-              left: sfxLeft,
+              left: sfxLeft2,
               top: sfxTextTop,
               canvas: tCanvas,
               blendMode: 'normal',
               opacity: 1,
               text: {
-                text: sfxText,
-                transform: [1, 0, 0, 1, sfxLeft, sfxTextTop],
+                text: sfxPsdText,
+                transform: [1, 0, 0, 1, sfxLeft2, sfxTextTop],
                 antiAlias: 'smooth',
                 shapeType: 'box',
-                boxBounds: [sfxTextTop, sfxLeft, sfxTextTop + sfxTh, sfxLeft + sfxTw],
-                style: {
-                  font: { name: sfxFontName },
-                  fontSize: sfxFs,
-                  fillColor: { r: sr, g: sg, b: sb2 },
-                  autoLeading: false,
-                  leading: Math.round(sfxFs * 1.2),
-                },
-                paragraphStyle: { justification: 'center' },
+                boxBounds: [0, 0, sfxTh, sfxTw],
+                styleRuns: [{
+                  length: sfxPsdText.length,
+                  style: {
+                    font: { name: sfxFontName },
+                    fontSize: sfxFs,
+                    fillColor: { r: sr, g: sg, b: sb2 },
+                    autoLeading: false,
+                    leading: sfxLeading,
+                    tracking: 0,
+                  }
+                }],
+                paragraphStyleRuns: [{
+                  length: sfxPsdText.length,
+                  style: { justification: 'center' }
+                }],
               }
             });
           }
@@ -5371,7 +5390,7 @@ Rules:
         }
 
         const psd = { width: psdW, height: pg.height, canvas: compositeCanvas, children: pg.children };
-        const buffer = agPsd.writePsd(psd);
+        const buffer = agPsd.writePsd(psd, { invalidateTextLayers: true });
         const blob = new Blob([buffer], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
