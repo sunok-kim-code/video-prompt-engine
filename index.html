@@ -4613,13 +4613,13 @@ Rules:
         // End — varied length, scaled by outerScale (outerMargin)
         const lenType = rand(c * 10 + li, 5);
         let lenMult;
-        if (lenType < 0.3) lenMult = 0.15 + rand(c * 10 + li, 6) * 0.1;       // 짧은 선 30%
-        else if (lenType < 0.7) lenMult = 0.25 + rand(c * 10 + li, 6) * 0.15;  // 중간 선 40%
-        else lenMult = 0.4 + rand(c * 10 + li, 6) * 0.2;                        // 긴 선 30%
+        if (lenType < 0.35) lenMult = 0.08 + rand(c * 10 + li, 6) * 0.08;      // 짧은 선 35%
+        else if (lenType < 0.75) lenMult = 0.16 + rand(c * 10 + li, 6) * 0.1;  // 중간 선 40%
+        else lenMult = 0.26 + rand(c * 10 + li, 6) * 0.14;                      // 긴 선 25%
         const maxReachX = (cx - innerRx) * outerScale;
         const maxReachY = (cy - innerRy) * outerScale;
-        const outerDist = innerRx + maxReachX * (0.2 + lenMult * 0.55);
-        const outerDistY = innerRy + maxReachY * (0.2 + lenMult * 0.55);
+        const outerDist = innerRx + maxReachX * (0.15 + lenMult * 0.45);
+        const outerDistY = innerRy + maxReachY * (0.15 + lenMult * 0.45);
         const ex = cx + cosA * outerDist;
         const ey = cy + sinA * outerDistY;
 
@@ -9429,9 +9429,9 @@ Return ONLY the detailed English prompt, nothing else.`,
                   </div>
                   <div className="be-sfx-row">
                     <label>색상</label>
-                    <input type="color" value={sfxColor} onChange={e => setSfxColor(e.target.value)} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}} />
+                    <input type="color" value={sfxColor} onChange={e => setSfxColor(e.target.value)} onInput={e => setSfxColor(e.target.value)} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}} />
                     <label style={{marginLeft:8}}>외곽</label>
-                    <input type="color" value={sfxStroke} onChange={e => setSfxStroke(e.target.value)} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}} />
+                    <input type="color" value={sfxStroke} onChange={e => setSfxStroke(e.target.value)} onInput={e => setSfxStroke(e.target.value)} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}} />
                   </div>
                   <button className="be-sfx-insert-btn" onClick={() => addSfxToPage()}>효과음 삽입</button>
                 </div>
@@ -9724,9 +9724,10 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     const pathD = buildWavePath(W, H, tailPos, tailLen, tailWid, scale);
                                     return <path d={pathD} fill={bt.bg} stroke={strokeColor} strokeWidth={bw2} strokeLinejoin="round"/>;
                                   } else if (bt.concentrationLines) {
-                                    const cl = buildConcentrationLines(W, H);
+                                    const cl = buildConcentrationLines(W, H, obj.concentrationPadding || 0, obj.concentrationOuterMargin || 0);
+                                    const clColor = obj.concentrationColor || strokeColor;
                                     return <g>
-                                      {cl.lines.map((ln, li) => <line key={li} x1={ln.sx} y1={ln.sy} x2={ln.ex} y2={ln.ey} stroke={strokeColor} strokeWidth={ln.sw} strokeLinecap="round"/>)}
+                                      {cl.lines.map((ln, li) => <line key={li} x1={ln.sx} y1={ln.sy} x2={ln.ex} y2={ln.ey} stroke={clColor} strokeWidth={ln.sw} strokeLinecap="round"/>)}
                                       <path d={cl.ellipse} fill="transparent" stroke="none"/>
                                     </g>;
                                   } else if (bt.ellipse) {
@@ -9958,7 +9959,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>글자색</label>
                         <input type="color" value={obj.customColor || bt.color || '#111111'} onClick={e=>e.stopPropagation()}
-                          onChange={e => updatePageObject(currentPageIdx, obj.id, {customColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {customColor: e.target.value})} onInput={e => updatePageObject(currentPageIdx, obj.id, {customColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
                         {obj.customColor && <button className="be-ctrl-reset" onClick={e=>{e.stopPropagation(); updatePageObject(currentPageIdx, obj.id, {customColor: null});}}>초기화</button>}
                       </div>
                       <div className="be-ctrl-row">
@@ -9976,7 +9977,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                       {bt.plainText && <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>배경색</label>
                         <input type="color" value={obj.customBg || '#ffffff'} onClick={e=>e.stopPropagation()}
-                          onChange={e => updatePageObject(currentPageIdx, obj.id, {customBg: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {customBg: e.target.value})} onInput={e => updatePageObject(currentPageIdx, obj.id, {customBg: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
                       </div>}
                       {bt.plainText && <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>투명도</label>
@@ -10042,7 +10043,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>선 색상</label>
                         <input type="color" value={obj.concentrationColor || '#000000'} onClick={e=>e.stopPropagation()}
-                          onChange={e => updatePageObject(currentPageIdx, obj.id, {concentrationColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {concentrationColor: e.target.value})} onInput={e => updatePageObject(currentPageIdx, obj.id, {concentrationColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
                         {obj.concentrationColor && <button className="be-ctrl-reset" onClick={e=>{e.stopPropagation(); updatePageObject(currentPageIdx, obj.id, {concentrationColor: null});}}>초기화</button>}
                       </div>
                       </React.Fragment>}
@@ -10056,13 +10057,13 @@ Return ONLY the detailed English prompt, nothing else.`,
                         <div className="be-ctrl-row">
                           <label className="be-ctrl-label" style={{flexShrink:0}}>선 색상</label>
                           <input type="color" value={obj.strokeColor || bt.border || '#333333'} onClick={e=>e.stopPropagation()}
-                            onChange={e => updatePageObject(currentPageIdx, obj.id, {strokeColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                            onChange={e => updatePageObject(currentPageIdx, obj.id, {strokeColor: e.target.value})} onInput={e => updatePageObject(currentPageIdx, obj.id, {strokeColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
                           {obj.strokeColor && <button className="be-ctrl-reset" onClick={e=>{e.stopPropagation(); updatePageObject(currentPageIdx, obj.id, {strokeColor: null});}}>초기화</button>}
                         </div>
                         <div className="be-ctrl-row">
                           <label className="be-ctrl-label" style={{flexShrink:0}}>채우기</label>
                           <input type="color" value={obj.fillColor || bt.bg || '#ffffff'} onClick={e=>e.stopPropagation()}
-                            onChange={e => updatePageObject(currentPageIdx, obj.id, {fillColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                            onChange={e => updatePageObject(currentPageIdx, obj.id, {fillColor: e.target.value})} onInput={e => updatePageObject(currentPageIdx, obj.id, {fillColor: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
                           {obj.fillColor && obj.fillColor !== '#fff' && obj.fillColor !== '#ffffff' && <button className="be-ctrl-reset" onClick={e=>{e.stopPropagation(); updatePageObject(currentPageIdx, obj.id, {fillColor: null});}}>초기화</button>}
                         </div>
                         <div className="be-ctrl-row">
@@ -10139,10 +10140,10 @@ Return ONLY the detailed English prompt, nothing else.`,
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>색상</label>
                         <input type="color" value={obj.color||'#ff2222'} onClick={e=>e.stopPropagation()}
-                          onChange={e => updatePageObject(currentPageIdx, obj.id, {color: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {color: e.target.value})} onInput={e => updatePageObject(currentPageIdx, obj.id, {color: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
                         <label className="be-ctrl-label" style={{flexShrink:0,marginLeft:4}}>외곽</label>
                         <input type="color" value={obj.stroke||'#000000'} onClick={e=>e.stopPropagation()}
-                          onChange={e => updatePageObject(currentPageIdx, obj.id, {stroke: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
+                          onChange={e => updatePageObject(currentPageIdx, obj.id, {stroke: e.target.value})} onInput={e => updatePageObject(currentPageIdx, obj.id, {stroke: e.target.value})} style={{width:28,height:22,border:'1px solid #555',borderRadius:3,padding:0,cursor:'pointer'}}/>
                       </div>
                       <div className="be-ctrl-row">
                         <label className="be-ctrl-label" style={{flexShrink:0}}>외곽두께</label>
@@ -10612,6 +10613,7 @@ Return ONLY the detailed English prompt, nothing else.`,
                                     type="color"
                                     value={cgTitleColor}
                                     onChange={e => setCgTitleColor(e.target.value)}
+                                    onInput={e => setCgTitleColor(e.target.value)}
                                     style={{width:'100%',height:36,border:'1px solid var(--border)',borderRadius:8,cursor:'pointer'}}
                                   />
                                 </div>
