@@ -458,6 +458,15 @@ async function fbLoadPhase(projectId, episodeNum, phaseName, metadataOnly, useCa
   } else if (imgCount > 0) {
     console.log(`[fbLoadPhase] ${phaseName}: 이미지 map ${mapSize}개 로드 (doc.imageCount=${imgCount}, keyMap=${Object.keys(keyMap).length}개)`);
   }
+  // 0.5차: key → deterministic token ID alias 추가 (ep*_o* 형식 토큰 복원용)
+  // 새 포맷 키(p0_o5_src) → 결정적 토큰 ID(ep0_o5)로 매핑하여 map에 추가
+  for (const [key, imgId] of Object.entries(keyMap)) {
+    const km = key.match(/^p(\d+)_o(\d+)_/);
+    if (km && map[imgId]) {
+      const detId = `ep${km[1]}_o${km[2]}`;
+      if (!map[detId]) { map[detId] = map[imgId]; console.log(`[fbLoadPhase] key alias: ${key} → ${detId}`); }
+    }
+  }
   // 1차: ID 기반 복원
   const result = restoreBase64(d, map);
   // 2차: key 기반 + 인덱스 기반 fallback 복구 (동시 저장으로 ID 불일치 시)
@@ -536,7 +545,7 @@ function restoreBase64(obj, map) {
       const id = obj.slice(5,-1);
       if (map[id]) return map[id];
       console.warn('[restoreBase64] 이미지 복원 실패 — 토큰:', id, '(map 크기:', Object.keys(map).length, ')');
-      return null; // 복원 실패 시 null 반환 (깨진 토큰 문자열 대신)
+      return obj; // 원래 토큰 문자열 유지 (openBubbleEditor panelIndex fallback에서 복구 가능)
     }
     return obj;
   }
@@ -573,6 +582,7 @@ function imgFingerprint(data) {
 let _editorSavedFingerprints = {}; // { imgId: fingerprint }
 
 // Optimized editor save: only writes changed images to Firestore
+// IMPORTANT: Images are saved BEFORE metadata to prevent token/doc ID mismatch on interruption
 async function fbSaveEditorOptimized(projectId, episodeNum, editorPages, currentPageIdx, onProgress) {
   const db = getDb(); if (!db) return;
   const phaseName = 'step5_editor';
@@ -602,11 +612,9 @@ async function fbSaveEditorOptimized(projectId, episodeNum, editorPages, current
     }
   }
 
-  const totalSteps = changedImgs.length + 2; // metadata + cleanup + changed images
-  if (onProgress) onProgress(0, totalSteps, '메타데이터 저장 중...');
+  const totalSteps = changedImgs.length + 2;
   console.log(`[fbSaveEditorOpt] 총 이미지 ${imgs.length}개: 변경 ${changedImgs.length}개, 유지 ${unchangedIds.size}개`);
 
-  // 3. Save metadata doc (always — it's small without base64)
   const retryWrite = async (fn, attempts) => {
     for (let a = 0; a < (attempts||3); a++) {
       try { await fn(); return; } catch(e) {
@@ -620,50 +628,8 @@ async function fbSaveEditorOptimized(projectId, episodeNum, editorPages, current
     }
   };
 
-  await retryWrite(() => ref.set({
-    editorPages: stripped, currentPageIdx,
-    imageCount: imgs.length,
-    savedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }));
-
-  if (imgs.length === 0) {
-    // No images at all — delete any old image docs
-    try {
-      const old = await imgColl.get();
-      if (old.docs.length > 0) {
-        const b = db.batch();
-        old.docs.forEach(d => b.delete(d.ref));
-        await b.commit();
-      }
-    } catch(e) { console.warn('[fbSaveEditorOpt] cleanup fail:', e.message); }
-    _editorSavedFingerprints = {};
-    if (onProgress) onProgress(1, 1, '완료');
-    return;
-  }
-
-  // 4. Delete old image docs that are removed or changed
-  if (onProgress) onProgress(1, totalSteps, '변경된 이미지 정리 중...');
-  try {
-    const old = await imgColl.get();
-    const docsToDelete = old.docs.filter(d => {
-      // Extract base ID (handle chunk docs like ep0_o1_c0 → ep0_o1)
-      const baseId = d.id.includes('_c') ? d.id.substring(0, d.id.lastIndexOf('_c')) : d.id;
-      // Delete if: no longer exists, or has changed (will be re-written)
-      return !newImgIds.has(baseId) || !unchangedIds.has(baseId);
-    });
-    if (docsToDelete.length > 0) {
-      console.log(`[fbSaveEditorOpt] 삭제할 이미지 문서: ${docsToDelete.length}개`);
-      const delBatches = [];
-      for (let d = 0; d < docsToDelete.length; d += 400) {
-        const b = db.batch();
-        docsToDelete.slice(d, d + 400).forEach(doc => b.delete(doc.ref));
-        delBatches.push(b.commit());
-      }
-      await Promise.all(delBatches);
-    }
-  } catch(e) { console.warn('[fbSaveEditorOpt] cleanup fail:', e.message); }
-
-  // 5. Write only changed images
+  // === STEP A: Write changed images FIRST (before metadata) ===
+  if (onProgress) onProgress(0, totalSteps, '이미지 저장 중...');
   const CHUNK_SIZE = 800000;
   for (let i = 0; i < changedImgs.length; i++) {
     const im = changedImgs[i];
@@ -679,8 +645,36 @@ async function fbSaveEditorOptimized(projectId, episodeNum, editorPages, current
       }
     }, 4);
     console.log(`[fbSaveEditorOpt] 이미지 ${i+1}/${changedImgs.length} 저장`);
-    if (onProgress) onProgress(i + 2, totalSteps, `이미지 ${i+1}/${changedImgs.length}`);
+    if (onProgress) onProgress(i + 1, totalSteps, `이미지 ${i+1}/${changedImgs.length}`);
   }
+
+  // === STEP B: Save metadata AFTER all images are written ===
+  if (onProgress) onProgress(changedImgs.length + 1, totalSteps, '메타데이터 저장 중...');
+  await retryWrite(() => ref.set({
+    editorPages: stripped, currentPageIdx,
+    imageCount: imgs.length,
+    savedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+
+  // === STEP C: Delete old/stale image docs (safe — metadata already points to new IDs) ===
+  try {
+    const old = await imgColl.get();
+    const docsToDelete = old.docs.filter(d => {
+      const baseId = d.id.includes('_c') ? d.id.substring(0, d.id.lastIndexOf('_c')) : d.id;
+      // Delete if: not in new set, or was changed (already re-written above)
+      return !newImgIds.has(baseId) || !unchangedIds.has(baseId);
+    });
+    if (docsToDelete.length > 0) {
+      console.log(`[fbSaveEditorOpt] 오래된 이미지 문서 ${docsToDelete.length}개 삭제`);
+      const delBatches = [];
+      for (let d = 0; d < docsToDelete.length; d += 400) {
+        const b = db.batch();
+        docsToDelete.slice(d, d + 400).forEach(doc => b.delete(doc.ref));
+        delBatches.push(b.commit());
+      }
+      await Promise.all(delBatches);
+    }
+  } catch(e) { console.warn('[fbSaveEditorOpt] cleanup fail:', e.message); }
 
   // 6. Update saved fingerprints
   _editorSavedFingerprints = newFingerprints;
@@ -3886,18 +3880,20 @@ Rules:
       const fixedPages = saved.editorPages.map(page => ({
         ...page,
         objects: (page.objects || []).map(obj => {
-          if ((obj.type === 'panel' || obj.type === 'image') && obj.src && obj.src.startsWith('[img:')) {
-            // Try to restore from panels array using panelIndex
+          if ((obj.type === 'panel' || obj.type === 'image') && (!obj.src || (typeof obj.src === 'string' && obj.src.startsWith('[img:')))) {
+            // Try to restore from panels array using panelIndex (handles both [img:] tokens and null)
             const pi = obj.panelIndex;
             const actualSrc = (pi !== undefined && effectivePanels[pi]) ? effectivePanels[pi] : null;
             // Verify restored source is not itself an [img:] token
             if (actualSrc && !actualSrc.startsWith('[img:')) {
-              console.log(`[BubbleEditor] Restored image token: ${obj.src} → panels[${pi}]`);
+              console.log(`[BubbleEditor] Restored image token: ${obj.src || 'null'} → panels[${pi}]`);
               return {...obj, src: actualSrc};
-            } else {
+            } else if (obj.src && obj.src.startsWith('[img:')) {
               unfixedCount++;
-              console.warn(`[BubbleEditor] Could not restore image token: ${obj.src} (panelIndex: ${pi}, effectivePanels[${pi}] is ${actualSrc ? 'also [img:]' : 'undefined'})`);
+              console.warn(`[BubbleEditor] Could not restore image token: ${obj.src} (panelIndex: ${pi})`);
               return obj;
+            } else {
+              return obj; // src가 null이고 panelIndex도 없는 경우 그대로
             }
           }
           return obj;
