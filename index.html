@@ -4892,9 +4892,29 @@ Rules:
     if (!window.agPsd?.writePsd) {
       log('ag-psd 라이브러리가 로드되지 않았습니다', 'error'); return;
     }
-    log('PSD 내보내기 중... (레이어 생성)', 'info');
+    log('PSD 내보내기 중... (고해상도 레이어 생성)', 'info');
 
     const page = editorPages[0];
+    // Determine upscale factor: detect max original image resolution vs editor size
+    // to export at original quality instead of editor's 720px width
+    let psdScale = 1;
+    const firstPanel = page.objects.find(o => (o.type === 'panel' || o.type === 'image') && !o.hidden && o.src);
+    if (firstPanel) {
+      try {
+        let testSrc = firstPanel.src;
+        if (testSrc.startsWith('[img:') && firstPanel.panelIndex !== undefined && panels[firstPanel.panelIndex]) {
+          testSrc = panels[firstPanel.panelIndex];
+        }
+        const testImg = await loadImage(testSrc);
+        const naturalW = testImg.naturalWidth;
+        if (naturalW > firstPanel.w * 1.2) {
+          psdScale = Math.min(3, naturalW / firstPanel.w); // cap at 3x
+          console.log(`[exportAsPsd] 고해상도 내보내기: 원본 ${naturalW}px / 에디터 ${firstPanel.w}px → ${psdScale.toFixed(2)}x 스케일`);
+        }
+      } catch(e) { /* fallback to 1x */ }
+    }
+    log(`PSD 스케일: ${psdScale.toFixed(1)}x (에디터 ${PAGE_W}px → ${Math.round(PAGE_W * psdScale)}px)`, 'info');
+
     // Calculate actual content height (hidden 객체 제외)
     let contentH = 0;
     for (const obj of page.objects) {
@@ -4933,23 +4953,25 @@ Rules:
             } catch(e) { /* use original */ }
           }
           const img = await loadImage(imgSrc);
+          const lw = Math.round(obj.w * psdScale);
+          const lh = Math.round(obj.h * psdScale);
           const layerCanvas = document.createElement('canvas');
-          layerCanvas.width = Math.round(obj.w);
-          layerCanvas.height = Math.round(obj.h);
+          layerCanvas.width = lw;
+          layerCanvas.height = lh;
           const lCtx = layerCanvas.getContext('2d');
           if (obj.crop && obj.crop.w > 0 && obj.crop.h > 0) {
             const sx = img.naturalWidth * obj.crop.x / 100;
             const sy = img.naturalHeight * obj.crop.y / 100;
             const sw = img.naturalWidth * obj.crop.w / 100;
             const sh = img.naturalHeight * obj.crop.h / 100;
-            lCtx.drawImage(img, sx, sy, sw, sh, 0, 0, obj.w, obj.h);
+            lCtx.drawImage(img, sx, sy, sw, sh, 0, 0, lw, lh);
           } else {
-            lCtx.drawImage(img, 0, 0, obj.w, obj.h);
+            lCtx.drawImage(img, 0, 0, lw, lh);
           }
           children.push({
             name: `Panel ${obj.panelIndex !== undefined ? obj.panelIndex + 1 : idx + 1}`,
-            left: Math.round(obj.x),
-            top: Math.round(obj.y),
+            left: Math.round(obj.x * psdScale),
+            top: Math.round(obj.y * psdScale),
             canvas: layerCanvas,
             blendMode: 'normal',
             opacity: 1
@@ -4957,8 +4979,8 @@ Rules:
         } else if (obj.type === 'bubble') {
           const bt = BUBBLE_TYPES[obj.bubbleStyle] || BUBBLE_TYPES.speech;
           // Bubble shape layer — render balloon shape to canvas (without text)
-          const bw = Math.round(obj.w + 20);
-          const bh = Math.round(obj.h + 40);
+          const bw = Math.round((obj.w + 20) * psdScale);
+          const bh = Math.round((obj.h + 40) * psdScale);
           const layerCanvas = document.createElement('canvas');
           layerCanvas.width = bw;
           layerCanvas.height = bh;
@@ -4967,11 +4989,11 @@ Rules:
           const origText = obj.text;
           const origTranslations = obj.translations;
           obj.text = ''; obj.translations = {};
-          drawBubbleOnCanvas(lCtx, obj, 10, 10, obj.w, obj.h, 1);
+          drawBubbleOnCanvas(lCtx, obj, 10 * psdScale, 10 * psdScale, obj.w * psdScale, obj.h * psdScale, psdScale);
           obj.text = origText; obj.translations = origTranslations;
           const layerName = obj.bubbleStyle === 'narration' ? `Narration ${idx+1}` : `Bubble ${idx+1}`;
-          const bubbleLeft = Math.max(0, Math.round(obj.x) - 10);
-          const bubbleTop = Math.max(0, Math.round(obj.y) - 10);
+          const bubbleLeft = Math.max(0, Math.round(obj.x * psdScale) - Math.round(10 * psdScale));
+          const bubbleTop = Math.max(0, Math.round(obj.y * psdScale) - Math.round(10 * psdScale));
           children.push({
             name: layerName + ' (shape)',
             left: bubbleLeft,
@@ -4983,17 +5005,19 @@ Rules:
           // Bubble text layer — editable text in Photoshop
           const displayText = getObjText(obj);
           if (displayText) {
-            const fs = Math.max(12, obj.fontSize || 25);
+            const fs = Math.round(Math.max(12, obj.fontSize || 25) * psdScale);
             const ff = getObjFont(obj, "'Noto Sans KR',sans-serif").replace(/'/g, '');
             const fontName = ff.split(',')[0].trim();
             const textColor = obj.customColor || bt.color || '#111111';
             const r = parseInt(textColor.slice(1,3),16) || 0;
             const g = parseInt(textColor.slice(3,5),16) || 0;
             const b2 = parseInt(textColor.slice(5,7),16) || 0;
+            const tw = Math.round(obj.w * psdScale);
+            const th = Math.round(obj.h * psdScale);
             // Text layer needs a dummy canvas for ag-psd
             const tCanvas = document.createElement('canvas');
-            tCanvas.width = Math.round(obj.w);
-            tCanvas.height = Math.round(obj.h);
+            tCanvas.width = tw;
+            tCanvas.height = th;
             const tCtx = tCanvas.getContext('2d');
             tCtx.font = `${obj.fontWeight || bt.fontWeight || 500} ${fs}px ${ff}`;
             tCtx.fillStyle = textColor;
@@ -5002,12 +5026,12 @@ Rules:
             const lh = fs * 1.3;
             const totalH = lines.length * lh;
             lines.forEach((line, li) => {
-              tCtx.fillText(line, obj.w / 2, (obj.h - totalH) / 2 + li * lh + lh / 2);
+              tCtx.fillText(line, tw / 2, (th - totalH) / 2 + li * lh + lh / 2);
             });
             children.push({
               name: layerName + ' (text)',
-              left: Math.round(obj.x),
-              top: Math.round(obj.y),
+              left: Math.round(obj.x * psdScale),
+              top: Math.round(obj.y * psdScale),
               canvas: tCanvas,
               blendMode: 'normal',
               opacity: 1,
@@ -5016,7 +5040,7 @@ Rules:
                 transform: [1, 0, 0, 1, 0, 0],
                 antiAlias: 'smooth',
                 shapeType: 'box',
-                boxBounds: [0, 0, obj.h, obj.w],
+                boxBounds: [0, 0, th, tw],
                 style: {
                   font: { name: fontName },
                   fontSize: fs,
@@ -5028,17 +5052,16 @@ Rules:
             });
           }
         } else if (obj.type === 'sfx') {
-          const bt2 = obj;
           // SFX shape layer — render visual effect to canvas
-          const sw = Math.round(obj.w + 20);
-          const sh = Math.round(obj.h + 20);
+          const sw2 = Math.round((obj.w + 20) * psdScale);
+          const sh2 = Math.round((obj.h + 20) * psdScale);
           const layerCanvas = document.createElement('canvas');
-          layerCanvas.width = sw;
-          layerCanvas.height = sh;
+          layerCanvas.width = sw2;
+          layerCanvas.height = sh2;
           const lCtx = layerCanvas.getContext('2d');
-          drawSfxOnCanvas(lCtx, obj, 10, 10, 1);
-          const sfxLeft = Math.max(0, Math.round(obj.x) - 10);
-          const sfxTop = Math.max(0, Math.round(obj.y) - 10);
+          drawSfxOnCanvas(lCtx, obj, 10 * psdScale, 10 * psdScale, psdScale);
+          const sfxLeft = Math.max(0, Math.round(obj.x * psdScale) - Math.round(10 * psdScale));
+          const sfxTop = Math.max(0, Math.round(obj.y * psdScale) - Math.round(10 * psdScale));
           children.push({
             name: `SFX ${idx+1} (shape)`,
             left: sfxLeft,
@@ -5050,25 +5073,27 @@ Rules:
           // SFX text layer — editable
           const sfxText = getObjText(obj);
           if (sfxText) {
-            const sfxFs = obj.fontSize || 48;
+            const sfxFs = Math.round((obj.fontSize || 48) * psdScale);
             const sfxFf = getObjFont(obj, "'Nanum Brush Script',cursive").replace(/'/g, '');
             const sfxFontName = sfxFf.split(',')[0].trim();
             const sfxColor = obj.color || '#ff2222';
             const sr = parseInt(sfxColor.slice(1,3),16) || 0;
             const sg = parseInt(sfxColor.slice(3,5),16) || 0;
             const sb2 = parseInt(sfxColor.slice(5,7),16) || 0;
+            const sfxTw = Math.round(obj.w * psdScale);
+            const sfxTh = Math.round(obj.h * psdScale);
             const tCanvas = document.createElement('canvas');
-            tCanvas.width = Math.round(obj.w);
-            tCanvas.height = Math.round(obj.h);
+            tCanvas.width = sfxTw;
+            tCanvas.height = sfxTh;
             const tCtx = tCanvas.getContext('2d');
             tCtx.font = `${sfxFs}px ${sfxFf}`;
             tCtx.fillStyle = sfxColor;
             tCtx.textAlign = 'center'; tCtx.textBaseline = 'middle';
-            tCtx.fillText(sfxText, obj.w / 2, obj.h / 2);
+            tCtx.fillText(sfxText, sfxTw / 2, sfxTh / 2);
             children.push({
               name: `SFX ${idx+1} (text)`,
-              left: Math.round(obj.x),
-              top: Math.round(obj.y),
+              left: Math.round(obj.x * psdScale),
+              top: Math.round(obj.y * psdScale),
               canvas: tCanvas,
               blendMode: 'normal',
               opacity: 1,
@@ -5077,7 +5102,7 @@ Rules:
                 transform: [1, 0, 0, 1, 0, 0],
                 antiAlias: 'smooth',
                 shapeType: 'box',
-                boxBounds: [0, 0, obj.h, obj.w],
+                boxBounds: [0, 0, sfxTh, sfxTw],
                 style: {
                   font: { name: sfxFontName },
                   fontSize: sfxFs,
@@ -5093,13 +5118,17 @@ Rules:
       }
     }
 
+    // Apply psdScale to document dimensions
+    const psdW = Math.round(PAGE_W * psdScale);
+    const psdH = Math.round(contentH * psdScale);
+
     // Create composite canvas (flattened preview)
     const compositeCanvas = document.createElement('canvas');
-    compositeCanvas.width = PAGE_W;
-    compositeCanvas.height = contentH;
+    compositeCanvas.width = psdW;
+    compositeCanvas.height = psdH;
     const compCtx = compositeCanvas.getContext('2d');
     compCtx.fillStyle = '#ffffff';
-    compCtx.fillRect(0, 0, PAGE_W, contentH);
+    compCtx.fillRect(0, 0, psdW, psdH);
     for (const child of children) {
       if (child.canvas) {
         compCtx.drawImage(child.canvas, child.left, child.top);
@@ -5107,8 +5136,8 @@ Rules:
     }
 
     const psd = {
-      width: PAGE_W,
-      height: contentH,
+      width: psdW,
+      height: psdH,
       canvas: compositeCanvas,
       children: children
     };
@@ -5116,13 +5145,13 @@ Rules:
     // PSD max size is 30000px — split into chunks if needed
     const PSD_MAX_H = 29000;
     const psdPages = [];
-    if (contentH <= PSD_MAX_H) {
-      psdPages.push({ startY: 0, height: contentH, children: children });
+    if (psdH <= PSD_MAX_H) {
+      psdPages.push({ startY: 0, height: psdH, children: children });
     } else {
-      const totalPsdPages = Math.ceil(contentH / PSD_MAX_H);
+      const totalPsdPages = Math.ceil(psdH / PSD_MAX_H);
       for (let p = 0; p < totalPsdPages; p++) {
         const startY = p * PSD_MAX_H;
-        const sliceH = Math.min(PSD_MAX_H, contentH - startY);
+        const sliceH = Math.min(PSD_MAX_H, psdH - startY);
         const pageChildren = children
           .filter(c => {
             const cTop = c.top;
@@ -5138,16 +5167,16 @@ Rules:
       for (let pi = 0; pi < psdPages.length; pi++) {
         const pg = psdPages[pi];
         const compositeCanvas = document.createElement('canvas');
-        compositeCanvas.width = PAGE_W;
+        compositeCanvas.width = psdW;
         compositeCanvas.height = pg.height;
         const compCtx = compositeCanvas.getContext('2d');
         compCtx.fillStyle = '#ffffff';
-        compCtx.fillRect(0, 0, PAGE_W, pg.height);
+        compCtx.fillRect(0, 0, psdW, pg.height);
         for (const child of pg.children) {
           if (child.canvas) compCtx.drawImage(child.canvas, child.left, child.top);
         }
 
-        const psd = { width: PAGE_W, height: pg.height, canvas: compositeCanvas, children: pg.children };
+        const psd = { width: psdW, height: pg.height, canvas: compositeCanvas, children: pg.children };
         const buffer = agPsd.writePsd(psd);
         const blob = new Blob([buffer], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
