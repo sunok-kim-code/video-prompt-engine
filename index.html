@@ -545,6 +545,149 @@ function restoreBase64(obj, map) {
 }
 
 // ============================================================
+// Editor-optimized save: deterministic image IDs + incremental writes
+// ============================================================
+// Strip base64 from editor pages using deterministic IDs (pageIdx_objIdx based)
+function stripEditorImages(editorPages) {
+  const imgs = [];
+  const stripped = editorPages.map((page, pi) => ({
+    ...page,
+    objects: (page.objects || []).map((obj, oi) => {
+      if (obj.src && typeof obj.src === 'string' && obj.src.startsWith('data:') && obj.src.length > 500) {
+        const id = `ep${pi}_o${oi}`;
+        imgs.push({ id, data: obj.src, key: `p${pi}_o${oi}_src` });
+        return { ...obj, src: '[img:' + id + ']' };
+      }
+      return obj;
+    })
+  }));
+  return { stripped, imgs };
+}
+
+// Fingerprint: quick comparison string (length + first 80 chars)
+function imgFingerprint(data) {
+  return data.length + '|' + data.substring(0, 80);
+}
+
+// Global ref for saved image fingerprints (populated on load, updated on save)
+let _editorSavedFingerprints = {}; // { imgId: fingerprint }
+
+// Optimized editor save: only writes changed images to Firestore
+async function fbSaveEditorOptimized(projectId, episodeNum, editorPages, currentPageIdx, onProgress) {
+  const db = getDb(); if (!db) return;
+  const phaseName = 'step5_editor';
+  clearPhaseCache(projectId, episodeNum, phaseName);
+  const ref = db.collection('webtoon_projects').doc(projectId)
+    .collection('episodes').doc(String(episodeNum))
+    .collection('phases').doc(phaseName);
+  const imgColl = ref.collection('images');
+
+  // 1. Strip images with deterministic IDs
+  const { stripped, imgs } = stripEditorImages(editorPages);
+
+  // 2. Compute fingerprints and classify: changed vs unchanged
+  const newFingerprints = {};
+  const changedImgs = [];
+  const unchangedIds = new Set();
+  const newImgIds = new Set();
+
+  for (const img of imgs) {
+    const fp = imgFingerprint(img.data);
+    newFingerprints[img.id] = fp;
+    newImgIds.add(img.id);
+    if (_editorSavedFingerprints[img.id] === fp) {
+      unchangedIds.add(img.id);
+    } else {
+      changedImgs.push(img);
+    }
+  }
+
+  const totalSteps = changedImgs.length + 2; // metadata + cleanup + changed images
+  if (onProgress) onProgress(0, totalSteps, '메타데이터 저장 중...');
+  console.log(`[fbSaveEditorOpt] 총 이미지 ${imgs.length}개: 변경 ${changedImgs.length}개, 유지 ${unchangedIds.size}개`);
+
+  // 3. Save metadata doc (always — it's small without base64)
+  const retryWrite = async (fn, attempts) => {
+    for (let a = 0; a < (attempts||3); a++) {
+      try { await fn(); return; } catch(e) {
+        const retryable = e.code === 'resource-exhausted' || e.code === 'unavailable' || e.message?.includes('exhausted');
+        if (a < (attempts||3)-1 && retryable) {
+          const wait = 5000 * (a + 1);
+          if (onProgress) onProgress(-1, totalSteps, `재시도 대기 ${wait/1000}초...`);
+          await new Promise(r => setTimeout(r, wait));
+        } else throw e;
+      }
+    }
+  };
+
+  await retryWrite(() => ref.set({
+    editorPages: stripped, currentPageIdx,
+    imageCount: imgs.length,
+    savedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }));
+
+  if (imgs.length === 0) {
+    // No images at all — delete any old image docs
+    try {
+      const old = await imgColl.get();
+      if (old.docs.length > 0) {
+        const b = db.batch();
+        old.docs.forEach(d => b.delete(d.ref));
+        await b.commit();
+      }
+    } catch(e) { console.warn('[fbSaveEditorOpt] cleanup fail:', e.message); }
+    _editorSavedFingerprints = {};
+    if (onProgress) onProgress(1, 1, '완료');
+    return;
+  }
+
+  // 4. Delete old image docs that are removed or changed
+  if (onProgress) onProgress(1, totalSteps, '변경된 이미지 정리 중...');
+  try {
+    const old = await imgColl.get();
+    const docsToDelete = old.docs.filter(d => {
+      // Extract base ID (handle chunk docs like ep0_o1_c0 → ep0_o1)
+      const baseId = d.id.includes('_c') ? d.id.substring(0, d.id.lastIndexOf('_c')) : d.id;
+      // Delete if: no longer exists, or has changed (will be re-written)
+      return !newImgIds.has(baseId) || !unchangedIds.has(baseId);
+    });
+    if (docsToDelete.length > 0) {
+      console.log(`[fbSaveEditorOpt] 삭제할 이미지 문서: ${docsToDelete.length}개`);
+      const delBatches = [];
+      for (let d = 0; d < docsToDelete.length; d += 400) {
+        const b = db.batch();
+        docsToDelete.slice(d, d + 400).forEach(doc => b.delete(doc.ref));
+        delBatches.push(b.commit());
+      }
+      await Promise.all(delBatches);
+    }
+  } catch(e) { console.warn('[fbSaveEditorOpt] cleanup fail:', e.message); }
+
+  // 5. Write only changed images
+  const CHUNK_SIZE = 800000;
+  for (let i = 0; i < changedImgs.length; i++) {
+    const im = changedImgs[i];
+    await retryWrite(async () => {
+      if (im.data.length > 900000) {
+        const cn = Math.ceil(im.data.length / CHUNK_SIZE);
+        await imgColl.doc(im.id).set({ key: im.key, chunks: cn });
+        for (let c = 0; c < cn; c++) {
+          await imgColl.doc(im.id + '_c' + c).set({ data: im.data.substring(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE), idx: c });
+        }
+      } else {
+        await imgColl.doc(im.id).set({ key: im.key, data: im.data });
+      }
+    }, 4);
+    console.log(`[fbSaveEditorOpt] 이미지 ${i+1}/${changedImgs.length} 저장`);
+    if (onProgress) onProgress(i + 2, totalSteps, `이미지 ${i+1}/${changedImgs.length}`);
+  }
+
+  // 6. Update saved fingerprints
+  _editorSavedFingerprints = newFingerprints;
+  if (onProgress) onProgress(totalSteps, totalSteps, '완료');
+}
+
+// ============================================================
 // Shared Asset CRUD (Project-level)
 // ============================================================
 async function fbSaveAsset(projectId, assetType, assetId, data) {
@@ -3693,9 +3836,11 @@ Rules:
       setIsSavingEditor(true);
       setSaveProgress('준비 중...');
       log(`${currentEpisode}화 에디터 배치 저장 중...`, 'info');
-      await fbSavePhaseQueued(projectId, currentEpisode, 'step5_editor', { editorPages, currentPageIdx }, false, (done, total, msg) => {
+      // Use optimized incremental save (only writes changed images), queued to prevent concurrent writes
+      _saveQueue = _saveQueue.then(() => fbSaveEditorOptimized(projectId, currentEpisode, editorPages, currentPageIdx, (done, total, msg) => {
         setSaveProgress(msg);
-      });
+      })).catch(e => { console.error('[saveEditorLayout queued]', e); throw e; });
+      await _saveQueue;
       setSaveProgress('');
       log(`✅ ${currentEpisode}화 에디터 배치 저장 완료!`, 'success');
       if (andClose) closeBubbleEditor();
@@ -3763,17 +3908,30 @@ Rules:
       }
       setEditorPages(fixedPages);
       setCurrentPageIdx(saved.currentPageIdx || 0);
+      // Build fingerprints from loaded data for incremental save optimization
+      _editorSavedFingerprints = {};
+      fixedPages.forEach((page, pi) => {
+        (page.objects || []).forEach((obj, oi) => {
+          if (obj.src && typeof obj.src === 'string' && obj.src.startsWith('data:') && obj.src.length > 500) {
+            _editorSavedFingerprints[`ep${pi}_o${oi}`] = imgFingerprint(obj.src);
+          }
+        });
+      });
+      console.log(`[BubbleEditor] 이미지 핑거프린트 ${Object.keys(_editorSavedFingerprints).length}개 초기화`);
       log(`${effectiveEpisode}화 저장된 배치 불러옴: ${saved.editorPages.length}페이지`, 'success');
     } else if (validCount > 0) {
       // No saved layout — initialize from current panels + storyboard (pass directly to bypass state timing)
       log(`${effectiveEpisode}화 에디터 초기화 중... 패널 크기 측정 (스토리보드 ${effectiveSb.length}개)`, 'info');
       const newPages = await initEditorPages(effectivePanels, effectiveSb);
       setEditorPages(newPages);
+      // New pages — no saved fingerprints yet
+      _editorSavedFingerprints = {};
       log(`${effectiveEpisode}화 에디터 준비 완료: ${newPages.length}페이지, ${validCount}개 패널`, 'success');
     } else {
       // No panels at all — empty editor
       log(`${effectiveEpisode}화 패널 없음 — 빈 에디터`, 'info');
       setEditorPages([{id:'p_'+Date.now(), width:PAGE_W, height:PAGE_H_MAX, objects:[]}]);
+      _editorSavedFingerprints = {};
     }
     if (!saved) setCurrentPageIdx(0);
     if (!Array.isArray(bubbleOverlays)) setBubbleOverlays([]);
@@ -3794,6 +3952,7 @@ Rules:
     setEditorPages([]);
     setCurrentPageIdx(0);
     setEditorLanguage('ko');
+    _editorSavedFingerprints = {}; // Clear fingerprints on close
   };
 
   // ======== Batch Translation (Gemini) ========
