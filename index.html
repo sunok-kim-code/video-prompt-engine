@@ -8559,21 +8559,15 @@ Return ONLY the detailed English prompt, nothing else.`,
           } catch(e) { console.warn(`[downloadPanelsZip] proxy fail panel ${idx}:`, e.message); }
         }
         if (imgData.startsWith('data:')) {
-          const b64Raw = imgData.split(',')[1];
-          if (b64Raw && b64Raw.length > 0) {
-            try {
-              // base64 정리: 공백/개행 제거, 패딩 보정
-              const b64Clean = b64Raw.replace(/[\s\r\n]+/g, '');
-              const padded = b64Clean + '='.repeat((4 - b64Clean.length % 4) % 4);
-              const binary = atob(padded);
-              const bytes = new Uint8Array(binary.length);
-              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-              const ext = imgData.match(/^data:image\/(\w+)/)?.[1] === 'jpeg' ? 'jpg' : 'png';
-              zip.file(`panel_${String(idx+1).padStart(2,'0')}.${ext}`, bytes);
-              added++;
-            } catch(b64Err) {
-              console.warn(`[downloadPanelsZip] panel ${idx} base64 decode fail:`, b64Err.message, '(length:', b64Raw.length, ')');
-            }
+          try {
+            // fetch로 data URI → blob 변환 (가장 안전한 방식)
+            const resp = await fetch(imgData);
+            const blob = await resp.blob();
+            const ext = blob.type === 'image/jpeg' ? 'jpg' : blob.type === 'image/webp' ? 'webp' : 'png';
+            zip.file(`panel_${String(idx+1).padStart(2,'0')}.${ext}`, blob);
+            added++;
+          } catch(b64Err) {
+            console.warn(`[downloadPanelsZip] panel ${idx} decode fail:`, b64Err.message);
           }
         }
       }
