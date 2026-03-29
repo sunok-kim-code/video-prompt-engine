@@ -1326,22 +1326,75 @@ async function callHiggsfieldSeedream(prompt, opts={}) {
     '4:3': '4:3', '3:4': '3:4', '3:2': '3:2', '2:3': '2:3', '21:9': '21:9'
   };
   const aspectRatio = arMap[opts.aspectRatio] || '3:4';
-  const resolution = opts.resolution || '2K';
+  const resolution = opts.resolution || '2k';
 
-  const body = {
-    input: {
-      prompt: prompt.substring(0, 5000),
-      resolution: resolution,
-      aspect_ratio: aspectRatio,
-      camera_fixed: false
+  // Determine sub-model: 't2i' or 'edit'
+  const subModel = opts.subModel || 't2i';
+
+  // Prepare reference image URLs for edit model
+  const refUrls = [];
+  if (opts.referenceImages?.length > 0 && subModel === 'edit') {
+    for (const ref of opts.referenceImages.slice(0, 10)) {
+      const imgData = ref.image || ref;
+      if (typeof imgData === 'string' && imgData.startsWith('http')) {
+        refUrls.push(imgData);
+      } else if (typeof imgData === 'string' && imgData.startsWith('data:')) {
+        // Upload base64 to Kie.ai for URL conversion (same as Siray)
+        try {
+          const kieKey = localStorage.getItem('KIE_API_KEY');
+          if (kieKey) {
+            const uploadRes = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + kieKey },
+              body: JSON.stringify({
+                base64Data: imgData,
+                uploadPath: 'higgs-refs',
+                fileName: 'href_' + Date.now() + '_' + Math.random().toString(36).slice(2,6) + '.png'
+              })
+            });
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json();
+              const fileUrl = uploadData.data?.fileUrl || uploadData.data?.downloadUrl;
+              if (fileUrl) { refUrls.push(fileUrl); continue; }
+            }
+          }
+          console.warn('[Higgsfield] No Kie key or upload failed, skipping ref');
+        } catch(e) { console.warn('[Higgsfield] ref upload failed:', e.message); }
+      }
     }
-  };
-  if (opts.seed) body.input.seed = opts.seed;
+  }
 
-  console.log(`[Higgsfield] Creating task: aspect=${aspectRatio}, res=${resolution}, prompt=${prompt.substring(0, 80)}...`);
+  // Select model and endpoint
+  const useEdit = subModel === 'edit' && refUrls.length > 0;
+  const model = useEdit ? 'bytedance/seedream-v4-edit' : 'bytedance/seedream/v4/text-to-image';
+  const endpoint = useEdit
+    ? 'https://platform.higgsfield.ai/bytedance/seedream-v4-edit'
+    : 'https://platform.higgsfield.ai/bytedance/seedream/v4/text-to-image';
+
+  // Build request body
+  const body = useEdit
+    ? {
+        model,
+        prompt: prompt.substring(0, 5000),
+        image_urls: refUrls,
+        strength: opts.strength || 0.75,
+        num_images: opts.n || 1,
+        resolution: resolution
+      }
+    : {
+        input: {
+          prompt: prompt.substring(0, 5000),
+          resolution: resolution,
+          aspect_ratio: aspectRatio,
+          camera_fixed: false
+        }
+      };
+  if (!useEdit && opts.seed) body.input.seed = opts.seed;
+
+  console.log(`[Higgsfield] Creating task: model=${useEdit ? 'edit' : 't2i'}, refs=${refUrls.length}, aspect=${aspectRatio}, res=${resolution}, prompt=${prompt.substring(0, 80)}...`);
 
   // 1) Submit generation request
-  const createRes = await fetch('https://platform.higgsfield.ai/bytedance/seedream/v4/text-to-image', {
+  const createRes = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1390,8 +1443,19 @@ async function callHiggsfieldSeedream(prompt, opts={}) {
         console.log(`[Higgsfield] Completed: ${imgs.length} images in ${((i+1)*2)}s`);
         return await _higgsDownloadImages(imgs);
       } else if (status === 'failed') {
-        throw new Error('Higgsfield Seedream 생성 실패: ' + (pollData.error || 'unknown'));
+        const failMsg = pollData.error || 'unknown';
+        // If edit model failed, retry as t2i
+        if (useEdit && !opts._retryT2i) {
+          console.warn(`[Higgsfield] Edit model failed (${failMsg}), retrying as t2i...`);
+          return await callHiggsfieldSeedream(prompt, {...opts, subModel: 't2i', referenceImages: undefined, _retryT2i: true});
+        }
+        throw new Error('Higgsfield Seedream 생성 실패: ' + failMsg);
       } else if (status === 'nsfw') {
+        // If edit model got nsfw, retry as t2i
+        if (useEdit && !opts._retryT2i) {
+          console.warn('[Higgsfield] Edit model NSFW rejected, retrying as t2i...');
+          return await callHiggsfieldSeedream(prompt, {...opts, subModel: 't2i', referenceImages: undefined, _retryT2i: true});
+        }
         throw new Error('Higgsfield Seedream: NSFW 콘텐츠 필터에 의해 거부됨');
       }
       // queued / in_progress — keep polling
@@ -3347,6 +3411,7 @@ function App() {
   const [grokImageModel, setGrokImageModel] = useState('grok-imagine-image-pro'); // Grok Image model selection
   const [kieSeedreamMode, setKieSeedreamMode] = useState('txt2img'); // 'txt2img' | 'edit'
   const [siraySeedreamMode, setSiraySeedreamMode] = useState('t2i'); // 't2i' | 'ref2i' | 'i2i'
+  const [higgsSeedreamMode, setHiggsSeedreamMode] = useState('t2i'); // 't2i' | 'edit'
   const [textModel] = useState('gemini-3.1-pro-preview'); // Text generation model — fixed to Gemini 3.1 Pro
 
   // Shared assets (project-level)
@@ -7026,8 +7091,18 @@ Rules:
 
     // ========== Higgsfield Seedream 4.0 ==========
     if (imageProvider === 'higgsSeedream') {
-      const higgsOpts = {aspectRatio: opts.aspectRatio || '3:4'};
-      log(`Seedream 4.0 (Higgsfield) 사용 (${curStyleName} 스타일 적용)`, 'info');
+      // Auto-select edit model when refs available and mode is edit (or auto-upgrade from t2i)
+      let effectiveMode = higgsSeedreamMode;
+      if (refs.length > 0 && effectiveMode === 't2i') {
+        effectiveMode = 'edit'; // auto-upgrade to edit when references available
+      }
+      const higgsOpts = {aspectRatio: opts.aspectRatio || '3:4', subModel: effectiveMode};
+      if (effectiveMode === 'edit' && refs.length > 0) {
+        higgsOpts.referenceImages = refs;
+        log(`Seedream 4.0 Edit (Higgsfield) 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개)`, 'info');
+      } else {
+        log(`Seedream 4.0 (Higgsfield) 사용 (${curStyleName} 스타일 적용)`, 'info');
+      }
       return await callHiggsfieldSeedream(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, higgsOpts);
     }
 
@@ -10081,6 +10156,12 @@ Return ONLY the detailed English prompt, nothing else.`,
             <option value="t2i">Text-to-Image (기본)</option>
             <option value="ref2i">Ref-to-Image (레퍼런스)</option>
             <option value="i2i">Image-to-Image (편집)</option>
+          </select>
+        )}
+        {imageProvider === 'higgsSeedream' && (
+          <select className="form-select" style={{width:200,marginLeft:4,background:'linear-gradient(135deg,#e0f7fa,#b2ebf2)',borderColor:'#4dd0e1'}} value={higgsSeedreamMode} onChange={e=>setHiggsSeedreamMode(e.target.value)}>
+            <option value="t2i">Text-to-Image (기본)</option>
+            <option value="edit">Edit (레퍼런스 기반)</option>
           </select>
         )}
         {imageProvider === 'a2eImage' && (
