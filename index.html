@@ -1326,7 +1326,7 @@ async function callHiggsfieldSeedream(prompt, opts={}) {
     '4:3': '4:3', '3:4': '3:4', '3:2': '3:2', '2:3': '2:3', '21:9': '21:9'
   };
   const aspectRatio = arMap[opts.aspectRatio] || '3:4';
-  const resolution = opts.resolution || '2k';
+  const resolution = opts.resolution || '2K';
 
   // Determine sub-model: 't2i' or 'edit'
   const subModel = opts.subModel || 't2i';
