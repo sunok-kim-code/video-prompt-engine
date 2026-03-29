@@ -3024,6 +3024,7 @@ function App() {
   const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | zimage | seedream
   const [ninjaChatModel, setNinjaChatModel] = useState('ninja-vision-1'); // NinjaChat model selection
   const [grokImageModel, setGrokImageModel] = useState('grok-imagine-image-pro'); // Grok Image model selection
+  const [kieSeedreamMode, setKieSeedreamMode] = useState('txt2img'); // 'txt2img' | 'edit'
   const [textModel] = useState('gemini-3.1-pro-preview'); // Text generation model — fixed to Gemini 3.1 Pro
 
   // Shared assets (project-level)
@@ -6665,10 +6666,14 @@ Rules:
 
     // ========== Kie.ai Seedream 4.0 ==========
     if (imageProvider === 'kieSeedream') {
-      // Seedream 4.0: text-to-image only (edit mode는 의상 프리셋 등에서 명시적으로만 사용)
-      // 레퍼런스 이미지는 프롬프트 텍스트에 이미 반영되어 있으므로 별도 전달 불필요
       const kieOpts = {aspectRatio: opts.aspectRatio || '3:4'};
-      log(`Seedream 4.0 (Kie.ai) 사용 (${curStyleName} 스타일 적용)`, 'info');
+      if (kieSeedreamMode === 'edit' && refs.length > 0) {
+        kieOpts.referenceImages = refs;
+        kieOpts.useEdit = true;
+        log(`Seedream 4.0 Edit (Kie.ai) 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개)`, 'info');
+      } else {
+        log(`Seedream 4.0 (Kie.ai) 사용 (${curStyleName} 스타일 적용)`, 'info');
+      }
       return await callKieSeedream(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, kieOpts);
     }
 
@@ -6686,7 +6691,7 @@ Rules:
       }
       return await callImagen(imagen4Prompt, {aspectRatio: opts.aspectRatio || '3:4'});
     }
-  }, [imageProvider, artStyle, customStylePrompt, getStylePrefix, log, loraModels, nbVertexModel, grokImageModel]);
+  }, [imageProvider, artStyle, customStylePrompt, getStylePrefix, log, loraModels, nbVertexModel, grokImageModel, kieSeedreamMode]);
 
   // LoRA Training: train a character LoRA from reference images
   const trainCharacterLora = async (charId, charName, images) => {
@@ -9707,6 +9712,12 @@ Return ONLY the detailed English prompt, nothing else.`,
           <select className="form-select" style={{width:170,marginLeft:4,background:'linear-gradient(135deg,#e3f2fd,#bbdefb)',borderColor:'#42a5f5'}} value={grokImageModel} onChange={e=>setGrokImageModel(e.target.value)}>
             <option value="grok-imagine-image-pro">Imagine Pro ($0.07)</option>
             <option value="grok-imagine-image">Imagine 기본 ($0.02)</option>
+          </select>
+        )}
+        {imageProvider === 'kieSeedream' && (
+          <select className="form-select" style={{width:180,marginLeft:4,background:'linear-gradient(135deg,#fce4ec,#f8bbd0)',borderColor:'#e91e63'}} value={kieSeedreamMode} onChange={e=>setKieSeedreamMode(e.target.value)}>
+            <option value="txt2img">Text-to-Image (기본)</option>
+            <option value="edit">Edit (이미지 기반)</option>
           </select>
         )}
         {imageProvider === 'a2eImage' && (
