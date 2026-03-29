@@ -1159,33 +1159,41 @@ function getNinjaChatKey() { const k=localStorage.getItem('NINJACHAT_API_KEY'); 
 function hasNinjaChatKey() { return !!localStorage.getItem('NINJACHAT_API_KEY'); }
 
 // ============================================================
-// KIE.AI API (Seedream 4.0 + 4.5)
+// KIE.AI API (Seedream 3.0 / 4.0 / 4.5 / 5.0 Lite)
 // ============================================================
 function getKieKey() { const k=localStorage.getItem('KIE_API_KEY'); if(!k)throw new Error('Kie.ai API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
 function hasKieKey() { return !!localStorage.getItem('KIE_API_KEY'); }
 
+// Kie.ai Seedream model registry
+const KIE_SEEDREAM_MODELS = {
+  '3.0':       { id: 'bytedance/seedream',                  label: '3.0',           format: 'v3',  hasEdit: false },
+  '4.0-t2i':   { id: 'bytedance/seedream-v4-text-to-image', label: '4.0 T2I',       format: 'v4',  hasEdit: false },
+  '4.0-edit':  { id: 'bytedance/seedream-v4-edit',          label: '4.0 Edit',      format: 'v4',  hasEdit: true },
+  '4.5-t2i':   { id: 'seedream/4.5-text-to-image',          label: '4.5 T2I',       format: 'v45', hasEdit: false },
+  '4.5-edit':  { id: 'seedream/4.5-edit',                    label: '4.5 Edit',      format: 'v45', hasEdit: true },
+  '5.0-t2i':   { id: 'seedream/5-lite-text-to-image',        label: '5.0 Lite T2I',  format: 'v45', hasEdit: false },
+  '5.0-i2i':   { id: 'seedream/5-lite-image-to-image',       label: '5.0 Lite I2I',  format: 'v45', hasEdit: true },
+};
+
 async function callKieSeedream(prompt, opts={}) {
   const apiKey = getKieKey();
 
-  // Map aspect ratio to kie.ai image_size enum
+  // Map aspect ratio to kie.ai image_size enum (v3/v4 format)
   const sizeMap = {
     '16:9': 'landscape_16_9', '9:16': 'portrait_16_9',
     '4:3': 'landscape_4_3', '3:4': 'portrait_4_3',
     '3:2': 'landscape_3_2', '2:3': 'portrait_3_2',
     '1:1': 'square_hd', '21:9': 'landscape_21_9'
   };
-  const imageSize = sizeMap[opts.aspectRatio] || 'portrait_4_3';
-  const imageResolution = opts.resolution || '1K';
 
-  // Collect reference image URLs (edit model supports up to 10)
+  // Collect reference image URLs (edit/i2i models support up to 14)
   const refUrls = [];
   if (opts.referenceImages?.length > 0) {
-    for (const ref of opts.referenceImages.slice(0, 10)) {
+    for (const ref of opts.referenceImages.slice(0, 14)) {
       const imgData = ref.image || ref;
       if (typeof imgData === 'string' && imgData.startsWith('http')) {
         refUrls.push(imgData);
       } else if (typeof imgData === 'string' && imgData.startsWith('data:')) {
-        // base64 → upload to Kie.ai file storage (3-day expiry, free)
         try {
           const uploadRes = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
             method: 'POST',
@@ -1211,53 +1219,65 @@ async function callKieSeedream(prompt, opts={}) {
     }
   }
 
-  // Determine sub-model: 'txt2img' | 'edit' | '4.5-t2i' | '4.5-edit'
-  const subModel = opts.subModel || 'txt2img';
-  const is45 = subModel.startsWith('4.5');
+  // Resolve model
+  const subModel = opts.subModel || '4.0-t2i';
+  const modelDef = KIE_SEEDREAM_MODELS[subModel] || KIE_SEEDREAM_MODELS['4.0-t2i'];
+  const useEdit = modelDef.hasEdit && refUrls.length > 0;
 
-  // For 4.5 edit: auto-use when refs available
-  const useEdit = (subModel === 'edit' && refUrls.length > 0 && opts.useEdit === true)
-    || (subModel === '4.5-edit' && refUrls.length > 0);
+  // If edit model selected but no refs, fall back to same-version t2i
+  let effectiveModel = modelDef;
+  if (modelDef.hasEdit && refUrls.length === 0) {
+    const fallbackKey = subModel === '4.0-edit' ? '4.0-t2i' : subModel === '4.5-edit' ? '4.5-t2i' : subModel === '5.0-i2i' ? '5.0-t2i' : subModel;
+    effectiveModel = KIE_SEEDREAM_MODELS[fallbackKey] || modelDef;
+  }
 
-  // Model selection
-  let model;
-  if (subModel === '4.5-t2i') model = 'seedream/4.5-text-to-image';
-  else if (subModel === '4.5-edit') model = useEdit ? 'seedream/4.5-edit' : 'seedream/4.5-text-to-image';
-  else if (useEdit) model = 'bytedance/seedream-v4-edit';
-  else model = 'bytedance/seedream-v4-text-to-image';
+  const model = effectiveModel.id;
+  const fmt = effectiveModel.format;
 
-  // Build request body — 4.5 uses different param format (aspect_ratio + quality instead of image_size + image_resolution)
+  // Build request body based on format
   let body;
-  if (is45) {
-    const arDirect = opts.aspectRatio || '3:4';
-    const quality = (imageResolution === '4K' || opts.quality === 'high') ? 'high' : 'basic';
+  if (fmt === 'v3') {
+    // Seedream 3.0: image_size, guidance_scale
     body = {
       model,
       input: {
         prompt: prompt.substring(0, 5000),
-        aspect_ratio: arDirect,
-        quality: quality,
-        nsfw_checker: false
+        image_size: sizeMap[opts.aspectRatio] || 'portrait_4_3',
+        guidance_scale: opts.guidanceScale || 2.5,
+        enable_safety_checker: false
       }
     };
-    if (useEdit && refUrls.length > 0) body.input.image_urls = refUrls;
-  } else {
+    if (opts.seed) body.input.seed = opts.seed;
+  } else if (fmt === 'v4') {
+    // Seedream 4.0: image_size, image_resolution
     body = {
       model,
       input: {
         prompt: prompt.substring(0, 5000),
-        image_size: imageSize,
-        image_resolution: imageResolution,
+        image_size: sizeMap[opts.aspectRatio] || 'portrait_4_3',
+        image_resolution: opts.resolution || '1K',
         max_images: opts.n || 1,
         nsfw_checker: false
       }
     };
     if (opts.seed) body.input.seed = opts.seed;
     if (useEdit) body.input.image_urls = refUrls;
+  } else {
+    // Seedream 4.5 / 5.0 Lite: aspect_ratio, quality
+    const quality = opts.quality === 'high' ? 'high' : 'basic';
+    body = {
+      model,
+      input: {
+        prompt: prompt.substring(0, 5000),
+        aspect_ratio: opts.aspectRatio || '3:4',
+        quality: quality,
+        nsfw_checker: false
+      }
+    };
+    if (useEdit && refUrls.length > 0) body.input.image_urls = refUrls;
   }
 
-  const modelLabel = is45 ? `4.5 ${useEdit ? 'edit' : 't2i'}` : (useEdit ? 'v4 edit' : 'v4 t2i');
-  console.log(`[KieSeedream] Creating task: model=${modelLabel}, refs=${refUrls.length}, size=${is45 ? (opts.aspectRatio||'3:4') : imageSize}, prompt=${prompt.substring(0, 80)}...`);
+  console.log(`[KieSeedream] Creating task: ${effectiveModel.label}, model=${model}, refs=${refUrls.length}, prompt=${prompt.substring(0, 80)}...`);
 
   // 1) Create task
   const createRes = await fetch('https://api.kie.ai/api/v1/jobs/createTask', {
@@ -1322,9 +1342,10 @@ async function callKieSeedream(prompt, opts={}) {
         return images;
       } else if (state === 'fail') {
         const failMsg = task.failMsg || 'unknown';
-        // If edit model failed, retry as text-to-image
+        // If edit model failed, retry as same-version text-to-image
         if (useEdit && !opts._retryTxt2Img) {
-          const fallbackModel = is45 ? '4.5-t2i' : 'txt2img';
+          const fallbackMap = {'4.0-edit':'4.0-t2i', '4.5-edit':'4.5-t2i', '5.0-i2i':'5.0-t2i'};
+          const fallbackModel = fallbackMap[subModel] || '4.0-t2i';
           console.warn(`[KieSeedream] Edit model failed (${failMsg}), retrying as ${fallbackModel}...`);
           return await callKieSeedream(prompt, {...opts, subModel: fallbackModel, referenceImages: undefined, _retryTxt2Img: true});
         }
@@ -3435,7 +3456,7 @@ function App() {
   const [a2eModelType, setA2eModelType] = useState('a2e'); // a2e | zimage | seedream
   const [ninjaChatModel, setNinjaChatModel] = useState('ninja-vision-1'); // NinjaChat model selection
   const [grokImageModel, setGrokImageModel] = useState('grok-imagine-image-pro'); // Grok Image model selection
-  const [kieSeedreamMode, setKieSeedreamMode] = useState('txt2img'); // 'txt2img' | 'edit' | '4.5-t2i' | '4.5-edit'
+  const [kieSeedreamMode, setKieSeedreamMode] = useState('4.0-t2i'); // KIE_SEEDREAM_MODELS key
   const [siraySeedreamMode, setSiraySeedreamMode] = useState('t2i'); // 't2i' | 'ref2i' | 'i2i'
   const [higgsSeedreamMode, setHiggsSeedreamMode] = useState('t2i'); // 't2i' | 'edit'
   const [textModel] = useState('gemini-3.1-pro-preview'); // Text generation model — fixed to Gemini 3.1 Pro
@@ -7085,23 +7106,20 @@ Rules:
       return await callStableDiffusion(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, sdOpts);
     }
 
-    // ========== Kie.ai Seedream 4.0 / 4.5 ==========
+    // ========== Kie.ai Seedream (3.0 / 4.0 / 4.5 / 5.0 Lite) ==========
     if (imageProvider === 'kieSeedream') {
       let effectiveMode = kieSeedreamMode;
-      // Auto-upgrade: if 4.5-t2i and refs available, switch to 4.5-edit
-      if (effectiveMode === '4.5-t2i' && refs.length > 0) effectiveMode = '4.5-edit';
+      // Auto-upgrade: if t2i model and refs available, switch to edit/i2i variant
+      const autoUpgradeMap = {'4.0-t2i':'4.0-edit', '4.5-t2i':'4.5-edit', '5.0-t2i':'5.0-i2i'};
+      if (refs.length > 0 && autoUpgradeMap[effectiveMode]) effectiveMode = autoUpgradeMap[effectiveMode];
+      const modelDef = typeof KIE_SEEDREAM_MODELS !== 'undefined' && KIE_SEEDREAM_MODELS[effectiveMode];
       const kieOpts = {aspectRatio: opts.aspectRatio || '3:4', subModel: effectiveMode};
-      if (effectiveMode === 'edit' && refs.length > 0) {
+      if (modelDef?.hasEdit && refs.length > 0) {
         kieOpts.referenceImages = refs;
-        kieOpts.useEdit = true;
-        log(`Seedream 4.0 Edit (Kie.ai) 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개)`, 'info');
-      } else if (effectiveMode === '4.5-edit' && refs.length > 0) {
-        kieOpts.referenceImages = refs;
-        log(`Seedream 4.5 Edit (Kie.ai) 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개)`, 'info');
-      } else if (effectiveMode.startsWith('4.5')) {
-        log(`Seedream 4.5 (Kie.ai) 사용 (${curStyleName} 스타일 적용)`, 'info');
+        log(`Seedream ${modelDef.label} (Kie.ai) 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개)`, 'info');
       } else {
-        log(`Seedream 4.0 (Kie.ai) 사용 (${curStyleName} 스타일 적용)`, 'info');
+        const label = modelDef?.label || effectiveMode;
+        log(`Seedream ${label} (Kie.ai) 사용 (${curStyleName} 스타일 적용)`, 'info');
       }
       return await callKieSeedream(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, kieOpts);
     }
@@ -10180,11 +10198,14 @@ Return ONLY the detailed English prompt, nothing else.`,
           </select>
         )}
         {imageProvider === 'kieSeedream' && (
-          <select className="form-select" style={{width:180,marginLeft:4,background:'linear-gradient(135deg,#fce4ec,#f8bbd0)',borderColor:'#e91e63'}} value={kieSeedreamMode} onChange={e=>setKieSeedreamMode(e.target.value)}>
-            <option value="txt2img">4.0 Text-to-Image</option>
-            <option value="edit">4.0 Edit (이미지 기반)</option>
+          <select className="form-select" style={{width:200,marginLeft:4,background:'linear-gradient(135deg,#fce4ec,#f8bbd0)',borderColor:'#e91e63'}} value={kieSeedreamMode} onChange={e=>setKieSeedreamMode(e.target.value)}>
+            <option value="3.0">3.0 Text-to-Image</option>
+            <option value="4.0-t2i">4.0 Text-to-Image</option>
+            <option value="4.0-edit">4.0 Edit (이미지 기반)</option>
             <option value="4.5-t2i">4.5 Text-to-Image</option>
             <option value="4.5-edit">4.5 Edit (레퍼런스 기반)</option>
+            <option value="5.0-t2i">5.0 Lite T2I</option>
+            <option value="5.0-i2i">5.0 Lite I2I (이미지 기반)</option>
           </select>
         )}
         {imageProvider === 'siraySeedream' && (
