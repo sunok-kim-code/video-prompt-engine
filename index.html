@@ -7449,6 +7449,36 @@ When enriching intimate/sexual scenes, the gazeMap, cameraComposition, and summa
         sa.characters[char.id] = {...assetData, assetId: char.id, type: 'characters'};
         if (projectId) { await fbSaveAsset(projectId, 'characters', char.id, assetData); await new Promise(r=>setTimeout(r,500)); }
         log(`${char.name} 레퍼런스 생성 → 공유 에셋 저장 완료`, 'success');
+
+        // 의상 프리셋 이미지 자동 생성 (기본 캐릭터 이미지를 레퍼런스로 활용)
+        const presets = char.outfitPresets || {};
+        const presetKeys = Object.keys(presets).filter(k => presets[k].outfit && !presets[k].image);
+        if (presetKeys.length > 0) {
+          log(`${char.name} — 의상 프리셋 ${presetKeys.length}개 자동 생성 (기본 이미지 레퍼런스 활용)`, 'info');
+          for (const pk of presetKeys) {
+            if (abortRef.current) break;
+            const p = presets[pk];
+            try {
+              log(`  ${char.name} — "${pk}" 의상 생성 중...`);
+              const presetPrompt = buildCharRefPrompt(char.id, {
+                outfitOverride: {outfit: p.outfit, accessories: p.accessories || ''}
+              });
+              const presetImgs = await callImage(presetPrompt, {
+                referenceImages: [{
+                  image: images[0],
+                  description: `Character: ${char.name} — base character reference. Keep the EXACT SAME face, hair color, hairstyle, eye color, skin tone, and body type. ONLY change the outfit and accessories.`
+                }]
+              });
+              presets[pk] = {...p, image: presetImgs[0]};
+              // Update asset data with preset image
+              sa.characters[char.id] = {...sa.characters[char.id], outfitPresets: {...presets}};
+              if (projectId) { await fbSaveAsset(projectId, 'characters', char.id, sa.characters[char.id]); await new Promise(r=>setTimeout(r,500)); }
+              log(`  ${char.name} — "${pk}" 의상 생성 완료 ✓`, 'success');
+            } catch(pe) {
+              log(`  ${char.name} — "${pk}" 의상 생성 실패: ${pe.message}`, 'error');
+            }
+          }
+        }
       } catch(e) {
         log(`${char.name} 레퍼런스 실패: ${e.message}`, 'error');
       }
@@ -8399,7 +8429,17 @@ CRITICAL — POSE CONTINUITY IN INTIMATE SEQUENCES:
       const finalPrompt = buildCharRefPrompt(charId, {
         outfitOverride: {outfit: preset.outfit, accessories: preset.accessories || ''}
       });
-      const images = await callImage(finalPrompt);
+      // 기본 캐릭터 이미지를 레퍼런스로 전달 → 얼굴/체형 일관성 유지
+      const callOpts = {};
+      const baseImage = sharedAssets.characters?.[charId]?.image;
+      if (baseImage) {
+        callOpts.referenceImages = [{
+          image: baseImage,
+          description: `Character: ${char.name} — base character reference. Keep the EXACT SAME face, hair color, hairstyle, eye color, skin tone, and body type. ONLY change the outfit and accessories as described in the prompt.`
+        }];
+        log(`${char.name} 기본 이미지를 레퍼런스로 전달 (얼굴/체형 유지)`, 'info');
+      }
+      const images = await callImage(finalPrompt, callOpts);
       const presetImage = images[0];
 
       // Save preset image to outfitPresets (in analysis + sharedAssets + Firebase)
@@ -9268,6 +9308,7 @@ Return ONLY the detailed English prompt, nothing else.`,
       }
       base += `\n\n[CRITICAL OUTFIT OVERRIDE] This character MUST wear EXACTLY: ${ov.outfit}.`;
       if (ov.accessories) base += ` Accessories: ${ov.accessories}.`;
+      base += `\n[IDENTITY PRESERVATION] The character's face, hair color, hairstyle, eye color, eye shape, skin tone, facial features, and body type MUST remain EXACTLY THE SAME as the reference image. ONLY the outfit and accessories should change. Do NOT alter facial features, hair, or body proportions.`;
     }
 
     // 4) 고유 시각 특성
