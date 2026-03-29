@@ -1185,14 +1185,26 @@ async function callKieSeedream(prompt, opts={}) {
       if (typeof imgData === 'string' && imgData.startsWith('http')) {
         refUrls.push(imgData);
       } else if (typeof imgData === 'string' && imgData.startsWith('data:')) {
-        // base64 → upload to temporary host (fal CDN if available, else skip)
+        // base64 → upload to Kie.ai file storage (3-day expiry, free)
         try {
-          if (typeof uploadToFalCDN === 'function') {
-            const url = await uploadToFalCDN(imgData);
-            if (url && url.startsWith('http')) refUrls.push(url);
-          } else if (typeof uploadImageToA2eR2 === 'function') {
-            const url = await uploadImageToA2eR2(imgData);
-            if (url && url.startsWith('http')) refUrls.push(url);
+          const uploadRes = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+            body: JSON.stringify({
+              base64Data: imgData,
+              uploadPath: 'webtoon-refs',
+              fileName: 'ref_' + Date.now() + '_' + Math.random().toString(36).slice(2,6) + '.png'
+            })
+          });
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            const fileUrl = uploadData.data?.fileUrl || uploadData.data?.downloadUrl;
+            if (fileUrl) {
+              refUrls.push(fileUrl);
+              console.log('[KieSeedream] Image uploaded to Kie.ai:', fileUrl.substring(0, 80));
+            }
+          } else {
+            console.warn('[KieSeedream] Kie.ai upload failed:', uploadRes.status);
           }
         } catch(e) { console.warn('[KieSeedream] ref upload failed:', e.message); }
       }
