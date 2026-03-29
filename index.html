@@ -1312,43 +1312,6 @@ async function callKieSeedream(prompt, opts={}) {
 }
 
 // ============================================================
-// Prompt sanitizer for NSFW content filter bypass (shared utility)
-// ============================================================
-function sanitizePromptForSafety(prompt) {
-  if (!prompt) return prompt;
-  let p = prompt;
-  const replacements = [
-    [/\bkiss(?:ing|ed|es)?\s+(?:on\s+)?(?:the\s+)?(?:lips?|mouth|cheek|neck|forehead)\b/gi, 'looking at each other closely'],
-    [/\bkiss(?:ing|ed|es)?\b/gi, 'facing each other closely'],
-    [/\bembrac(?:e|ing|ed)\s+(?:each\s+other|him|them|tightly|warmly)\b/gi, 'standing close together'],
-    [/\bembrac(?:e|ing|ed)\b/gi, 'standing close'],
-    [/\bhug(?:ging|ged|s)?\s+(?:each\s+other|him|them|tightly|warmly)\b/gi, 'standing side by side'],
-    [/\bhug(?:ging|ged|s)?\b/gi, 'standing together'],
-    [/\bcuddl(?:e|ing|ed)\b/gi, 'sitting together'],
-    [/\bcaress(?:ing|ed|es)?\b/gi, 'gentle gesture'],
-    [/\bintimate(?:ly)?\b/gi, 'emotional'],
-    [/\bromantic(?:ally)?\b/gi, 'dramatic'],
-    [/\bsensual(?:ly)?\b/gi, 'graceful'],
-    [/\bseduct(?:ive|ion|ively)\b/gi, 'charming'],
-    [/\bpassionat(?:e|ely)\b/gi, 'intense'],
-    [/\blust(?:ful|fully)?\b/gi, 'intense'],
-    [/\berotic(?:ally)?\b/gi, 'artistic'],
-    [/\bnaked\b/gi, 'in casual attire'], [/\bnude\b/gi, 'in casual attire'],
-    [/\bshirtless\b/gi, 'in a fitted top'], [/\bundress(?:ing|ed)?\b/gi, 'adjusting clothes'],
-    [/\bbedroom\s+scene\b/gi, 'indoor scene'],
-    [/\bnsfw\b/gi, ''], [/\bsexual(?:ly)?\b/gi, ''], [/\bexplicit\b/gi, ''],
-    [/\bboys\s*love\b/gi, 'manga style'], [/\bBL\b/g, 'manga'],
-    [/\byaoi\b/gi, 'manga'], [/\bshounen\s*ai\b/gi, 'manga'],
-  ];
-  for (const [pattern, replacement] of replacements) p = p.replace(pattern, replacement);
-  // Korean terms
-  p = p.replace(/키스/g, '가까이 마주보기').replace(/포옹/g, '나란히 서기').replace(/껴안/g, '가까이 서');
-  p = p.replace(/애무/g, '손짓').replace(/관능/g, '감성').replace(/야한/g, '드라마틱한');
-  p = p.replace(/섹시/g, '매력적인').replace(/노출/g, '의상');
-  return p.replace(/\s{2,}/g, ' ').trim();
-}
-
-// ============================================================
 // SIRAY.AI API (Seedream 4.0 — t2i / ref2i / i2i)
 // ============================================================
 function getSirayKey() { const k=localStorage.getItem('SIRAY_API_KEY'); if(!k)throw new Error('Siray.AI API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
@@ -1521,20 +1484,10 @@ async function callSiraySeedream(prompt, opts={}) {
         if (images.length === 0) throw new Error('Siray.AI Seedream: 이미지 다운로드 실패');
         return images;
       } else if (status === 'FAILURE') {
-        const failMsg = (task.fail_reason || 'unknown').toLowerCase();
+        const failMsg = task.fail_reason || 'unknown';
         console.warn(`[SiraySeedream] Task failed: ${failMsg}`);
 
-        // NSFW / content filter rejection — sanitize prompt and retry
-        const isNsfw = failMsg.includes('nsfw') || failMsg.includes('safety') || failMsg.includes('content')
-          || failMsg.includes('moderation') || failMsg.includes('inappropriate') || failMsg.includes('violat')
-          || failMsg.includes('blocked') || failMsg.includes('sensitive') || failMsg.includes('policy');
-        if (isNsfw && !opts._retrySanitized) {
-          console.warn(`[SiraySeedream] NSFW/content filter detected, sanitizing prompt and retrying...`);
-          const cleanPrompt = sanitizePromptForSafety(prompt);
-          return await callSiraySeedream(cleanPrompt, {...opts, _retrySanitized: true});
-        }
-
-        // If ref2i/i2i failed (non-NSFW), retry as t2i
+        // If ref2i/i2i failed, retry as t2i
         if (subModel !== 't2i' && !opts._retryT2i) {
           console.warn(`[SiraySeedream] ${model} failed (${failMsg}), retrying as t2i...`);
           return await callSiraySeedream(prompt, {...opts, subModel: 't2i', referenceImages: undefined, _retryT2i: true});
