@@ -1211,8 +1211,9 @@ async function callKieSeedream(prompt, opts={}) {
     }
   }
 
-  // Use edit model when reference images are available, otherwise text-to-image
-  const useEdit = refUrls.length > 0;
+  // Use edit model only when explicitly requested (e.g., outfit preset with 1 base image)
+  // For general panel generation with multiple refs, text-to-image is more appropriate
+  const useEdit = refUrls.length > 0 && (opts.useEdit === true || refUrls.length <= 2);
   const model = useEdit ? 'bytedance/seedream-v4-edit' : 'bytedance/seedream-v4-text-to-image';
 
   const body = {
@@ -1292,7 +1293,13 @@ async function callKieSeedream(prompt, opts={}) {
         if (images.length === 0) throw new Error('Kie.ai Seedream: 이미지 다운로드 실패');
         return images;
       } else if (state === 'fail') {
-        throw new Error('Kie.ai Seedream 생성 실패: ' + (task.failMsg || 'unknown'));
+        const failMsg = task.failMsg || 'unknown';
+        // If edit model failed, retry as text-to-image
+        if (useEdit && !opts._retryTxt2Img) {
+          console.warn(`[KieSeedream] Edit model failed (${failMsg}), retrying as text-to-image...`);
+          return await callKieSeedream(prompt, {...opts, referenceImages: undefined, _retryTxt2Img: true});
+        }
+        throw new Error('Kie.ai Seedream 생성 실패: ' + failMsg);
       }
       // waiting / queuing / generating — keep polling
       if (i % 5 === 4) console.log(`[KieSeedream] Still ${state}... (${(i+1)*3}s)`);
