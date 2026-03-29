@@ -730,7 +730,7 @@ let _apiKeySyncResolve;
 const _apiKeySyncPromise = new Promise(r => { _apiKeySyncResolve = r; });
 function waitForApiKeySync() { return _apiKeySyncPromise; }
 
-const API_KEY_NAMES = ['VERTEX_PROJECT_ID','VERTEX_LOCATION','VERTEX_ACCESS_TOKEN','XAI_API_KEY','STABILITY_API_KEY','FAL_API_KEY','A2E_API_KEY','NINJACHAT_API_KEY','KIE_API_KEY'];
+const API_KEY_NAMES = ['VERTEX_PROJECT_ID','VERTEX_LOCATION','VERTEX_ACCESS_TOKEN','XAI_API_KEY','STABILITY_API_KEY','FAL_API_KEY','A2E_API_KEY','NINJACHAT_API_KEY','KIE_API_KEY','SIRAY_API_KEY'];
 
 async function syncApiKeysFromFirestore() {
   const db = getDb();
@@ -1309,6 +1309,142 @@ async function callKieSeedream(prompt, opts={}) {
     }
   }
   throw new Error('Kie.ai Seedream: 시간 초과 (3분 이내 완료되지 않음)');
+}
+
+// ============================================================
+// SIRAY.AI API (Seedream 4.0 — t2i / ref2i / i2i)
+// ============================================================
+function getSirayKey() { const k=localStorage.getItem('SIRAY_API_KEY'); if(!k)throw new Error('Siray.AI API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
+function hasSirayKey() { return !!localStorage.getItem('SIRAY_API_KEY'); }
+
+async function callSiraySeedream(prompt, opts={}) {
+  const apiKey = getSirayKey();
+
+  // Map aspect ratio to Siray size string (WxH)
+  const sizeMap = {
+    '1:1': '2048x2048',
+    '16:9': '2560x1440', '9:16': '1440x2560',
+    '4:3': '2304x1728', '3:4': '1728x2304',
+    '3:2': '2496x1664', '2:3': '1664x2496',
+    '21:9': '3024x1296'
+  };
+  const imageSize = sizeMap[opts.aspectRatio] || '1728x2304'; // default 3:4
+
+  // Sub-model: 't2i' (text-to-image), 'ref2i' (reference-to-image), 'i2i' (image-to-image)
+  const subModel = opts.subModel || 't2i';
+
+  // Prepare reference images (ref2i supports up to 10, i2i supports 1)
+  const refImages = [];
+  if (opts.referenceImages?.length > 0 && (subModel === 'ref2i' || subModel === 'i2i')) {
+    const maxRefs = subModel === 'i2i' ? 1 : 10;
+    for (const ref of opts.referenceImages.slice(0, maxRefs)) {
+      const imgData = ref.image || ref;
+      if (typeof imgData === 'string' && (imgData.startsWith('http') || imgData.startsWith('data:'))) {
+        refImages.push(imgData);
+      }
+    }
+  }
+
+  // Determine model name
+  let model;
+  if (subModel === 'ref2i' && refImages.length > 0) {
+    model = 'bytedance/seedream-4.0-ref2i';
+  } else if (subModel === 'i2i' && refImages.length > 0) {
+    model = 'bytedance/seedream-4.0-i2i';
+  } else {
+    model = 'bytedance/seedream-4.0-t2i';
+  }
+
+  // Build request body
+  const body = {
+    model,
+    prompt: prompt.substring(0, 5000),
+    size: imageSize
+  };
+  if (subModel === 'ref2i' && refImages.length > 0) {
+    body.images = refImages;
+  } else if (subModel === 'i2i' && refImages.length > 0) {
+    body.image = refImages[0];
+  }
+
+  console.log(`[SiraySeedream] Creating task: model=${model}, refs=${refImages.length}, size=${imageSize}, prompt=${prompt.substring(0, 80)}...`);
+
+  // 1) Create async task
+  const createRes = await fetch('https://api.siray.ai/v1/images/generations/async', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+    body: JSON.stringify(body)
+  });
+  if (createRes.status === 401 || createRes.status === 403) throw new Error('Siray.AI: 인증 실패 — API 키를 확인해주세요.');
+  if (createRes.status === 402) throw new Error('Siray.AI: 크레딧 부족 — Siray 대시보드에서 충전해주세요.');
+  if (createRes.status === 429) throw new Error('Siray.AI: 요청 빈도 제한 — 잠시 후 다시 시도해주세요.');
+  if (!createRes.ok) {
+    const errText = await createRes.text();
+    throw new Error('Siray.AI Seedream ' + createRes.status + ': ' + errText.substring(0, 300));
+  }
+  const createData = await createRes.json();
+  if (createData.code !== 'success' || !createData.data?.task_id) {
+    throw new Error('Siray.AI Seedream 오류: ' + (createData.message || JSON.stringify(createData).substring(0, 300)));
+  }
+  const taskId = createData.data.task_id;
+  console.log('[SiraySeedream] Task created:', taskId);
+
+  // 2) Poll for completion (3s intervals, max 3min)
+  const maxPolls = 60;
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise(r => setTimeout(r, 3000));
+    try {
+      const pollRes = await fetch('https://api.siray.ai/v1/images/generations/async/' + encodeURIComponent(taskId), {
+        method: 'GET',
+        headers: { 'Authorization': 'Bearer ' + apiKey }
+      });
+      if (!pollRes.ok) { console.warn('[SiraySeedream] Poll error:', pollRes.status); continue; }
+      const pollData = await pollRes.json();
+      if (pollData.code !== 'success' || !pollData.data) continue;
+      const task = pollData.data;
+      const status = task.status;
+
+      if (status === 'SUCCESS') {
+        const outputUrls = task.outputs || [];
+        if (outputUrls.length === 0) throw new Error('Siray.AI Seedream: 이미지가 생성되지 않았습니다.');
+        console.log(`[SiraySeedream] Success: ${outputUrls.length} images in ${((i+1)*3)}s`);
+        // Convert URLs to base64
+        const images = [];
+        for (const url of outputUrls) {
+          try {
+            const imgRes = await fetch(url);
+            if (!imgRes.ok) { console.warn('[SiraySeedream] Image fetch failed:', url); continue; }
+            const blob = await imgRes.blob();
+            const b64 = await new Promise(resolve => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result);
+              reader.readAsDataURL(blob);
+            });
+            images.push(b64);
+          } catch(e) {
+            console.warn('[SiraySeedream] Image download error:', e.message);
+            images.push(url); // fallback: return URL directly
+          }
+        }
+        if (images.length === 0) throw new Error('Siray.AI Seedream: 이미지 다운로드 실패');
+        return images;
+      } else if (status === 'FAILURE') {
+        const failMsg = task.fail_reason || 'unknown';
+        // If ref2i/i2i failed, retry as t2i
+        if (subModel !== 't2i' && !opts._retryT2i) {
+          console.warn(`[SiraySeedream] ${model} failed (${failMsg}), retrying as t2i...`);
+          return await callSiraySeedream(prompt, {...opts, subModel: 't2i', referenceImages: undefined, _retryT2i: true});
+        }
+        throw new Error('Siray.AI Seedream 생성 실패: ' + failMsg);
+      }
+      // NOT_START / SUBMITTED / QUEUED / IN_PROGRESS — keep polling
+      if (i % 5 === 4) console.log(`[SiraySeedream] Still ${status} (${task.progress || ''})... (${(i+1)*3}s)`);
+    } catch(pollErr) {
+      if (pollErr.message.includes('Siray.AI')) throw pollErr;
+      console.warn('[SiraySeedream] Poll exception:', pollErr.message);
+    }
+  }
+  throw new Error('Siray.AI Seedream: 시간 초과 (3분 이내 완료되지 않음)');
 }
 
 // ============================================================
@@ -2824,6 +2960,7 @@ function ApiKeyModal({onClose}) {
   const [ak,setAk]=useState(localStorage.getItem('A2E_API_KEY')||'');
   const [nk,setNk]=useState(localStorage.getItem('NINJACHAT_API_KEY')||'');
   const [kk,setKk]=useState(localStorage.getItem('KIE_API_KEY')||'');
+  const [sirayK,setSirayK]=useState(localStorage.getItem('SIRAY_API_KEY')||'');
   const save=()=>{
     if(vp)localStorage.setItem('VERTEX_PROJECT_ID',vp);
     if(vl)localStorage.setItem('VERTEX_LOCATION',vl);
@@ -2834,6 +2971,7 @@ function ApiKeyModal({onClose}) {
     if(ak)localStorage.setItem('A2E_API_KEY',ak);
     if(nk)localStorage.setItem('NINJACHAT_API_KEY',nk);
     if(kk)localStorage.setItem('KIE_API_KEY',kk);
+    if(sirayK)localStorage.setItem('SIRAY_API_KEY',sirayK);
     // Sync to Firestore for cross-browser access
     const keysToSave = {};
     if(vp) keysToSave.VERTEX_PROJECT_ID = vp;
@@ -2845,6 +2983,7 @@ function ApiKeyModal({onClose}) {
     if(ak) keysToSave.A2E_API_KEY = ak;
     if(nk) keysToSave.NINJACHAT_API_KEY = nk;
     if(kk) keysToSave.KIE_API_KEY = kk;
+    if(sirayK) keysToSave.SIRAY_API_KEY = sirayK;
     fbSaveApiKeys(keysToSave).then(() => {
       console.log('[KeySync] Keys saved to Firestore:', Object.keys(keysToSave).join(', '));
     }).catch(e => {
@@ -2872,6 +3011,8 @@ function ApiKeyModal({onClose}) {
       <div className="key-status"><div className={`dot ${hasNinjaChatKey()?'on':''}`}/><span>NinjaChat {hasNinjaChatKey()?'설정됨':'미설정'}</span></div>
       <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">Kie.ai API Key (Seedream 4.0)</label><input className="modal-input" type="password" value={kk} onChange={e=>setKk(e.target.value)} placeholder="kie_..."/></div>
       <div className="key-status"><div className={`dot ${hasKieKey()?'on':''}`}/><span>Kie.ai {hasKieKey()?'설정됨':'미설정'}</span></div>
+      <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">Siray.AI API Key (Seedream 4.0 t2i/ref2i/i2i)</label><input className="modal-input" type="password" value={sirayK} onChange={e=>setSirayK(e.target.value)} placeholder="siray_..."/></div>
+      <div className="key-status"><div className={`dot ${hasSirayKey()?'on':''}`}/><span>Siray.AI {hasSirayKey()?'설정됨':'미설정'}</span></div>
       <div className="modal-actions"><button className="btn-cancel" onClick={onClose}>취소</button><button className="btn-save" onClick={save}>저장</button></div>
     </div></div>
   );
@@ -3025,6 +3166,7 @@ function App() {
   const [ninjaChatModel, setNinjaChatModel] = useState('ninja-vision-1'); // NinjaChat model selection
   const [grokImageModel, setGrokImageModel] = useState('grok-imagine-image-pro'); // Grok Image model selection
   const [kieSeedreamMode, setKieSeedreamMode] = useState('txt2img'); // 'txt2img' | 'edit'
+  const [siraySeedreamMode, setSiraySeedreamMode] = useState('t2i'); // 't2i' | 'ref2i' | 'i2i'
   const [textModel] = useState('gemini-3.1-pro-preview'); // Text generation model — fixed to Gemini 3.1 Pro
 
   // Shared assets (project-level)
@@ -6677,6 +6819,18 @@ Rules:
       return await callKieSeedream(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, kieOpts);
     }
 
+    // ========== Siray.AI Seedream 4.0 ==========
+    if (imageProvider === 'siraySeedream') {
+      const sirayOpts = {aspectRatio: opts.aspectRatio || '3:4', subModel: siraySeedreamMode};
+      if ((siraySeedreamMode === 'ref2i' || siraySeedreamMode === 'i2i') && refs.length > 0) {
+        sirayOpts.referenceImages = refs;
+        log(`Seedream 4.0 ${siraySeedreamMode} (Siray.AI) 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개)`, 'info');
+      } else {
+        log(`Seedream 4.0 t2i (Siray.AI) 사용 (${curStyleName} 스타일 적용)`, 'info');
+      }
+      return await callSiraySeedream(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, sirayOpts);
+    }
+
     // ========== Imagen 4 (default) — text-only, use detailed Character Visual ID Cards ==========
     {
       // Use centralized prompt builder (full mode for Imagen4 with detailed ID cards)
@@ -9706,6 +9860,7 @@ Return ONLY the detailed English prompt, nothing else.`,
           <option value="a2eNanoBanana">A2E Gemini (레퍼런스 반영)</option>
           <option value="flux2Pro">Flux 2 Pro (fal.ai 레퍼런스)</option>
           <option value="kieSeedream">Seedream 4.0 (Kie.ai)</option>
+          <option value="siraySeedream">Seedream 4.0 (Siray.AI)</option>
           <option value="ninjaChat">NinjaChat (다중 모델)</option>
         </select>
         {imageProvider === 'grokImage' && (
@@ -9718,6 +9873,13 @@ Return ONLY the detailed English prompt, nothing else.`,
           <select className="form-select" style={{width:180,marginLeft:4,background:'linear-gradient(135deg,#fce4ec,#f8bbd0)',borderColor:'#e91e63'}} value={kieSeedreamMode} onChange={e=>setKieSeedreamMode(e.target.value)}>
             <option value="txt2img">Text-to-Image (기본)</option>
             <option value="edit">Edit (이미지 기반)</option>
+          </select>
+        )}
+        {imageProvider === 'siraySeedream' && (
+          <select className="form-select" style={{width:200,marginLeft:4,background:'linear-gradient(135deg,#e8eaf6,#c5cae9)',borderColor:'#7986cb'}} value={siraySeedreamMode} onChange={e=>setSiraySeedreamMode(e.target.value)}>
+            <option value="t2i">Text-to-Image (기본)</option>
+            <option value="ref2i">Ref-to-Image (레퍼런스)</option>
+            <option value="i2i">Image-to-Image (편집)</option>
           </select>
         )}
         {imageProvider === 'a2eImage' && (
