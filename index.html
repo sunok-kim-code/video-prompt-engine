@@ -3315,6 +3315,7 @@ Rules:
   const imageInputRef = React.useRef(null);
   const dragRef = React.useRef(null); // {type:'move'|'resize', pageIdx, objId, startX, startY, origX, origY, origW, origH}
   const clipboardRef = React.useRef([]); // copied objects for paste
+  const [clipboardCount, setClipboardCount] = useState(0); // trigger re-render on copy
   const [dropTargetPageIdx, setDropTargetPageIdx] = useState(null); // highlight page during cross-page drag
 
   // Translation / language state
@@ -3361,30 +3362,35 @@ Rules:
   // Copy selected objects to clipboard
   const copySelectedObjects = React.useCallback(() => {
     const ids = selectedObjectIds.length > 0 ? selectedObjectIds : (selectedObjectId ? [selectedObjectId] : []);
-    if (ids.length === 0) return;
+    if (ids.length === 0) { console.log('[Copy] No objects selected'); return; }
     const copied = [];
     editorPages.forEach(page => {
-      page.objects.forEach(o => {
-        if (ids.includes(o.id)) copied.push({...o});
+      (page.objects || []).forEach(o => {
+        if (ids.includes(o.id)) copied.push(JSON.parse(JSON.stringify(o)));
       });
     });
     if (copied.length > 0) {
       clipboardRef.current = copied;
+      setClipboardCount(copied.length);
       log(`${copied.length}개 객체 복사됨`, 'info');
+    } else {
+      console.log('[Copy] Selected ids not found in pages:', ids);
     }
   }, [selectedObjectId, selectedObjectIds, editorPages]);
 
   // Paste objects from clipboard to current page
   const pasteObjects = React.useCallback(() => {
     const items = clipboardRef.current;
-    if (!items || items.length === 0) return;
+    if (!items || items.length === 0) { console.log('[Paste] Clipboard empty'); return; }
     const ts = Date.now();
-    const newObjs = items.map((o, i) => ({
-      ...o,
-      id: o.id.split('_')[0] + '_' + (ts + i),
-      x: (o.x || 0) + 20,
-      y: (o.y || 0) + 20
-    }));
+    const newObjs = items.map((o, i) => {
+      const clone = JSON.parse(JSON.stringify(o));
+      const prefix = (clone.type || 'obj') + '_paste_';
+      clone.id = prefix + (ts + i);
+      clone.x = (clone.x || 0) + 20;
+      clone.y = (clone.y || 0) + 20;
+      return clone;
+    });
     setEditorPages(prev => {
       const next = [...prev];
       const pi = currentPageIdx;
@@ -3410,14 +3416,14 @@ Rules:
     const ts = Date.now();
     const newObjs = [];
     editorPages.forEach(page => {
-      page.objects.forEach(o => {
+      (page.objects || []).forEach(o => {
         if (ids.includes(o.id)) {
-          newObjs.push({
-            ...o,
-            id: o.id.split('_')[0] + '_' + (ts + newObjs.length),
-            x: (o.x || 0) + 20,
-            y: (o.y || 0) + 20
-          });
+          const clone = JSON.parse(JSON.stringify(o));
+          const prefix = (clone.type || 'obj') + '_dup_';
+          clone.id = prefix + (ts + newObjs.length);
+          clone.x = (clone.x || 0) + 20;
+          clone.y = (clone.y || 0) + 20;
+          newObjs.push(clone);
         }
       });
     });
@@ -9827,8 +9833,8 @@ Return ONLY the detailed English prompt, nothing else.`,
               disabled={!selectedObjectId && selectedObjectIds.length === 0}
               title="복사 (Ctrl+C)" style={{fontSize:10,padding:'4px 8px'}}>복사</button>
             <button className="btn btn-outline btn-sm be-btn" onClick={pasteObjects}
-              disabled={clipboardRef.current.length === 0}
-              title="붙여넣기 (Ctrl+V)" style={{fontSize:10,padding:'4px 8px'}}>붙여넣기</button>
+              disabled={clipboardCount === 0}
+              title="붙여넣기 (Ctrl+V)" style={{fontSize:10,padding:'4px 8px'}}>붙여넣기{clipboardCount > 0 ? ` (${clipboardCount})` : ''}</button>
             <button className="btn btn-outline btn-sm be-btn" onClick={duplicateSelectedObjects}
               disabled={!selectedObjectId && selectedObjectIds.length === 0}
               title="복제 (Ctrl+D)" style={{fontSize:10,padding:'4px 8px'}}>복제</button>
