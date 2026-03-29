@@ -1211,9 +1211,9 @@ async function callKieSeedream(prompt, opts={}) {
     }
   }
 
-  // Use edit model only when explicitly requested (e.g., outfit preset with 1 base image)
-  // For general panel generation with multiple refs, text-to-image is more appropriate
-  const useEdit = refUrls.length > 0 && (opts.useEdit === true || refUrls.length <= 2);
+  // Edit model ONLY when explicitly opted in (e.g., outfit preset generation)
+  // Default: always use text-to-image (edit model is for image modification, not reference-based generation)
+  const useEdit = refUrls.length > 0 && opts.useEdit === true;
   const model = useEdit ? 'bytedance/seedream-v4-edit' : 'bytedance/seedream-v4-text-to-image';
 
   const body = {
@@ -6665,13 +6665,10 @@ Rules:
 
     // ========== Kie.ai Seedream 4.0 ==========
     if (imageProvider === 'kieSeedream') {
+      // Seedream 4.0: text-to-image only (edit mode는 의상 프리셋 등에서 명시적으로만 사용)
+      // 레퍼런스 이미지는 프롬프트 텍스트에 이미 반영되어 있으므로 별도 전달 불필요
       const kieOpts = {aspectRatio: opts.aspectRatio || '3:4'};
-      if (refs.length > 0) {
-        kieOpts.referenceImages = refs;
-        log(`Seedream 4.0 Edit (Kie.ai) 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개)`, 'info');
-      } else {
-        log(`Seedream 4.0 (Kie.ai) 사용 (${curStyleName} 스타일 적용)`, 'info');
-      }
+      log(`Seedream 4.0 (Kie.ai) 사용 (${curStyleName} 스타일 적용)`, 'info');
       return await callKieSeedream(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, kieOpts);
     }
 
