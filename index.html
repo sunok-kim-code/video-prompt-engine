@@ -6850,10 +6850,15 @@ Rules:
 
     // ========== Siray.AI Seedream 4.0 ==========
     if (imageProvider === 'siraySeedream') {
-      const sirayOpts = {aspectRatio: opts.aspectRatio || '3:4', subModel: siraySeedreamMode};
-      if ((siraySeedreamMode === 'ref2i' || siraySeedreamMode === 'i2i') && refs.length > 0) {
+      // Auto-select sub-model based on reference availability
+      let effectiveSubModel = siraySeedreamMode;
+      if (refs.length > 0 && effectiveSubModel === 't2i') {
+        effectiveSubModel = 'ref2i'; // auto-upgrade to ref2i when references available
+      }
+      const sirayOpts = {aspectRatio: opts.aspectRatio || '3:4', subModel: effectiveSubModel};
+      if ((effectiveSubModel === 'ref2i' || effectiveSubModel === 'i2i') && refs.length > 0) {
         sirayOpts.referenceImages = refs;
-        log(`Seedream 4.0 ${siraySeedreamMode} (Siray.AI) 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개)`, 'info');
+        log(`Seedream 4.0 ${effectiveSubModel} (Siray.AI) 사용 (${curStyleName} 스타일 + 레퍼런스 ${refs.length}개)`, 'info');
       } else {
         log(`Seedream 4.0 t2i (Siray.AI) 사용 (${curStyleName} 스타일 적용)`, 'info');
       }
