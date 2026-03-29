@@ -1368,13 +1368,12 @@ async function callHiggsfieldSeedream(prompt, opts={}) {
   const useEdit = subModel === 'edit' && refUrls.length > 0;
   const model = useEdit ? 'bytedance/seedream-v4-edit' : 'bytedance/seedream/v4/text-to-image';
   const endpoint = useEdit
-    ? 'https://platform.higgsfield.ai/bytedance/seedream-v4-edit'
+    ? 'https://platform.higgsfield.ai/bytedance/seedream/v4/edit'
     : 'https://platform.higgsfield.ai/bytedance/seedream/v4/text-to-image';
 
-  // Build request body
+  // Build request body — Higgsfield uses flat params (no 'input' wrapper)
   const body = useEdit
     ? {
-        model,
         prompt: prompt.substring(0, 5000),
         image_urls: refUrls,
         strength: opts.strength || 0.75,
@@ -1382,14 +1381,12 @@ async function callHiggsfieldSeedream(prompt, opts={}) {
         resolution: resolution
       }
     : {
-        input: {
-          prompt: prompt.substring(0, 5000),
-          resolution: resolution,
-          aspect_ratio: aspectRatio,
-          camera_fixed: false
-        }
+        prompt: prompt.substring(0, 5000),
+        resolution: resolution,
+        aspect_ratio: aspectRatio,
+        camera_fixed: false
       };
-  if (!useEdit && opts.seed) body.input.seed = opts.seed;
+  if (!useEdit && opts.seed) body.seed = opts.seed;
 
   console.log(`[Higgsfield] Creating task: model=${useEdit ? 'edit' : 't2i'}, refs=${refUrls.length}, aspect=${aspectRatio}, res=${resolution}, prompt=${prompt.substring(0, 80)}...`);
 
