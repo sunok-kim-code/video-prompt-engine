@@ -3619,33 +3619,41 @@ Rules:
   // Keyboard: arrow keys (move), Ctrl+C/V/D (copy/paste/duplicate), Delete
   React.useEffect(() => {
     const handleKeyDown = (e) => {
-      // Don't capture if user is typing in an input
-      if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
-      if (e.target.isContentEditable) return;
+      const inTextInput = ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.isContentEditable;
 
       const ids = selectedObjectIds.length > 0 ? selectedObjectIds : (selectedObjectId ? [selectedObjectId] : []);
 
-      // Ctrl+C / Cmd+C — copy
-      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-        if (ids.length === 0) return;
-        e.preventDefault();
-        copySelectedObjects();
-        return;
-      }
-      // Ctrl+V / Cmd+V — paste
-      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-        if (clipboardRef.current.length === 0) return;
-        e.preventDefault();
-        pasteObjects();
-        return;
-      }
-      // Ctrl+D / Cmd+D — duplicate
+      // Ctrl+D / Cmd+D — duplicate (works even in textarea — always duplicates the selected object)
       if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
         if (ids.length === 0) return;
         e.preventDefault();
         duplicateSelectedObjects();
         return;
       }
+      // Ctrl+C / Cmd+C — copy object (only when textarea has no text selection)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        if (ids.length === 0) return;
+        // If user is in a textarea and has selected text, let browser handle it (text copy)
+        if (inTextInput) {
+          const sel = window.getSelection();
+          if (sel && sel.toString().length > 0) return; // let browser copy text
+        }
+        e.preventDefault();
+        copySelectedObjects();
+        return;
+      }
+      // Ctrl+V / Cmd+V — paste object (only when not in text input, or clipboard has objects)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        if (clipboardRef.current.length === 0) return; // no objects to paste, let browser handle
+        if (inTextInput) return; // let browser paste text in textarea
+        e.preventDefault();
+        pasteObjects();
+        return;
+      }
+
+      // For non-Ctrl shortcuts, don't capture if user is typing in an input
+      if (inTextInput) return;
+
       // Delete / Backspace — delete selected objects
       if (e.key === 'Delete' || e.key === 'Backspace') {
         if (ids.length === 0) return;
