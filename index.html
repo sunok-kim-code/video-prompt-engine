@@ -730,7 +730,7 @@ let _apiKeySyncResolve;
 const _apiKeySyncPromise = new Promise(r => { _apiKeySyncResolve = r; });
 function waitForApiKeySync() { return _apiKeySyncPromise; }
 
-const API_KEY_NAMES = ['VERTEX_PROJECT_ID','VERTEX_LOCATION','VERTEX_ACCESS_TOKEN','XAI_API_KEY','STABILITY_API_KEY','FAL_API_KEY','A2E_API_KEY','NINJACHAT_API_KEY','KIE_API_KEY','SIRAY_API_KEY'];
+const API_KEY_NAMES = ['VERTEX_PROJECT_ID','VERTEX_LOCATION','VERTEX_ACCESS_TOKEN','XAI_API_KEY','STABILITY_API_KEY','FAL_API_KEY','A2E_API_KEY','NINJACHAT_API_KEY','KIE_API_KEY','SIRAY_API_KEY','HIGGSFIELD_CREDENTIALS'];
 
 async function syncApiKeysFromFirestore() {
   const db = getDb();
@@ -1309,6 +1309,124 @@ async function callKieSeedream(prompt, opts={}) {
     }
   }
   throw new Error('Kie.ai Seedream: 시간 초과 (3분 이내 완료되지 않음)');
+}
+
+// ============================================================
+// HIGGSFIELD API (Seedream 4.0 via platform.higgsfield.ai)
+// ============================================================
+function getHiggsKey() { const k=localStorage.getItem('HIGGSFIELD_CREDENTIALS'); if(!k)throw new Error('Higgsfield API 키가 설정되지 않았습니다. 설정에서 입력해주세요.'); return k; }
+function hasHiggsKey() { return !!localStorage.getItem('HIGGSFIELD_CREDENTIALS'); }
+
+async function callHiggsfieldSeedream(prompt, opts={}) {
+  const credentials = getHiggsKey();
+
+  // Map aspect ratio
+  const arMap = {
+    '1:1': '1:1', '16:9': '16:9', '9:16': '9:16',
+    '4:3': '4:3', '3:4': '3:4', '3:2': '3:2', '2:3': '2:3', '21:9': '21:9'
+  };
+  const aspectRatio = arMap[opts.aspectRatio] || '3:4';
+  const resolution = opts.resolution || '2K';
+
+  const body = {
+    input: {
+      prompt: prompt.substring(0, 5000),
+      resolution: resolution,
+      aspect_ratio: aspectRatio,
+      camera_fixed: false
+    }
+  };
+  if (opts.seed) body.input.seed = opts.seed;
+
+  console.log(`[Higgsfield] Creating task: aspect=${aspectRatio}, res=${resolution}, prompt=${prompt.substring(0, 80)}...`);
+
+  // 1) Submit generation request
+  const createRes = await fetch('https://platform.higgsfield.ai/bytedance/seedream/v4/text-to-image', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Key ' + credentials
+    },
+    body: JSON.stringify(body)
+  });
+  if (createRes.status === 401 || createRes.status === 403) throw new Error('Higgsfield: 인증 실패 — API 자격증명을 확인해주세요.');
+  if (createRes.status === 402) throw new Error('Higgsfield: 크레딧 부족 — Higgsfield 대시보드에서 충전해주세요.');
+  if (createRes.status === 429) throw new Error('Higgsfield: 요청 빈도 제한 — 잠시 후 다시 시도해주세요.');
+  if (!createRes.ok) {
+    const errText = await createRes.text();
+    throw new Error('Higgsfield Seedream ' + createRes.status + ': ' + errText.substring(0, 300));
+  }
+  const createData = await createRes.json();
+  console.log('[Higgsfield] Submit response:', JSON.stringify(createData).substring(0, 400));
+
+  // Check for direct completion (synchronous response)
+  if (createData.status === 'completed' && createData.images?.length > 0) {
+    console.log(`[Higgsfield] Direct result: ${createData.images.length} images`);
+    return await _higgsDownloadImages(createData.images);
+  }
+
+  const requestId = createData.request_id;
+  if (!requestId) {
+    throw new Error('Higgsfield Seedream 오류: request_id 없음 — ' + JSON.stringify(createData).substring(0, 400));
+  }
+  console.log('[Higgsfield] Request submitted:', requestId);
+
+  // 2) Poll for completion (2s intervals, max 5min)
+  const maxPolls = 150;
+  for (let i = 0; i < maxPolls; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const pollRes = await fetch('https://platform.higgsfield.ai/requests/' + encodeURIComponent(requestId) + '/status', {
+        method: 'GET',
+        headers: { 'Authorization': 'Key ' + credentials }
+      });
+      if (!pollRes.ok) { console.warn('[Higgsfield] Poll error:', pollRes.status); continue; }
+      const pollData = await pollRes.json();
+      const status = pollData.status;
+
+      if (status === 'completed') {
+        const imgs = pollData.images || [];
+        if (imgs.length === 0) throw new Error('Higgsfield Seedream: 이미지가 생성되지 않았습니다.');
+        console.log(`[Higgsfield] Completed: ${imgs.length} images in ${((i+1)*2)}s`);
+        return await _higgsDownloadImages(imgs);
+      } else if (status === 'failed') {
+        throw new Error('Higgsfield Seedream 생성 실패: ' + (pollData.error || 'unknown'));
+      } else if (status === 'nsfw') {
+        throw new Error('Higgsfield Seedream: NSFW 콘텐츠 필터에 의해 거부됨');
+      }
+      // queued / in_progress — keep polling
+      if (i % 10 === 9) console.log(`[Higgsfield] Still ${status}... (${(i+1)*2}s)`);
+    } catch(pollErr) {
+      if (pollErr.message.includes('Higgsfield')) throw pollErr;
+      console.warn('[Higgsfield] Poll exception:', pollErr.message);
+    }
+  }
+  throw new Error('Higgsfield Seedream: 시간 초과 (5분 이내 완료되지 않음)');
+}
+
+// Helper: download Higgsfield image URLs to base64
+async function _higgsDownloadImages(imgs) {
+  const images = [];
+  for (const img of imgs) {
+    const url = img.url || img;
+    if (typeof url !== 'string') continue;
+    try {
+      const imgRes = await fetch(url);
+      if (!imgRes.ok) { console.warn('[Higgsfield] Image fetch failed:', url); continue; }
+      const blob = await imgRes.blob();
+      const b64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+      images.push(b64);
+    } catch(e) {
+      console.warn('[Higgsfield] Image download error:', e.message);
+      images.push(url); // fallback
+    }
+  }
+  if (images.length === 0) throw new Error('Higgsfield Seedream: 이미지 다운로드 실패');
+  return images;
 }
 
 // ============================================================
@@ -3018,6 +3136,7 @@ function ApiKeyModal({onClose}) {
   const [nk,setNk]=useState(localStorage.getItem('NINJACHAT_API_KEY')||'');
   const [kk,setKk]=useState(localStorage.getItem('KIE_API_KEY')||'');
   const [sirayK,setSirayK]=useState(localStorage.getItem('SIRAY_API_KEY')||'');
+  const [higgsK,setHiggsK]=useState(localStorage.getItem('HIGGSFIELD_CREDENTIALS')||'');
   const save=()=>{
     if(vp)localStorage.setItem('VERTEX_PROJECT_ID',vp);
     if(vl)localStorage.setItem('VERTEX_LOCATION',vl);
@@ -3029,6 +3148,7 @@ function ApiKeyModal({onClose}) {
     if(nk)localStorage.setItem('NINJACHAT_API_KEY',nk);
     if(kk)localStorage.setItem('KIE_API_KEY',kk);
     if(sirayK)localStorage.setItem('SIRAY_API_KEY',sirayK);
+    if(higgsK)localStorage.setItem('HIGGSFIELD_CREDENTIALS',higgsK);
     // Sync to Firestore for cross-browser access
     const keysToSave = {};
     if(vp) keysToSave.VERTEX_PROJECT_ID = vp;
@@ -3041,6 +3161,7 @@ function ApiKeyModal({onClose}) {
     if(nk) keysToSave.NINJACHAT_API_KEY = nk;
     if(kk) keysToSave.KIE_API_KEY = kk;
     if(sirayK) keysToSave.SIRAY_API_KEY = sirayK;
+    if(higgsK) keysToSave.HIGGSFIELD_CREDENTIALS = higgsK;
     fbSaveApiKeys(keysToSave).then(() => {
       console.log('[KeySync] Keys saved to Firestore:', Object.keys(keysToSave).join(', '));
     }).catch(e => {
@@ -3070,6 +3191,8 @@ function ApiKeyModal({onClose}) {
       <div className="key-status"><div className={`dot ${hasKieKey()?'on':''}`}/><span>Kie.ai {hasKieKey()?'설정됨':'미설정'}</span></div>
       <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">Siray.AI API Key (Seedream 4.0 t2i/ref2i/i2i)</label><input className="modal-input" type="password" value={sirayK} onChange={e=>setSirayK(e.target.value)} placeholder="siray_..."/></div>
       <div className="key-status"><div className={`dot ${hasSirayKey()?'on':''}`}/><span>Siray.AI {hasSirayKey()?'설정됨':'미설정'}</span></div>
+      <div style={{marginBottom:12,marginTop:16,borderTop:'1px solid var(--border)',paddingTop:12}}><label className="form-label">Higgsfield Credentials (Seedream 4.0)</label><input className="modal-input" type="password" value={higgsK} onChange={e=>setHiggsK(e.target.value)} placeholder="KEY_ID:KEY_SECRET"/></div>
+      <div className="key-status"><div className={`dot ${hasHiggsKey()?'on':''}`}/><span>Higgsfield {hasHiggsKey()?'설정됨':'미설정'}</span></div>
       <div className="modal-actions"><button className="btn-cancel" onClick={onClose}>취소</button><button className="btn-save" onClick={save}>저장</button></div>
     </div></div>
   );
@@ -6901,6 +7024,13 @@ Rules:
       return await callSiraySeedream(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, sirayOpts);
     }
 
+    // ========== Higgsfield Seedream 4.0 ==========
+    if (imageProvider === 'higgsSeedream') {
+      const higgsOpts = {aspectRatio: opts.aspectRatio || '3:4'};
+      log(`Seedream 4.0 (Higgsfield) 사용 (${curStyleName} 스타일 적용)`, 'info');
+      return await callHiggsfieldSeedream(basePrompt + sp.toneDirective + sp.noTextDirective + sp.styleReinforce, higgsOpts);
+    }
+
     // ========== Imagen 4 (default) — text-only, use detailed Character Visual ID Cards ==========
     {
       // Use centralized prompt builder (full mode for Imagen4 with detailed ID cards)
@@ -9931,6 +10061,7 @@ Return ONLY the detailed English prompt, nothing else.`,
           <option value="flux2Pro">Flux 2 Pro (fal.ai 레퍼런스)</option>
           <option value="kieSeedream">Seedream 4.0 (Kie.ai)</option>
           <option value="siraySeedream">Seedream 4.0 (Siray.AI)</option>
+          <option value="higgsSeedream">Seedream 4.0 (Higgsfield)</option>
           <option value="ninjaChat">NinjaChat (다중 모델)</option>
         </select>
         {imageProvider === 'grokImage' && (
