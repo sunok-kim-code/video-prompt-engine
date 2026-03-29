@@ -1383,10 +1383,31 @@ async function callSiraySeedream(prompt, opts={}) {
     throw new Error('Siray.AI Seedream ' + createRes.status + ': ' + errText.substring(0, 300));
   }
   const createData = await createRes.json();
-  if (createData.code !== 'success' || !createData.data?.task_id) {
-    throw new Error('Siray.AI Seedream 오류: ' + (createData.message || JSON.stringify(createData).substring(0, 300)));
+  console.log('[SiraySeedream] Create response:', JSON.stringify(createData).substring(0, 500));
+  // Accept various response formats: {code:'success', data:{task_id:...}} or {data:{task_id:...}} or {task_id:...}
+  const taskId = createData.data?.task_id || createData.data?.taskId || createData.task_id || createData.taskId;
+  if (!taskId) {
+    // Check if response contains image directly (synchronous mode)
+    const directOutputs = createData.data?.outputs || createData.outputs || createData.data?.images || createData.images;
+    if (directOutputs?.length > 0) {
+      console.log(`[SiraySeedream] Direct result: ${directOutputs.length} images`);
+      const images = [];
+      for (const item of directOutputs) {
+        if (typeof item === 'string' && item.startsWith('data:')) { images.push(item); }
+        else if (typeof item === 'string' && item.startsWith('http')) {
+          try {
+            const imgRes = await fetch(item);
+            if (!imgRes.ok) { images.push(item); continue; }
+            const blob = await imgRes.blob();
+            const b64 = await new Promise(resolve => { const reader = new FileReader(); reader.onloadend = () => resolve(reader.result); reader.readAsDataURL(blob); });
+            images.push(b64);
+          } catch(e) { images.push(item); }
+        }
+      }
+      if (images.length > 0) return images;
+    }
+    throw new Error('Siray.AI Seedream 오류: task_id 없음 — ' + JSON.stringify(createData).substring(0, 400));
   }
-  const taskId = createData.data.task_id;
   console.log('[SiraySeedream] Task created:', taskId);
 
   // 2) Poll for completion (3s intervals, max 3min)
