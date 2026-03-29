@@ -1334,15 +1334,49 @@ async function callSiraySeedream(prompt, opts={}) {
   const subModel = opts.subModel || 't2i';
 
   // Prepare reference images (ref2i supports up to 10, i2i supports 1)
+  // base64 data URLs are uploaded to temporary hosting first (Siray may reject large inline base64)
   const refImages = [];
   if (opts.referenceImages?.length > 0 && (subModel === 'ref2i' || subModel === 'i2i')) {
     const maxRefs = subModel === 'i2i' ? 1 : 10;
     for (const ref of opts.referenceImages.slice(0, maxRefs)) {
       const imgData = ref.image || ref;
-      if (typeof imgData === 'string' && (imgData.startsWith('http') || imgData.startsWith('data:'))) {
+      if (typeof imgData === 'string' && imgData.startsWith('http')) {
         refImages.push(imgData);
+      } else if (typeof imgData === 'string' && imgData.startsWith('data:')) {
+        // Upload base64 to Kie.ai file storage (free, 3-day expiry) for URL conversion
+        // Falls back to Siray's own upload proxy if Kie key available
+        try {
+          const kieKey = localStorage.getItem('KIE_API_KEY');
+          if (kieKey) {
+            const uploadRes = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + kieKey },
+              body: JSON.stringify({
+                base64Data: imgData,
+                uploadPath: 'siray-refs',
+                fileName: 'sref_' + Date.now() + '_' + Math.random().toString(36).slice(2,6) + '.png'
+              })
+            });
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json();
+              const fileUrl = uploadData.data?.fileUrl || uploadData.data?.downloadUrl;
+              if (fileUrl) {
+                refImages.push(fileUrl);
+                console.log('[SiraySeedream] Ref uploaded via Kie.ai:', fileUrl.substring(0, 80));
+                continue;
+              }
+            }
+          }
+          // Fallback: try sending data URL directly (may fail for large images)
+          console.warn('[SiraySeedream] No Kie key or upload failed, sending data URL directly');
+          refImages.push(imgData);
+        } catch(e) {
+          console.warn('[SiraySeedream] ref upload failed:', e.message);
+          refImages.push(imgData); // fallback to data URL
+        }
       }
     }
+    console.log(`[SiraySeedream] Prepared ${refImages.length} ref images (${refImages.map(r => r.startsWith('http') ? 'URL' : 'dataURL').join(',')})`);
   }
 
   // Determine model name
@@ -1367,7 +1401,7 @@ async function callSiraySeedream(prompt, opts={}) {
     body.image = refImages[0];
   }
 
-  console.log(`[SiraySeedream] Creating task: model=${model}, refs=${refImages.length}, size=${imageSize}, prompt=${prompt.substring(0, 80)}...`);
+  console.log(`[SiraySeedream] Creating task: model=${model}, refs=${refImages.length}, size=${imageSize}, bodySize=${JSON.stringify(body).length} bytes, prompt=${prompt.substring(0, 80)}...`);
 
   // 1) Create async task
   const createRes = await fetch('https://api.siray.ai/v1/images/generations/async', {
